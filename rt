@@ -1,0 +1,28 @@
+#!/bin/bash
+#NREG="-r16"
+NREG="-r16 -b5"
+TMPDIR=scratch
+CHOW=`pwd`/chow
+CLEAVE=`pwd`/cleave
+FIX_UNDEF=-"{`pwd`/fix_undef}"
+EXTRA=$FIX_UNDEF
+
+mkdir $TMPDIR
+pushd $TMPDIR
+
+#fmm
+#ctest /home/compiler/test/fmm/fmin/  -"{$CHOW $NREG}"
+#ctest /home/compiler/test/fmm/seval/ -"{$CHOW $NREG}"
+#ctest /home/compiler/test/fmm/solve/ -"{$CHOW $NREG}"
+#ctest /home/compiler/test/fmm/urand/ -"{$CHOW $NREG}"
+#ctest /home/compiler/test/fmm/zeroin/ -"{$CHOW $NREG}"
+ctest /home/compiler/test/fmm/ $EXTRA -"{$CHOW $NREG}"
+
+#spec
+#ctest /home/compiler/test/spec/doduc/ $EXTRA  -"{$CHOW $NREG}"
+ctest /home/compiler/test/spec/matrix300/ $EXTRA -"{$CHOW $NREG}"
+#ctest /home/compiler/test/spec/fpppp/ -"{$CHOW $NREG}"
+#ctest /home/compiler/test/spec/tomcatv/ -"{$CHOW $NREG}"
+
+popd
+

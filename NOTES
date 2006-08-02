@@ -1,0 +1,151 @@
+$Id$
+
+=====
+note
+=====
+question:
+
+does splitting critical edges change the splitting of live ranges? for
+example look at fmin.i where splitting critical edges makes chow fail
+an insertion on multiple defs..
+
+it seems that splitting critical edges can change the number of
+interferences in a live range. This happens when the block for the 
+split critical edge is added to a live range to extend its range. This
+will happen when the live range is split and adds the extra block even
+though it is not needed.
+
+L1:
+  z
+  BRANCH L2 L3
+  
+L2:
+  y
+  GOTO L3
+
+L3:
+  y
+  x
+  END
+
+with split critical edges in this case both x and z extend to the
+dummy block L4, which increases their interferences. this can happen
+with bad splitting (by adding a block when there is no subsequent use
+(z) and adding a block before the first use (x)
+
+L1:
+  z
+  BRANCH L2 L4
+  
+L2:
+  y
+  GOTO L3
+
+L4:
+  z
+  x
+  GOTO L3
+
+L3:
+  y
+  x
+
+
+=====
+note
+=====
+it makes a big difference where you choose your split point,
+otherwise you can end up with a bunch of live units with no uses and
+no defs and the whole live range contains these useless units. i think
+that is the cause of the "peeling" splitting we saw where it would
+peel off on of the live units each time it would split, but that would
+not help since it is a useless live unit
+
+
+=====
+note
+=====
+question:
+why are we not putting the loads and stores in the right place? we are
+calculating stores by looking at the uses that each def reaches. if it
+reaches a use in another live range then we add a store. if it reaches
+a use in the same live range that needs a load we add a store.
+
+we compute loads by looking at the predecessor blocks. if the
+predecessor is in another live range then we insert a load.
+
+answer:
+phi nodes were getting in the way. if a def reaches a use that is a
+phi-node it is not a real use. we need to look at the uses that the
+phi-node def reaches as well in order to find all the nodes that def
+actually reaches.
+
+=====
+note
+=====
+speed up attemtps: 
+ + use a set to for interferece "list" so that adding unique values is
+ efficent (log n)
+
+ + choose the starting point for the split much better
+   - only split starting with a def or a use
+   - split starting with an entry point if possible
+
+ + a live range is uncolorable if all the live units where it actually
+ has a use or a def have no available registers
+
+ + only need to update interferences for the new and orig lr and those
+ live ranges that they interfered with. can be done efficently by
+ iterating over the origlr interferences and seeing what they now
+ interfere with
+
+
+=====
+note
+=====
+observation:
+
+it seems that the splitting algorithm can add live units to the split
+live range even when there is no point. we split the live range by
+looking for a place where it starts with a def or a use and then do a
+bfs of the nodes in the origlr from there adding any node that does
+not fill up the forbidden register set. now suppose that we don't get
+to another use of the live range in any block that we add, this means
+that if we allocate this split live range it could tie up all those
+blocks even though it serves no purpose to have that register tied up
+since there are no uses beyond the first.
+
+I suspect that the priority function is designed to prevent this from
+happening, but it is something to watch for.
+
+
+=====
+note
+=====
+question:
+
+Would it be beneficial to split the BB at register to register copies?
+
+
+
+=====
+note
+=====
+Had a problem where a load was inserted for a live range because it
+had a predecessor that was not in the live range, but no store was
+inserted in any of the other blocks in the live range. Turns out the
+load was requested because it was used in a phi-node, but no store was
+generated because we were not counting phi-node uses. 
+
+not sure how exactly this should be handeled. need to better figure
+out where to insert loads and stores.
+
+
+
+
+---
+reg101d, 102d on line 334 swap back and forth between values. find out
+why.
+
+
+
