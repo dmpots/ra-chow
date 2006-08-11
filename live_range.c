@@ -11,7 +11,6 @@
 #include <algorithm>
 #include <queue>
 #include <iterator>
-#include <iostream.h>
 #include <stdlib.h>
 #include "live_range.h"
 #include "debug.h"
@@ -905,7 +904,6 @@ debug("*** MARKING STORES for LR: %d ***\n", lr->id);
   {
     LiveRange_ForAllUnits(lr, unit)
     {
-
       //check if any successor blocks in the live range need a load
       Edge* edg;
       Block* blkSucc;
@@ -930,33 +928,6 @@ debug("*** MARKING STORES for LR: %d ***\n", lr->id);
         }
         else //unit is an exit point of the live range
         {
-
-//DEBUG-->
-if(lr->id == 8){
-  //Block* b;
-  //ForAllBlocks(b){
-  //  Block_Dump(b, NULL, TRUE);
-  // }
-  //LiveRange_DDump(lr);
-  //SSA_Phi_Node_Dump();
-}
-debug("\nBLOCK: %s -- SUCC: %s\n", bname(unit->block), bname(blkSucc));
-fprintf(stderr,"DEFS: ");
-copy(def_list.begin(), def_list.end(), std::ostream_iterator<int>(cerr, " "));
-fprintf(stderr,"\n");
-
-Liveness_Info infoo = SSA_live_in[id(blkSucc)];
-debug("LIVEIN: ");
-copy(infoo.names, infoo.names+infoo.size, std::ostream_iterator<int>(cerr, " "));
-debug("\n");
-//<--DEBUG
-
-          //see if a definition in this live range reaches this block
-          //for(std::list<Variable>::iterator i = def_list.begin();
-          //    i != def_list.end();
-          //    i++)
-          //{
-          //  Variable def = *i;
           Variable def = unit->orig_name;
           debug("checking def %d\n", def);
           if(find(def_list.begin(), def_list.end(), def) !=
@@ -964,7 +935,7 @@ debug("\n");
           {
             //test for liveness
             Liveness_Info info = SSA_live_in[id(blkSucc)];
-            for(int j = 0; j < info.size; j++)
+            for(LOOPVAR j = 0; j < info.size; j++)
             {
               debug("LIVE_IN: %d in %s",info.names[j], bname(blkSucc));
               //def is live along this path
@@ -980,7 +951,6 @@ debug("\n");
             }
             if(!unit->need_store) {debug("NO STORE: %d\n",unit->orig_name);}
           }
-          //}//for all defs
         }//else
       }//ForAllSuccs
     }//ForAllUnits()
@@ -989,6 +959,20 @@ debug("\n");
 debug("\n*** DONE MARKING STORES for LR: %d ***\n", lr->id);
 }//MarkStores
 
+/*
+ *=================================
+ * Def_CollectUniqueUseNames()
+ *=================================
+ * Collects all the names that a definition could be known under
+ * within a live range. This is done by following the def to any phi
+ * nodes and adding those phi node names, and then recursively
+ * following those phi nodes.
+ *
+ * The names are collected uniquely based on the contents of the vgrp
+ * list.
+ *
+ * vgrp - Variable Group
+ */
 void Def_CollectUniqueUseNames(Variable v, std::list<Variable>& vgrp)
 {
   //gather all of the phi nodes this def reaches and count them as
