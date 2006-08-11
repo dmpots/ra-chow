@@ -7,12 +7,13 @@ mkdir $TMPDIR
 pushd $TMPDIR
 
 #fmm
-ctest /home/compiler/test/fmm/fmin/  -"{$CHOW $NREG}"
-ctest /home/compiler/test/fmm/zeroin/  -"{$CHOW $NREG}"
+#ctest /home/compiler/test/fmm/fmin/  -"{$CHOW $NREG}"
+#ctest /home/compiler/test/fmm/zeroin/  -"{$CHOW $NREG}"
+ctest /home/compiler/test/fmm/  -"{$CHOW $NREG}"
 
 #spec
 ctest /home/compiler/test/spec/matrix300/ -"{$CHOW $NREG}"
-ctest /home/compiler/test/spec/doduc/ -"{$CHOW $NREG}"
+#ctest /home/compiler/test/spec/doduc/ -"{$CHOW $NREG}"
 
 #spec95x
 #ctest /home/compiler/test/spec95x/ -"{$CHOW $NREG}"

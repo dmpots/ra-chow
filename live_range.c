@@ -126,7 +126,7 @@ void LiveRange_AllocLiveRanges(Arena arena,
     lr_mem_map[i] = MEM_UNASSIGNED;
 
   unsigned int seed = time(NULL);
-  seed = 1154486980;
+  //seed = 1154486980;
   srand(seed);
   debug("SRAND: %u", seed);
   //srand(74499979);
