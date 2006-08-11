@@ -10,6 +10,8 @@
 #include <assert.h>
 #include <algorithm>
 #include <queue>
+#include <iterator>
+#include <iostream.h>
 #include <stdlib.h>
 #include "live_range.h"
 #include "debug.h"
@@ -34,6 +36,7 @@ static MemoryLocation* lr_mem_map;
 Unsigned_Int liverange_count;
 
 /* local functions */
+void Def_CollectUniqueUseNames(Variable v, std::list<Variable>& vgrp);
 
 //iterate through interference list. if stmt used as a cheat for its
 //side effect 
@@ -123,7 +126,10 @@ void LiveRange_AllocLiveRanges(Arena arena,
   for(i = 0; i < liverange_count; i++)
     lr_mem_map[i] = MEM_UNASSIGNED;
 
-  srand(time(NULL));
+  unsigned int seed = time(NULL);
+  seed = 1154486980;
+  srand(seed);
+  debug("SRAND: %u", seed);
   //srand(74499979);
   //srand(44979);
 }
@@ -880,6 +886,7 @@ void LiveRange_MarkLoads(LiveRange* lr)
  */
 void LiveRange_MarkStores(LiveRange* lr)
 {
+debug("*** MARKING STORES for LR: %d ***\n", lr->id);
   //walk through the live units and look for a store 
   LiveUnit* unit;
   Boolean fStore = FALSE; //lr contains a store
@@ -890,44 +897,7 @@ void LiveRange_MarkStores(LiveRange* lr)
     if(unit->defs > 0)
     {
       fStore = TRUE; //TODO: can optimize by caching this in LR
-      def_list.push_back(unit->orig_name);
-
-      //gather all of the phi nodes this def reaches and count them as
-      //defs in this live range too since we are interested in finding
-      //out all the defs active in this live range and a def that
-      //reaches a phi node continues to be active through that phi
-      //node
-      std::list<Variable> guard_list;
-      std::queue<Variable> work_queue;
-      work_queue.push(unit->orig_name);
-      guard_list.push_back(unit->orig_name);
-      while(! work_queue.empty())
-      {
-        Chains_List* runner;
-        Variable def = work_queue.front(); work_queue.pop();
-        debug("examining %d in queue", def);
-        Chain_ForAllUses(runner, def)
-        {
-          Block* b = runner->block;
-          debug("use in block %s", bname(b));
-          //if it is a phi node then add the uses of the phi node
-          if(runner->chain.is_phi_node)
-          {
-            Variable phivar = 
-              runner->chain.op_pointer.phi_node->new_name;
-            debug("use is a phi node in %s(%d)", 
-                  bname(runner->block), id(runner->block)); 
-            if(find(guard_list.begin(), guard_list.end(), phivar) ==
-               guard_list.end())
-            {
-              def_list.push_back(phivar); //phi def is active
-              work_queue.push(phivar); //follow this phi def
-              guard_list.push_back(phivar); //only follow a phi once
-              debug("adding %d to queue", phivar); 
-            }
-          }
-        }
-      }
+      Def_CollectUniqueUseNames(unit->orig_name, def_list);
     }//if(nstores > 1)
   }//ForAllUnits()
 
@@ -960,50 +930,107 @@ void LiveRange_MarkStores(LiveRange* lr)
         }
         else //unit is an exit point of the live range
         {
+
+//DEBUG-->
+if(lr->id == 8){
+  //Block* b;
+  //ForAllBlocks(b){
+  //  Block_Dump(b, NULL, TRUE);
+  // }
+  //LiveRange_DDump(lr);
+  //SSA_Phi_Node_Dump();
+}
+debug("\nBLOCK: %s -- SUCC: %s\n", bname(unit->block), bname(blkSucc));
+fprintf(stderr,"DEFS: ");
+copy(def_list.begin(), def_list.end(), std::ostream_iterator<int>(cerr, " "));
+fprintf(stderr,"\n");
+
+Liveness_Info infoo = SSA_live_in[id(blkSucc)];
+debug("LIVEIN: ");
+copy(infoo.names, infoo.names+infoo.size, std::ostream_iterator<int>(cerr, " "));
+debug("\n");
+//<--DEBUG
+
           //see if a definition in this live range reaches this block
-          for(std::list<Variable>::iterator i = def_list.begin();
-              i != def_list.end();
-              i++)
-          {
-            Variable def = *i;
-          //Variable def = unit->orig_name;
-          //if(find(def_list.begin(), def_list.end(), def) !=
-          //    def_list.end())
+          //for(std::list<Variable>::iterator i = def_list.begin();
+          //    i != def_list.end();
+          //    i++)
           //{
-            //if(find(def_list.begin(), def_list.end(), def) !=
-            //    def_list.end())
-            //{
+          //  Variable def = *i;
+          Variable def = unit->orig_name;
+          debug("checking def %d\n", def);
+          if(find(def_list.begin(), def_list.end(), def) !=
+              def_list.end())
+          {
             //test for liveness
-            //if(VectorSet_Member(
-            //    mpBlkId_VsLridLiveIn[id(blkSucc)], lr->orig_lrid))
-           // {
-           //     unit->need_store = TRUE;
-           //     debug("store needed for lr: %d block(%s) "
-           //           "because successor %s(%d) is another live range",
-           //           lr->id, bname(unit->block), 
-           //           bname(blkSucc), id(blkSucc));
-           // }
-           //}
             Liveness_Info info = SSA_live_in[id(blkSucc)];
             for(int j = 0; j < info.size; j++)
             {
+              debug("LIVE_IN: %d in %s",info.names[j], bname(blkSucc));
               //def is live along this path
-              if(def == info.names[j])
+              if(lr->orig_lrid == info.names[j])
               {
                 unit->need_store = TRUE;
                 debug("store needed for lr: %d block(%s) "
-                      "because successor %s(%d) is another live range",
+                      "because it is live in at successor %s(%d)\n",
                       lr->id, bname(unit->block), 
                       bname(blkSucc), id(blkSucc));
+                break;
               }
             }
+            if(!unit->need_store) {debug("NO STORE: %d\n",unit->orig_name);}
           }
+          //}//for all defs
         }//else
       }//ForAllSuccs
     }//ForAllUnits()
   }//if(fStore)
 
+debug("\n*** DONE MARKING STORES for LR: %d ***\n", lr->id);
 }//MarkStores
+
+void Def_CollectUniqueUseNames(Variable v, std::list<Variable>& vgrp)
+{
+  //gather all of the phi nodes this def reaches and count them as
+  //defs in this live range too since we are interested in finding
+  //out all the defs active in this live range and a def that
+  //reaches a phi node continues to be active through that phi
+  //node
+  std::list<Variable> vgrpWork;
+  vgrpWork.push_back(v);
+
+  debug("Collecting uses for def: %d", v);
+  while(! vgrpWork.empty())
+  {
+    Variable vDef = vgrpWork.back(); vgrpWork.pop_back();
+    debug("examining %d in queue", vDef);
+    if(find(vgrp.begin(), vgrp.end(), vDef) == vgrp.end())
+    {
+      debug("added name %d", vDef); 
+      vgrp.push_back(vDef); //add use to the group
+
+      Chains_List* pcln;
+      Chain_ForAllUses(pcln, vDef)
+      {
+        Block* blk = pcln->block;
+        //if it is a phi node then add the uses of the phi node
+        if(pcln->chain.is_phi_node)
+        {
+          Variable vPhi;
+          vPhi = pcln->chain.op_pointer.phi_node->new_name;
+          if(find(vgrp.begin(), vgrp.end(), vPhi) == vgrp.end())
+          {
+            debug("use (%d) is a phi node in %s(%d)", vPhi, bname(blk), id(blk)); 
+            vgrpWork.push_back(vPhi); //follow this phi def
+            debug("adding %d to work queue", vPhi); 
+          }
+        }
+        //debug("use (%d) in block %s", vUse, bname(blk));
+      }
+    }
+  }
+
+}
 
 /*
  *=================================

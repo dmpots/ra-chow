@@ -44,6 +44,7 @@ static Register*  color_mreg_map = NULL;
 static const Register REG_SPILL = 666;
 static const Register REG_UNASSIGNED = 999;
 static const Register REG_FP = 555;
+static const LRID     NO_LRID = (LRID)-1;//bigger than any lrid
 static MemoryLocation stack_pointer = 0;
 static LRID fp_lrid;
 
@@ -96,8 +97,9 @@ static Inst* Inst_CreateStore(Opcode_Names opcode,
                       Register val);
 void InitChow();
 UFSet* Find_Set(Variable v);
-LRID Name2LRID(Variable v);
+LRID SSAName2LRID(Variable v);
 void DumpInitialLiveRanges();
+void ConvertLiveInNamespaceSSAToLiveRange();
 
 
 
@@ -242,6 +244,7 @@ int main(Int argc, Char **argv)
    
   //compute initial live ranges
   LiveRange_BuildInitialSSA();
+  ConvertLiveInNamespaceSSAToLiveRange();
   //DumpInitialLiveRanges();
 
   //run the priority algorithm
@@ -362,7 +365,7 @@ void InitChow()
   //this from the interference graph and remember which lrid holds the
   //frame pointer
   Operation* frame_op = get_frame_operation();
-  fp_lrid = Name2LRID(frame_op->arguments[frame_op->referenced]);
+  fp_lrid = SSAName2LRID(frame_op->arguments[frame_op->referenced]);
   LiveRange_MarkNonCandidateAndDelete(live_ranges[fp_lrid]);
   //LRList_Remove(&live_ranges, live_ranges[fp_lrid]);
 
@@ -471,7 +474,7 @@ void LiveRange_BuildInitialSSA()
         Operation_ForAllDefs(reg, *op)
         {
           debug("DEF: %d", *reg);
-          lrid = Name2LRID(*reg);
+          lrid = SSAName2LRID(*reg);
           //better not have two definitions in the same block for the
           //same live range
           assert_same_orig_name(lrid, *reg, lrset, b); 
@@ -485,7 +488,7 @@ void LiveRange_BuildInitialSSA()
         Operation_ForAllUses(reg, *op)
         {
           debug("USE: %d", *reg);
-          lrid = Name2LRID(*reg);
+          lrid = SSAName2LRID(*reg);
           AddLiveUnitOnce(lrid, b, lrset, *reg);
         }
       } 
@@ -497,11 +500,11 @@ void LiveRange_BuildInitialSSA()
     info = SSA_live_out[id(b)];
     for(j = 0; j < info.size; j++)
     {
-      debug("LIVE: %d is LRID: %d",info.names[j], Name2LRID(info.names[j]));
+      debug("LIVE: %d is LRID: %d",info.names[j], SSAName2LRID(info.names[j]));
       //add block to each live range
-      lrid = Name2LRID(info.names[j]);
-      AddLiveUnitOnce(lrid, b, lrset, info.names[j]);
+      lrid = SSAName2LRID(info.names[j]);
       //VectorSet_Insert(lrset, lrid);
+      AddLiveUnitOnce(lrid, b, lrset, info.names[j]);
     }
 
     //now that we have the full set of lrids that need to include this
@@ -560,7 +563,6 @@ void CreateLiveRangeNameMap(Arena arena)
         Arena_GetMemClear(arena,sizeof(LRID) * SSA_def_count);
   Unsigned_Int idcnt = 0; //start the count at 1 to match SSA names
   Unsigned_Int setid; //a setid may be 0
-  Unsigned_Int NO_LRID = (Unsigned_Int)-1; //bigger than any lrid
   LOOPVAR i;
 
   //initialize to known value
@@ -586,13 +588,46 @@ void CreateLiveRangeNameMap(Arena arena)
   assert(idcnt == (uf_set_count)); //we start lrids at 1
 }
 
+
+/*
+ *========================================
+ * ConvertLiveInNamespaceSSAToLiveRange()
+ *========================================
+ * Changes live range name space to use live range ids rather than the
+ * ssa namespace.
+ *
+ * NOTE: Make sure you call this after building initial live ranges
+ * because the live units need to know which SSA name they contain and
+ * that information is taken from the ssa liveness info.
+ ***/
+void ConvertLiveInNamespaceSSAToLiveRange() 
+{
+
+  Liveness_Info info;
+  Block* blk;
+  LOOPVAR j;
+  LRID lrid;
+  ForAllBlocks(blk)
+  {
+    //TODO: do we need to convert live out too?
+    info = SSA_live_in[id(blk)];
+    for(j = 0; j < info.size; j++)
+    {
+      debug("Converting LIVE: %d to LRID: %d",info.names[j],
+            SSAName2LRID(info.names[j]));
+      lrid = SSAName2LRID(info.names[j]);
+      info.names[j] = lrid;
+    }
+  }
+}
+
 void DumpInitialLiveRanges()
 {
   LOOPVAR i;
   for(i = 0; i < SSA_def_count; i++)
   {
     debug("SSA_map: %d ==> %d", i, SSA_name_map[i]);
-    SSA_name_map[i] = Name2LRID(i);
+    SSA_name_map[i] = SSAName2LRID(i);
   }
   SSA_Restore();   
   Output();
@@ -630,7 +665,7 @@ void RenameRegisters()
         Operation_ForAllUses(reg, *op)
         {
           //Block_Dump(b, NULL, TRUE);
-          lrid = Name2LRID(*reg);
+          lrid = SSAName2LRID(*reg);
           *reg = GetMachineRegAssignment(b, lrid);
 
           if(*reg == REG_SPILL)
@@ -643,7 +678,7 @@ void RenameRegisters()
 
         Operation_ForAllDefs(reg, *op)
         {
-          lrid = Name2LRID(*reg);
+          lrid = SSAName2LRID(*reg);
           *reg = GetMachineRegAssignment(b, lrid); 
           if(*reg == REG_SPILL)
           {
@@ -984,15 +1019,16 @@ UFSet* Find_Set(Variable v)
 
 /*
  *===================
- * Name2LRID()
+ * SSAName2LRID()
  *===================
  * Maps a variable to the initial live range id to which that variable
  * belongs. Once the splitting process starts this mapping may not be
  * valid and should not be used.
  **/
-LRID Name2LRID(Variable v)
+LRID SSAName2LRID(Variable v)
 {
   assert(v < SSA_def_count);
+  assert(lr_name_map[v] != NO_LRID);
   return lr_name_map[v];
 }
 
@@ -1035,13 +1071,13 @@ BB_Stats Compute_BBStats(Arena arena, Unsigned_Int variable_count)
       {
         Operation_ForAllUses(reg, *op)
         {
-          lrid = Name2LRID(*reg);
+          lrid = SSAName2LRID(*reg);
           bstats[lrid].uses++;
         }
 
         Operation_ForAllDefs(reg, *op)
         {
-          lrid = Name2LRID(*reg);
+          lrid = SSAName2LRID(*reg);
           bstats[lrid].defs++;
           if(bstats[lrid].uses == 0)
             bstats[lrid].start_with_def = TRUE;

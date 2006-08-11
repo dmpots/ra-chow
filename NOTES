@@ -141,11 +141,25 @@ not sure how exactly this should be handeled. need to better figure
 out where to insert loads and stores.
 
 
+=====
+note
+=====
+Need to solve two problems for inserting stores:
+1) if the live range contains a def, figure out which blocks in the LR
+that def reaches
+
+2) for those blocks that def reaches, check if the successor block is
+in the LR
+  2.t) if it IS in the LR, then check if it needs a load
+    2.t.t) if it does need a load then insert a store
+    2.t.f) if it does not need a load then no store needed
+  2.f) if it is NOT in the LR then check to see if the LR is live in
+  at the successor block (only occurs after a split)
+    2.f.t) if it is live in at successor then insert a store
+    2.f.f) if it is not live in then no store needed
 
 
----
-reg101d, 102d on line 334 swap back and forth between values. find out
-why.
+
 
 
 
