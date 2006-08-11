@@ -5,7 +5,11 @@ TMPDIR=scratch
 CHOW=`pwd`/chow
 CLEAVE=`pwd`/cleave
 FIX_UNDEF=-"{`pwd`/fix_undef}"
-#EXTRA=$FIX_UNDEF
+DEAD=-d
+VALNUM=-v
+LAZY=-z
+CPROP=-c
+EXTRA="$DEAD $VALNUM $LAZY $CPROP"
 
 mkdir $TMPDIR
 pushd $TMPDIR
@@ -21,8 +25,8 @@ ctest /home/compiler/test/fmm/ $EXTRA -"{$CHOW $NREG}"
 #spec
 ctest /home/compiler/test/spec/doduc/ $EXTRA  -"{$CHOW $NREG}"
 ctest /home/compiler/test/spec/matrix300/ $EXTRA -"{$CHOW $NREG}"
-#ctest /home/compiler/test/spec/fpppp/ -"{$CHOW $NREG}"
-ctest /home/compiler/test/spec/tomcatv/ -"{$CHOW $NREG}"
+#ctest /home/compiler/test/spec/fpppp/ $EXTRA -"{$CHOW $NREG}"
+ctest /home/compiler/test/spec/tomcatv/ $EXTRA -"{$CHOW $NREG}"
 
 #spec95
 ctest /home/compiler/test/spec95X/applu $EXTRA  -"{$CHOW $NREG}"

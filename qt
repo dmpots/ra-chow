@@ -1,7 +1,12 @@
 #!/bin/bash
-NREG="-r16"
+NREG="-r16 -b5"
 TMPDIR=scratch
 CHOW=`pwd`/chow
+DEAD=-d
+VALNUM=-v
+LAZY=-z
+CPROP=-c
+EXTRA="$DEAD $VALNUM $LAZY $CPROP"
 
 mkdir $TMPDIR
 pushd $TMPDIR
@@ -9,14 +14,14 @@ pushd $TMPDIR
 #fmm
 #ctest /home/compiler/test/fmm/fmin/  -"{$CHOW $NREG}"
 #ctest /home/compiler/test/fmm/zeroin/  -"{$CHOW $NREG}"
-ctest /home/compiler/test/fmm/  -"{$CHOW $NREG}"
+ctest /home/compiler/test/fmm/  $EXTRA -"{$CHOW $NREG}"
 
 #spec
-ctest /home/compiler/test/spec/matrix300/ -"{$CHOW $NREG}"
-#ctest /home/compiler/test/spec/doduc/ -"{$CHOW $NREG}"
+ctest /home/compiler/test/spec/matrix300/ $EXTRA -"{$CHOW $NREG}"
+#ctest /home/compiler/test/spec/doduc/ $EXTRA -"{$CHOW $NREG}"
 
 #spec95x
-#ctest /home/compiler/test/spec95x/ -"{$CHOW $NREG}"
+#ctest /home/compiler/test/spec95x/ $EXTRA -"{$CHOW $NREG}"
 
 popd
 
