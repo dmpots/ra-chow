@@ -114,6 +114,7 @@ Unsigned_Int mRegisters;
 float mMVCost;
 float mLDSave;
 float mSTRSave;
+float wLoopDepth;
 
 /* used to keep track of the type of a parameter in the param table */
 typedef enum
@@ -131,7 +132,8 @@ typedef enum
   HELP_NUMREGISTERS,
   HELP_MVCOST,
   HELP_LDSAVE,
-  HELP_STRSAVE
+  HELP_STRSAVE,
+  HELP_LOOPDEPTH
 } Param_Help;
 
 
@@ -175,13 +177,14 @@ static void usage(Boolean);
 static Param_Details param_table[] = 
 {
   {'b', process_, 0,F,B, &pBBMaxInsts, INT_PARAM, HELP_BBMAXINSTS},
-  {'r', process_, 0,F,B, &mRegisters, INT_PARAM, HELP_NUMREGISTERS},
+  {'r', process_, 32,F,B, &mRegisters, INT_PARAM, HELP_NUMREGISTERS},
   {'m', process_, I,1.0,B, &mMVCost, FLOAT_PARAM, HELP_MVCOST},
   {'l', process_, I,2.0,B, &mLDSave, FLOAT_PARAM, HELP_LDSAVE},
-  {'s', process_, I,2.0,B,&mSTRSave, FLOAT_PARAM, HELP_STRSAVE} 
+  {'s', process_, I,2.0,B,&mSTRSave, FLOAT_PARAM, HELP_STRSAVE},
+  {'d', process_, 0,10.0,B,&wLoopDepth, FLOAT_PARAM, HELP_LOOPDEPTH} 
 };
 #define NPARAMS (sizeof(param_table) / sizeof(param_table[0]))
-#define PARAMETER_STRING ":b:r:m:l:s:"
+#define PARAMETER_STRING ":b:r:m:l:s:d:"
 
 /*
  *===========

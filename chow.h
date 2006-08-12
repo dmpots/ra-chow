@@ -18,6 +18,7 @@ extern Unsigned_Int mRegisters;
 extern float mMVCost;
 extern float mLDSave;
 extern float mSTRSave;
+extern float wLoopDepth;
 
 
 

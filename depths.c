@@ -19,7 +19,7 @@ static Void visit_successors(Unsigned_Int pred, Unsigned_Int i);
 //added by dave
 static Void Block_Clear_Visited_Flags();
 Unsigned_Int max_depth = 0;
-Unsigned_Int debug = TRUE;
+Unsigned_Int debug = FALSE;
 
 Void find_nesting_depths(Arena external_arena)
 {

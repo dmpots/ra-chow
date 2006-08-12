@@ -12,6 +12,8 @@
 #include <queue>
 #include <iterator>
 #include <stdlib.h>
+#include <math.h>
+
 #include "live_range.h"
 #include "debug.h"
 #include "chow.h"
@@ -36,7 +38,8 @@ static MemoryLocation* lr_mem_map;
 Unsigned_Int liverange_count;
 
 /* local functions */
-void Def_CollectUniqueUseNames(Variable v, std::list<Variable>& vgrp);
+static void Def_CollectUniqueUseNames(Variable, std::list<Variable>&);
+static Priority LiveUnit_ComputePriority(LiveUnit*);
 
 //iterate through interference list. if stmt used as a cheat for its
 //side effect 
@@ -351,9 +354,9 @@ void LRSet_Remove(LRSet* lrs, LiveRange* lr)
 
 
 /*
- *==============
+ *=========================
  * LiveRange_Constrained()
- *==============
+ *=========================
  *
  ***/
 Boolean LiveRange_Constrained(LiveRange* lr)
@@ -370,8 +373,31 @@ Boolean LiveRange_Constrained(LiveRange* lr)
  ***/
 Priority LiveRange_ComputePriority(LiveRange* lr)
 {
-  //TODO: implement ComputePriority
-  return .1*(rand() % 100);
+  //return .1*(rand() % 100);
+  LiveUnit* lu;
+  Priority pr = 0.0;
+  Unsigned_Int clu = 0; //count of live units
+  LiveRange_ForAllUnits(lr, lu)
+  {
+    pr += LiveUnit_ComputePriority(lu) * 
+          pow(wLoopDepth, depths[id(lu->block)]);
+    clu++;
+  }
+  return pr/clu;
+}
+
+/*
+ *=======================================
+ * LiveUnit_ComputePriority()
+ *=======================================
+ *
+ ***/
+Priority LiveUnit_ComputePriority(LiveUnit* lu)
+{
+  return
+    mLDSave  * lu->uses 
+  + mSTRSave * lu->defs 
+  - mMVCost  * (lu->need_store + lu->need_load);
 }
 
 /*
@@ -997,7 +1023,7 @@ void Def_CollectUniqueUseNames(Variable v, std::list<Variable>& vgrp)
       Chains_List* pcln;
       Chain_ForAllUses(pcln, vDef)
       {
-        Block* blk = pcln->block;
+        Block* blk = pcln->block; blk = blk; //only for debug
         //if it is a phi node then add the uses of the phi node
         if(pcln->chain.is_phi_node)
         {
