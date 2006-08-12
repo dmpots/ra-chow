@@ -16,6 +16,7 @@
 #include "debug.h"
 #include "chow.h"
 #include "util.h"
+#include "ra.h" //for computing loop nesting depth
 
 /* local variables */
 static Arena lr_arena;

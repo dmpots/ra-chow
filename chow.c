@@ -22,6 +22,7 @@
 #include "reach.h"
 #include "debug.h"
 #include "cleave.h"
+#include "ra.h" //for computing loop nesting depth
 
 #define SUCCESS 0
 #define ERROR -1
@@ -37,6 +38,7 @@ Arena  chow_arena;
 BB_Stats bb_stats;
 Unsigned_Int** register_map;
 Variable GBL_fp_origname;
+Unsigned_Int* depths; //loop nesting depth
 
 /* locals */
 static LRID* lr_name_map;
@@ -247,6 +249,9 @@ int main(Int argc, Char **argv)
   ConvertLiveInNamespaceSSAToLiveRange();
   //DumpInitialLiveRanges();
 
+  //compute loop nesting depth needed for computing priorities
+  find_nesting_depths(chow_arena);
+  
   //run the priority algorithm
   RunChow();
   RenameRegisters();

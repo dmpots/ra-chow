@@ -16,16 +16,21 @@ static Void reach_under(Block *block, Block *head, SparseSet loop);
 static Void dfs(Unsigned_Int i);
 static Void visit_successors(Unsigned_Int pred, Unsigned_Int i);
 
+//added by dave
+static Void Block_Clear_Visited_Flags();
+Unsigned_Int max_depth = 0;
+Unsigned_Int debug = TRUE;
+
 Void find_nesting_depths(Arena external_arena)
 {
-    depths =
+    depths = (Unsigned_Int*)
         Arena_GetMemClear(external_arena,
                           (block_count+1)*sizeof(Unsigned_Int2));
     depth_arena = Arena_Create();
     {
         Unsigned_Int index = 1;
         Unsigned_Int level = 0;
-        DJ_graph_info =
+        DJ_graph_info = (DJ_GRAPH_INFO*)
             Arena_GetMemClear(depth_arena, (block_count+1)*sizeof(DJ_GRAPH_INFO));
         
         Dominator_CalcDom(depth_arena, FALSE);
@@ -33,13 +38,14 @@ Void find_nesting_depths(Arena external_arena)
         {
             Block *block;
         
-            levels =
+            levels = (Linked_List**)
                 Arena_GetMemClear(depth_arena, (max_level+1)*sizeof(Linked_List *));
             ForAllBlocks(block)
             {
                 Unsigned_Int block_num = block->preorder_index;
                 Unsigned_Int level = DJ_graph_info[block_num].dom_level;
-                Linked_List *node = Arena_GetMem(depth_arena, sizeof(Linked_List));
+                Linked_List *node = (Linked_List*)
+                  Arena_GetMem(depth_arena, sizeof(Linked_List));
                 node->name = block_num;
                 node->next = levels[level];
                 levels[level] = node;
@@ -92,7 +98,7 @@ Void find_nesting_depths(Arena external_arena)
                                 DJ_graph_info[i].loop_head = block_index;
                                 if (i != block_index)
                                 {
-                                    Linked_List *node =
+                                    Linked_List *node = (Linked_List*)
                                         Arena_GetMem(depth_arena, sizeof(Linked_List));
                                     node->name = i;
                                     node->next = DJ_graph_info[block_index].children;
@@ -105,7 +111,8 @@ Void find_nesting_depths(Arena external_arena)
                 if (irreducible_loop)
                     {
                         Arena_Mark(depth_arena);
-                        scc_info = Arena_GetMemClear(depth_arena, (block_count+1)*sizeof(SCC_INFO));
+                        scc_info = (SCC_INFO*)
+                          Arena_GetMemClear(depth_arena, (block_count+1)*sizeof(SCC_INFO));
                         next_dfs_num = 0;
                         
                         {
@@ -280,7 +287,7 @@ static Void dfs(Unsigned_Int i)
                         DJ_graph_info[name].loop_head = i;
                         if (name != i)
                         {
-                            Linked_List *node =
+                            Linked_List *node = (Linked_List*)
                                 Arena_GetMem(depth_arena, sizeof(Linked_List));
                             node->name = name;
                             node->next = DJ_graph_info[i].children;
@@ -321,3 +328,12 @@ static Void visit_successors(Unsigned_Int pred, Unsigned_Int i)
         visit_successors(pred, node->name);
 }
 
+//added by dave... where was this originally?
+static Void Block_Clear_Visited_Flags()
+{
+  Block* blk;
+  ForAllBlocks(blk)
+  {
+    blk->visited = FALSE;
+  }
+}

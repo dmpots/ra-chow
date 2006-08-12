@@ -7,6 +7,7 @@ SRCFILES=union_find.c\
          chow.c\
          live_range.c\
          cleave.c\
+         depths.c\
 
 OBJS=${SRCFILES:.c=.o}
 
