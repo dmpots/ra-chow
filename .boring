@@ -37,3 +37,6 @@
 ^scratch
 chow
 ssa_dump
+cleave
+dot_dump
+vtest
