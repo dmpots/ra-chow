@@ -35,8 +35,9 @@
 (^|/)autom4te\.cache($|/)
 #for chow allocator
 ^scratch
-chow
-ssa_dump
-cleave
-dot_dump
-vtest
+^chow$
+^ssa_dump$
+^cleave$
+^dot_dump$
+^vtest$
+\.stats$
