@@ -445,6 +445,7 @@ void LiveRange_MarkNonCandidateAndDelete(LiveRange* lr)
   LiveRange* intf_lr;
   lr->color = NO_COLOR;
   lr->is_candidate = FALSE;
+  chowstats.cSpills++;
 
   debug("deleting LR: %d from interference graph", lr->id);
   LiveRange_ForAllFearsCopy(lr, intf_lr)
@@ -473,6 +474,7 @@ void LiveRange_AssignColor(LiveRange* lr)
   assert(color < mRegisters);
   lr->color = color;
   lr->is_candidate = FALSE; //no longer need a color
+  chowstats.clrColored++;
   debug("assigning color: %d to lr: %d", color, lr->id);
 
   //update the interfering live ranges forbidden set
@@ -628,6 +630,7 @@ LRTuple LiveRange_Split(LiveRange* origlr,
                      LRSet* constr_lrs,
                      LRSet* unconstr_lrs)
 {
+  chowstats.cSplits++;
 
   //create a new live range and initialize values
   LiveRange* newlr = LiveRange_SplitFrom(origlr);

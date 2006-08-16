@@ -39,6 +39,7 @@ BB_Stats bb_stats;
 Unsigned_Int** register_map;
 Variable GBL_fp_origname;
 Unsigned_Int* depths; //loop nesting depth
+Chow_Stats chowstats = {0};
 
 /* locals */
 static LRID* lr_name_map;
@@ -68,6 +69,7 @@ static Unsigned_Int tmp_reg_indx = 0;
 /* local functions */
 static void Dump(void);
 static void DumpParams(void);
+static void DumpChowStats(void);
 static void Output(void);
 static void Param_InitDefaults(void);
 static void LiveRange_BuildInitialSSA(void);
@@ -261,7 +263,8 @@ int main(Int argc, Char **argv)
   
   //Dump(); 
   Output(); 
-  DumpParams();
+  //DumpParams();
+  DumpChowStats();
   return EXIT_SUCCESS;
 } /* main */
 
@@ -329,6 +332,8 @@ void RunChow()
     LiveRange_AssignColor(lr);
     debug("LR: %d is given color:%d", lr->id, lr->color);
   }
+  //record some statistics about the allocation
+  chowstats.clrFinal = live_ranges.size();
 }
 
 void AllocChowMemory()
@@ -437,6 +442,7 @@ void LiveRange_BuildInitialSSA()
   }
   debug("SSA NAMES: %d", SSA_def_count);
   debug("UNIQUE LRs: %d", uf_set_count);
+  chowstats.clrInitial = uf_set_count;
 
   //create a mapping from ssa names to live range ids
   CreateLiveRangeNameMap(uf_arena);
@@ -1280,6 +1286,29 @@ void DumpParams()
     }
     fprintf(stderr, "\n");
   }
+}
+
+
+/*
+ *================
+ * DumpChowStats()
+ *================
+ *
+ ***/
+static void DumpChowStats()
+{
+  fprintf(stderr, "***** ALLOCATION STATISTICS *****\n");
+  fprintf(stderr, " Inital  LiveRange Count: %d\n",
+                                           chowstats.clrInitial);
+  fprintf(stderr, " Final   LiveRange Count: %d\n",
+                                           chowstats.clrFinal);
+  fprintf(stderr, " Colored LiveRange Count: %d\n",
+                                           chowstats.clrColored+1);
+  fprintf(stderr, " Spilled LiveRange Count: %d\n", 
+                                           chowstats.cSpills-1);
+  fprintf(stderr, " Number of Splits: %d\n", chowstats.cSplits);
+  fprintf(stderr, "***** ALLOCATION STATISTICS *****\n");
+  //note: +/- 1 colored/spill count is for frame pointer live range
 }
 
 
