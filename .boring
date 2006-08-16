@@ -41,3 +41,4 @@
 ^dot_dump$
 ^vtest$
 \.stats$
+\.gdb_history$
