@@ -75,7 +75,6 @@ Void find_nesting_depths(Arena external_arena)
                 Block_ForAllPreds(edge, block)
                 {
                     Block *pred = edge->pred;
-                    Unsigned_Int pred_index = pred->preorder_index;
                     if (pred != block->dom_node->parent)
                     {
                         if (!dominates(block, pred) && sp_back_edge(block, pred))

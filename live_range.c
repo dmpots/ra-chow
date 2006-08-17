@@ -6,7 +6,7 @@
  ********************************************************************/
 
 #include <Shared.h>
-#include <SSA.h> /* for traversing def-use chains */
+#include <SSA.h> 
 #include <assert.h>
 #include <algorithm>
 #include <queue>

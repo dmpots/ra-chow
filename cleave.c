@@ -41,13 +41,10 @@ static Inst* MoveInstTo(Inst* in, Block* blk);
 static void InsertJumpFromTo(Block* blkFrom, Block* blkTo);
 static void RemoveInstFromBlock(Inst* in);
 static void InsertInstInsertAfter(Inst* inInsert, Inst* inAfter);
-static void InsertInstInsertBefore(Inst* inInsert, Inst* inBefore);
 static Inst* In_CreateJmpTo(Expr ex);
 static Expr Ex_ExprFromLabel(Label* plbl);
 static Inst* In_LastInst(Block* blk);
-static void DumpBlock(Block* blk);
 static void FixControlFlow(Block* blkTop, Block* blkBot);
-static Boolean F_IsFrameInst(Inst* in);
 static Inst* In_FirstInst(Block* blk);
 
 /*
@@ -199,7 +196,6 @@ BlockTuple Blk2_CleaveBlockAt(Inst* inLast, Block* blk)
       bname(blk), bname(blkNew));
 
     inIterFix = MoveInstTo(in, blkNew);
-    //DumpBlock(blk); DumpBlock(blkNew);
 
     if(in == inLast)
     {
@@ -215,31 +211,6 @@ BlockTuple Blk2_CleaveBlockAt(Inst* inLast, Block* blk)
   blk2.top = blk;
   blk2.bottom = blkNew;
   return blk2;
-}
-
-/*
- *========================
- * F_IsFrameInst()
- *========================
- * 
- ***/
-Boolean F_IsFrameInst(Inst* in)
-{
-  return in->operations[0]->opcode == FRAME;
-}
-
-
-/*
- *========================
- * DumpBlock()
- *========================
- * 
- ***/
-void DumpBlock(Block* blk)
-{
-#ifdef __DEBUG
-  Block_Dump(blk, NULL, TRUE);
-#endif
 }
 
 /*
@@ -350,7 +321,6 @@ void FixControlFlow(Block* blkTop, Block* blkBot)
   //blkTop->pred does not change
   blkTop->succ = edgTopSucc;
 
-  //DumpBlock(blkTop); DumpBlock(blkBot);
 }
 
 
@@ -376,17 +346,6 @@ Block* Blk_CreateBlock()
 }
 
 
-
-/*
- *========================
- * InsertInstInsertBefore()
- *========================
- * 
- ***/
-void InsertInstInsertBefore(Inst* inInsert, Inst* inBefore)
-{
-  Block_Insert_Instruction(inInsert, inBefore);
-}
 
 
 /*

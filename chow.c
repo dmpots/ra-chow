@@ -67,7 +67,6 @@ static const Unsigned_Int num_tmp_regs =
 static Unsigned_Int tmp_reg_indx = 0;
 
 /* local functions */
-static void Dump(void);
 static void DumpParams(void);
 static void DumpChowStats(void);
 static void Output(void);
@@ -263,7 +262,7 @@ int main(Int argc, Char **argv)
   
   //Dump(); 
   Output(); 
-  //DumpParams();
+  DumpParams();
   DumpChowStats();
   return EXIT_SUCCESS;
 } /* main */
@@ -1137,19 +1136,6 @@ void Output()
 }
 
 
-/*
- *========
- * Dump()
- *========
- *
- ***/
-void Dump()
-{
-  Block* b;
-  ForAllBlocks(b){
-    Block_Dump(b, NULL, TRUE);
-   }
-}
 
 
 /*
