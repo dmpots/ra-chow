@@ -24,8 +24,6 @@
 static Arena lr_arena;
 static const float UNDEFINED_PRIORITY = 666;
 static const float MIN_PRIORITY = -3.4e38;
-static const Color UNDEFINED_COLOR = -1u;
-static const Color NO_COLOR = -2u;
 static VectorSet* used_reg_map;
 static VectorSet all_regs;
 static VectorSet no_regs;
@@ -150,7 +148,7 @@ LiveRange* LiveRange_Create(Arena arena)
   lr->orig_lrid = (LRID)-1;
   lr->id = 0;
   lr->priority = UNDEFINED_PRIORITY;
-  lr->color = UNDEFINED_COLOR;
+  lr->color = NO_COLOR;
   lr->bb_list = VectorSet_Create(arena, block_count+1);
   lr->fear_list = new std::set<LiveRange*, LRcmp>;
   lr->units = new std::list<LiveUnit*>;
@@ -492,7 +490,7 @@ void LiveRange_AssignColor(LiveRange* lr)
   {
     assert(!VectorSet_Member(used_reg_map[id(unit->block)], color));
     VectorSet_Insert(used_reg_map[id(unit->block)], color);
-    register_map[id(unit->block)][lr->orig_lrid] = color;
+    mBlkIdSSAName_Color[id(unit->block)][lr->orig_lrid] = color;
 
     if(unit->need_load)
     {
@@ -692,7 +690,7 @@ LiveRange* LiveRange_SplitFrom(LiveRange* origlr)
   newlr->tag = origlr->tag;
 
   //some sanity checks
-  assert(origlr->color == UNDEFINED_COLOR);
+  assert(origlr->color == NO_COLOR);
   assert(origlr->is_candidate == TRUE);
 
   return newlr;

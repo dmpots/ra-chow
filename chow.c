@@ -36,7 +36,7 @@ typedef unsigned int LOOPVAR;
 LRList live_ranges;
 Arena  chow_arena;
 BB_Stats bb_stats;
-Unsigned_Int** register_map;
+Unsigned_Int** mBlkIdSSAName_Color;
 Variable GBL_fp_origname;
 Unsigned_Int* depths; //loop nesting depth
 Chow_Stats chowstats = {0};
@@ -339,18 +339,18 @@ void RunChow()
 void AllocChowMemory()
 {
   //allocate a mapping of block x SSA_name -> register
-  register_map = (Unsigned_Int**)
+  mBlkIdSSAName_Color = (Unsigned_Int**)
     Arena_GetMemClear(chow_arena, 
                       sizeof(Unsigned_Int*) * (1+block_count));
   LOOPVAR i;
   for(i = 0; i < block_count+1; i++)
   {
-    register_map[i] = (Unsigned_Int*)
+    mBlkIdSSAName_Color[i] = (Unsigned_Int*)
       Arena_GetMemClear(chow_arena, 
                         sizeof(Unsigned_Int) * liverange_count );
       LOOPVAR j;
       for(j = 0; j < liverange_count; j++)
-        register_map[i][j] = (Unsigned_Int)REG_SPILL;
+        mBlkIdSSAName_Color[i][j] = NO_COLOR;
   }
 
   //allocate a map from colors to machine registers. we need such a
@@ -816,8 +816,8 @@ Register GetMachineRegAssignment(Block* b, LRID lrid)
 
    /* return REG_SPILL; spill everything */
 
-  Register color = register_map[id(b)][lrid];
-  if(color == REG_SPILL)
+  Register color = mBlkIdSSAName_Color[id(b)][lrid];
+  if(color == NO_COLOR)
     return REG_SPILL;
 
   return MachineRegForColor(color);

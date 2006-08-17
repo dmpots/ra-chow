@@ -21,6 +21,8 @@ extern float mSTRSave;
 extern float wLoopDepth;
 
 
+//constants
+const Color NO_COLOR = -1u;
 
 //usage statistics for variables
 struct bb_stat
@@ -48,7 +50,7 @@ typedef struct chow_stat Chow_Stats;
 
 //2-d array block x variable
 extern BB_Stats bb_stats;
-extern Unsigned_Int** register_map;
+extern Unsigned_Int** mBlkIdSSAName_Color;
 extern Chow_Stats chowstats;
 
 
