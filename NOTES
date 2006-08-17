@@ -168,3 +168,29 @@ On the other hand a coalesce pass helps me a lot on the order of
 40,000 operations.
 
 
+===========
+next steps
+===========
+1) look at memory usage to see where we can possible free some memory
+so that we do not use so much for allocation
+2) implement the optimizations of placement of loads and stores.
+  + review PRE as basis for the optimization
+  + need to understand when this is done in the algorithm. Chow says
+  to use it in order to have a more precise measurement of the
+  priority function. so perhaps we can compute it as part of computing
+  loads and stores, and just mark the load or store as movable, then
+  when computing priority we don't have to count the cost???
+3) Implement heuristics described in Chow paper for splitting. These
+should improve allocation runtime speed. Chow said they did not help
+allocation quality.
+4) Need a peephole optimizer to take care of ST followed by immediate
+LD
+5) Figure out why ra does not give correct results on fpppp and seems
+to loop forever on doduc (vgjyeh.i)
+
+Places where I think we can improve chow:
+1) he uses memory to connect live ranges after he has split them. If
+there was a way to notice that a store is loaded into a register in a
+successor block then we could just do a register to register copy
+rather than a ST/LD.
+

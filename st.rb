@@ -11,12 +11,14 @@
 ###############################################################
 
 def usage
-  puts "usage: st [basedir]"
+  puts "usage: st basedir cvs_file"
   exit(1)
 end
 
-stdir = ARGV[0]
-stdir || usage()
+$stdir = ARGV[0]
+$cvs_file = ARGV[1]
+$stdir   || usage()
+$cvs_file|| usage()
 
 #print file
 def cat(fname)
@@ -32,19 +34,35 @@ def sum(fname)
   counts.inject(0) {|sum, cnt| sum + cnt}
 end
 
+def dump_csv(header, values)
+  File.open($cvs_file, "w") {|csv|
+    csv.print(header.join(",")+"\n")
+    csv.print(values.join(",")+"\n")
+  }
+end
+
+
 gtotal = 0
-stfiles = File.join(stdir,"**","*.stats")
+totals = []
+tests = []
+stfiles = File.join($stdir,"**","*.stats")
 Dir.glob(stfiles).each do |f|
+  test = File.dirname(f).split("/").last
   puts "--------------------------------"
-  puts File.dirname(f).split("/").last
+  puts  test
   puts "--------------------------------"
   cat f
 
   ftotal = sum f
   gtotal += ftotal
   puts "  TOTAL: #{ftotal}"
+
+  totals << ftotal
+  tests << test
 end
 puts "GRAND TOTAL: #{gtotal}"
+
+dump_csv(tests, totals)
 
 
 
