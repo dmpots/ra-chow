@@ -168,9 +168,10 @@ On the other hand a coalesce pass helps me a lot on the order of
 40,000 operations.
 
 
-===========
+=================================
 next steps
-===========
+Thu Aug 17 15:20:08 CDT 2006
+=================================
 1) look at memory usage to see where we can possible free some memory
 so that we do not use so much for allocation
 2) implement the optimizations of placement of loads and stores.
@@ -187,10 +188,52 @@ allocation quality.
 LD
 5) Figure out why ra does not give correct results on fpppp and seems
 to loop forever on doduc (vgjyeh.i)
+6) Why does Chaitin beat me so bad? Because he selects better
+variables to store or is it something else?
+7) Code up an example where the graph is colorable only through a
+split. basically make the graph in Fig. 8 of chow's paper.
+8) Check to make sure the coalesce pass is actually working
+9) Review priority functions and weights given to functions to see
+that priorites are computed sensibly.
 
 Places where I think we can improve chow:
 1) he uses memory to connect live ranges after he has split them. If
 there was a way to notice that a store is loaded into a register in a
 successor block then we could just do a register to register copy
 rather than a ST/LD.
+
+Possible splitting heruistics
+1) don't add blocks if it makes the number of forbidden colors too
+great (i.e. more than 1)
+
+=================================
+First Comparison
+Thu Aug 17 15:24:23 CDT 2006
+=================================
+First comparison with the Chaitin allocator showed that it outpeformed
+my Chow allocator by anywhere from 12%-133% (1.12-2.33 times better).
+Brainstormed with Tim for a while about why this was the case. The
+main result we thought of was that Chaitin was using a partitioned
+register set while chow used a single register set. This means that
+my allocator was having a lot more interferences than ra which could
+be causing a lot more spilling.  Next steps to attack:
+
+  1) make chow allocator use partitioned register set
+  2) take a more detailed look at the code to see what is causing such
+  a poor allocation. One identified problem is a ST followed directly
+  by a LD.
+  3) implement optimized placement of loads and stores
+
+
+
+
+
+=================================
+List of experiments
+Thu Aug 17 15:20:46 CDT 2006
+=================================
++ Crank the size of a basic block down to 1 and compare the allocation
+with Chaitin
+
+
 
