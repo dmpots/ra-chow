@@ -40,10 +40,11 @@ Unsigned_Int** mBlkIdSSAName_Color;
 Variable GBL_fp_origname;
 Unsigned_Int* depths; //loop nesting depth
 Chow_Stats chowstats = {0};
+Unsigned_Int cRegisterClass = 1;
 
 /* locals */
 static LRID* lr_name_map;
-static Register*  color_mreg_map = NULL;
+static Register**  mRcColor_Reg= NULL;
 static const Register REG_SPILL = 666;
 static const Register REG_UNASSIGNED = 999;
 static const Register REG_FP = 555;
@@ -77,12 +78,12 @@ static void RenameRegisters();
 static BB_Stats Compute_BBStats(Arena, Unsigned_Int);
 static void CreateLiveRangeNameMap(Arena);
 static void assert_same_orig_name(LRID,Variable,VectorSet,Block* b);
-Register get_free_tmp_reg();
-void reset_free_tmp_regs();
+static Register get_free_tmp_reg();
+static void reset_free_tmp_regs();
 static void AllocChowMemory();
 static Register GetMachineRegAssignment(Block*, LRID);
 static Operation* get_frame_operation();
-MemoryLocation Frame_GetStackSize(Operation* frame_op);
+static MemoryLocation Frame_GetStackSize(Operation* frame_op);
 static void Frame_SetStackSize(Operation* frame_op, MemoryLocation sp);
 static void Frame_SetRegFP(Operation* frame_op);
 static Variable Frame_GetRegFP(Operation* frame_op);
@@ -98,11 +99,12 @@ static Inst* Inst_CreateStore(Opcode_Names opcode,
                       Unsigned_Int offset,
                       Register base_reg,
                       Register val);
-void InitChow();
-UFSet* Find_Set(Variable v);
-LRID SSAName2LRID(Variable v);
-void DumpInitialLiveRanges();
-void ConvertLiveInNamespaceSSAToLiveRange();
+static void InitChow();
+static UFSet* Find_Set(Variable v);
+static LRID SSAName2LRID(Variable v);
+static void DumpInitialLiveRanges();
+static void ConvertLiveInNamespaceSSAToLiveRange();
+static Register MachineRegForColor(Color c, RegisterClass rc);
 
 
 
@@ -355,11 +357,18 @@ void AllocChowMemory()
   //allocate a map from colors to machine registers. we need such a
   //mapping because we use VectorSets to represent colors but don't
   //necessarily want color 0 to map to machine register 0
-  color_mreg_map = (Unsigned_Int*)
-     Arena_GetMemClear(chow_arena, sizeof(Unsigned_Int) * mRegisters);
-  LOOPVAR k;
-  for(i = 0, k = 1; i < mRegisters; i++)
-    color_mreg_map[i] = k++;
+  mRcColor_Reg = (Unsigned_Int**)
+     Arena_GetMemClear(chow_arena, sizeof(Unsigned_Int) * cRegisterClass);
+  for(RegisterClass rc = 0; rc < cRegisterClass; rc++)
+  {
+    Unsigned_Int cRegs = RegisterClass_NumMachineReg(rc);
+    mRcColor_Reg[rc] = (Unsigned_Int*)
+    Arena_GetMemClear(chow_arena, sizeof(Register) * cRegs);
+
+    Register r = RegisterClass_MachineRegStart(rc);
+    for(i = 0; i < cRegs; i++)
+      mRcColor_Reg[rc][i] = r++;
+  }
 }
 
 /*
@@ -819,12 +828,13 @@ Register GetMachineRegAssignment(Block* b, LRID lrid)
   if(color == NO_COLOR)
     return REG_SPILL;
 
-  return MachineRegForColor(color);
+  RegisterClass rc = LiveRange_RegisterClass(LiveRange_ForLRID(lrid));
+  return MachineRegForColor(color, rc);
 }
 
-Register MachineRegForColor(Color c)
+Register MachineRegForColor(Color c, RegisterClass rc)
 {
-  return color_mreg_map[c];
+  return mRcColor_Reg[rc][c];
 }
 
 /*

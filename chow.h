@@ -21,7 +21,8 @@ extern float mSTRSave;
 extern float wLoopDepth;
 
 
-//constants
+
+/* constants */
 const Color NO_COLOR = -1u;
 
 //usage statistics for variables
@@ -47,6 +48,9 @@ struct chow_stat
 typedef struct bb_stat BB_Stat;
 typedef BB_Stat** BB_Stats;
 typedef struct chow_stat Chow_Stats;
+typedef Unsigned_Int RegisterClass;
+
+/* support multiple register classes */
 
 //2-d array block x variable
 extern BB_Stats bb_stats;
@@ -55,13 +59,13 @@ extern Chow_Stats chowstats;
 
 
 /* exported functions */
-Register MachineRegForColor(Color c);
 Inst* Insert_Store(LRID,Inst*,Register,Register,InstInsertLocation);
 void Insert_Load(LRID, Inst*, Register, Register);
 MemoryLocation ReserveStackSpace(Unsigned_Int size);
 
 //globals
 extern Variable GBL_fp_origname;
+extern Unsigned_Int cRegisterClass;
 
 #endif
 

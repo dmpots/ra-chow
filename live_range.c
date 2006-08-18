@@ -24,7 +24,7 @@
 static Arena lr_arena;
 static const float UNDEFINED_PRIORITY = 666;
 static const float MIN_PRIORITY = -3.4e38;
-static VectorSet* used_reg_map;
+static VectorSet** mRcBlkId_VsUsedColor;
 static VectorSet all_regs;
 static VectorSet no_regs;
 static VectorSet tmpset;
@@ -38,6 +38,9 @@ Unsigned_Int liverange_count;
 /* local functions */
 static void Def_CollectUniqueUseNames(Variable, std::list<Variable>&);
 static Priority LiveUnit_ComputePriority(LiveUnit*);
+static Boolean ColorSet_Full(VectorSet vsColor);
+static RegisterClass LiveRange_RegisterClass(LiveRange* lr);
+static Boolean LiveRange_ColorsAvailable(LiveRange* lr);
 
 //iterate through interference list. if stmt used as a cheat for its
 //side effect 
@@ -95,16 +98,22 @@ void LiveRange_AllocLiveRanges(Arena arena,
     lrs[i]->id = i;
   }
 
-  //allocate a mapping from blocks to a set of used registers
-  used_reg_map = (VectorSet*)
-       Arena_GetMemClear(arena,sizeof(VectorSet)*(block_count+1));
-  Block* b;
-  ForAllBlocks(b)
+  //allocate a mapping from blocks to a set of used colors
+  mRcBlkId_VsUsedColor = (VectorSet**)
+       Arena_GetMemClear(arena,sizeof(VectorSet*)*(cRegisterClass));
+
+  for(RegisterClass rc = 0; rc < cRegisterClass; rc++)
   {
-    i = id(b);
-    used_reg_map[i] = VectorSet_Create(arena, mRegisters);
-    VectorSet_Clear(used_reg_map[i]);
-  } 
+    mRcBlkId_VsUsedColor[rc] = (VectorSet*)
+        Arena_GetMemClear(arena,sizeof(VectorSet)*(block_count+1));
+    Block* b;
+    ForAllBlocks(b)
+    {
+      Unsigned_Int bid = id(b);
+      mRcBlkId_VsUsedColor[rc][bid] = VectorSet_Create(arena, mRegisters); 
+      VectorSet_Clear(mRcBlkId_VsUsedColor[rc][bid]);
+    } 
+  }
 
   //set where all register bits are set
   all_regs  = VectorSet_Create(arena, mRegisters);
@@ -290,6 +299,10 @@ void LiveRange_RemoveLiveUnit(LiveRange* lr, LiveUnit* unit)
  ***/
 Boolean LiveRange_InterferesWith(LiveRange* lr1, LiveRange* lr2)
 {
+  if(LiveRange_RegisterClass(lr1) != LiveRange_RegisterClass(lr2))
+  {
+    return FALSE;
+  }
   VectorSet_Intersect(tmpbbset, lr1->bb_list, lr2->bb_list);
   return (!VectorSet_Equal(no_bbs, tmpbbset));
 }
@@ -413,13 +426,16 @@ Boolean LiveRange_UnColorable(LiveRange* lr)
   //basic blocks to used registers for that block in order to see
   //which registers are available.
   
+  RegisterClass rc = LiveRange_RegisterClass(lr); 
   LiveUnit* unit;
   LiveRange_ForAllUnits(lr, unit)
   {
     //must have a free register where we have a def or a use
     if(unit->defs > 0 || unit->uses > 0)
     {
-      if(!RegisterSet_Full(used_reg_map[id(unit->block)]))
+      VectorSet vsUsedColors =
+        mRcBlkId_VsUsedColor[rc][id(unit->block)];
+      if(!ColorSet_Full(vsUsedColors))
       {
         return false;
       }
@@ -486,10 +502,12 @@ void LiveRange_AssignColor(LiveRange* lr)
   }
 
   //update the basic block taken set
+  RegisterClass rc = LiveRange_RegisterClass(lr);
   LiveRange_ForAllUnits(lr, unit)
   {
-    assert(!VectorSet_Member(used_reg_map[id(unit->block)], color));
-    VectorSet_Insert(used_reg_map[id(unit->block)], color);
+    VectorSet vs = mRcBlkId_VsUsedColor[rc][id(unit->block)];
+    assert(!VectorSet_Member(vs, color));
+    VectorSet_Insert(vs, color);
     mBlkIdSSAName_Color[id(unit->block)][lr->orig_lrid] = color;
 
     if(unit->need_load)
@@ -576,7 +594,7 @@ void LiveRange_SplitNeighbors(LiveRange* lr,
     if(!(intf_lr->is_candidate)) continue;
 
     //split if no registers available
-    if(!LiveRange_RegistersAvailable(intf_lr))
+    if(!LiveRange_ColorsAvailable(intf_lr))
     {
       debug("Need to split LR: %d", intf_lr->id);
       if(LiveRange_UnColorable(intf_lr))
@@ -762,6 +780,7 @@ void LiveRange_UpdateAfterSplit(LiveRange* newlr,
   //removing live units means we need to update the forbidden list
   //only do this for the orig live range since the new live range
   //keeps track as it goes
+  RegisterClass rc = LiveRange_RegisterClass(origlr);
   LiveUnit* unit;
   VectorSet_Clear(origlr->forbidden);
   LiveRange_ForAllUnits(origlr, unit)
@@ -769,7 +788,7 @@ void LiveRange_UpdateAfterSplit(LiveRange* newlr,
     unit = *i;
     VectorSet_Union(origlr->forbidden, 
                     origlr->forbidden,
-                    used_reg_map[id(unit->block)]);
+                    mRcBlkId_VsUsedColor[rc][id(unit->block)]);
   }
 
   //reset the priorites on the split live ranges since they are no
@@ -788,7 +807,10 @@ void LiveRange_UpdateAfterSplit(LiveRange* newlr,
 void LiveRange_AddBlock(LiveRange* lr, Block* b)
 {
   VectorSet_Insert(lr->bb_list, id(b));
-  VectorSet_Union(lr->forbidden, lr->forbidden, used_reg_map[id(b)]);
+  RegisterClass rc = LiveRange_RegisterClass(lr);
+  VectorSet_Union(lr->forbidden, 
+                  lr->forbidden,
+                  mRcBlkId_VsUsedColor[rc][id(b)]);
 }
 
 
@@ -819,9 +841,10 @@ LiveUnit* LiveRange_ChooseSplitPoint(LiveRange* lr)
   LiveUnit* first = NULL;
   LiveUnit* startdefunit = NULL;
 
+  RegisterClass rc = LiveRange_RegisterClass(lr);
   LiveRange_ForAllUnits(lr, unit)
   {
-    if(!RegisterSet_Full(used_reg_map[id(unit->block)]))
+    if(!ColorSet_Full(mRcBlkId_VsUsedColor[rc][id(unit->block)]))
     {
       //only take it if there is a use
       if(unit->uses > 0)
@@ -859,8 +882,11 @@ LiveUnit* LiveRange_IncludeInSplit(LiveRange* newlr,
   LiveUnit* unit = NULL;
   //we can include this block in the split if it does not max out the
   //forbidden set
-  VectorSet_Union(tmpset, newlr->forbidden, used_reg_map[id(b)]);
-  if(!RegisterSet_Full(tmpset))
+  RegisterClass rc = LiveRange_RegisterClass(origlr);
+  VectorSet_Union(tmpset,
+                  newlr->forbidden, 
+                  mRcBlkId_VsUsedColor[rc][id(b)]);
+  if(!ColorSet_Full(tmpset))
   {
     unit = LiveRange_LiveUnitForBlock(origlr,b);
   }
@@ -1084,16 +1110,16 @@ Boolean LiveRange_ContainsBlock(LiveRange* lr, Block* b)
 
 /*
  *============================
- * LiveRange_RegistersAvailable()
+ * LiveRange_ColorsAvailable()
  *============================
  * return true if there are registers that can be assigned to this
  * live range in at least on basic block
  */ 
-Boolean LiveRange_RegistersAvailable(LiveRange* lr)
+Boolean LiveRange_ColorsAvailable(LiveRange* lr)
 {
-  return (!RegisterSet_Full(lr->forbidden));
+  return (!ColorSet_Full(lr->forbidden));
 }
-Boolean RegisterSet_Full(VectorSet set)
+Boolean ColorSet_Full(VectorSet set)
 {
   return VectorSet_Equal(all_regs, set);
 }
@@ -1494,3 +1520,16 @@ MemoryLocation LiveRange_MemLocation(LiveRange* lr)
 
   return lr_mem_map[lr->orig_lrid];
 }
+
+/*
+ *========================
+ * LiveRange_MemLocation()
+ *========================
+ */
+RegisterClass LiveRange_RegisterClass(LiveRange* lr)
+{
+  //TODO: implement LiveRange_RegisterClass
+  return 0;
+}
+
+

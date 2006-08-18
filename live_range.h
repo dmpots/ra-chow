@@ -127,7 +127,6 @@ MemoryLocation LiveRange_MemLocation(LiveRange* lr);
 
 
 //temporary while resolving VectorSet_Equal problem
-Boolean RegisterSet_Full(VectorSet set);
 Boolean VectorSet_Empty(VectorSet set);
 
 //Dumps
