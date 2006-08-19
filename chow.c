@@ -23,6 +23,7 @@
 #include "debug.h"
 #include "cleave.h"
 #include "ra.h" //for computing loop nesting depth
+#include "rc.h" //RegisterClass definitions 
 
 #define SUCCESS 0
 #define ERROR -1
@@ -40,11 +41,9 @@ Unsigned_Int** mBlkIdSSAName_Color;
 Variable GBL_fp_origname;
 Unsigned_Int* depths; //loop nesting depth
 Chow_Stats chowstats = {0};
-Unsigned_Int cRegisterClass = 1;
 
 /* locals */
 static LRID* lr_name_map;
-static Register**  mRcColor_Reg= NULL;
 static const Register REG_SPILL = 666;
 static const Register REG_UNASSIGNED = 999;
 static const Register REG_FP = 555;
@@ -104,20 +103,18 @@ static UFSet* Find_Set(Variable v);
 static LRID SSAName2LRID(Variable v);
 static void DumpInitialLiveRanges();
 static void ConvertLiveInNamespaceSSAToLiveRange();
-static Register MachineRegForColor(Color c, RegisterClass rc);
-
-
-
 
 /*
  * allocation parameters 
  */
 Unsigned_Int pBBMaxInsts;
-Unsigned_Int mRegisters;
 float mMVCost;
 float mLDSave;
 float mSTRSave;
 float wLoopDepth;
+//
+static Boolean fEnableRegisterClasses;
+static Unsigned_Int mRegisters;
 
 /* used to keep track of the type of a parameter in the param table */
 typedef enum
@@ -136,7 +133,8 @@ typedef enum
   HELP_MVCOST,
   HELP_LDSAVE,
   HELP_STRSAVE,
-  HELP_LOOPDEPTH
+  HELP_LOOPDEPTH,
+  HELP_REGISTERCLASSES
 } Param_Help;
 
 
@@ -184,10 +182,12 @@ static Param_Details param_table[] =
   {'m', process_, I,1.0,B, &mMVCost, FLOAT_PARAM, HELP_MVCOST},
   {'l', process_, I,2.0,B, &mLDSave, FLOAT_PARAM, HELP_LDSAVE},
   {'s', process_, I,2.0,B,&mSTRSave, FLOAT_PARAM, HELP_STRSAVE},
-  {'d', process_, 0,10.0,B,&wLoopDepth, FLOAT_PARAM, HELP_LOOPDEPTH} 
+  {'d', process_, 0,10.0,B,&wLoopDepth, FLOAT_PARAM, HELP_LOOPDEPTH},
+  {'p', process_, I,F,FALSE,&fEnableRegisterClasses, BOOL_PARAM, 
+                                                  HELP_REGISTERCLASSES} 
 };
 #define NPARAMS (sizeof(param_table) / sizeof(param_table[0]))
-#define PARAMETER_STRING ":b:r:m:l:s:d:"
+#define PARAMETER_STRING ":b:r:m:l:s:d:p"
 
 /*
  *===========
@@ -249,7 +249,10 @@ int main(Int argc, Char **argv)
   //split basic blocks to desired size
   InitCleaver(chow_arena, pBBMaxInsts);
   CleaveBlocks();
-   
+  
+  //initialize the register class data structures 
+  InitRegisterClasses(chow_arena, mRegisters, fEnableRegisterClasses);
+
   //compute initial live ranges
   LiveRange_BuildInitialSSA();
   ConvertLiveInNamespaceSSAToLiveRange();
@@ -354,21 +357,6 @@ void AllocChowMemory()
         mBlkIdSSAName_Color[i][j] = NO_COLOR;
   }
 
-  //allocate a map from colors to machine registers. we need such a
-  //mapping because we use VectorSets to represent colors but don't
-  //necessarily want color 0 to map to machine register 0
-  mRcColor_Reg = (Unsigned_Int**)
-     Arena_GetMemClear(chow_arena, sizeof(Unsigned_Int) * cRegisterClass);
-  for(RegisterClass rc = 0; rc < cRegisterClass; rc++)
-  {
-    Unsigned_Int cRegs = RegisterClass_NumMachineReg(rc);
-    mRcColor_Reg[rc] = (Unsigned_Int*)
-    Arena_GetMemClear(chow_arena, sizeof(Register) * cRegs);
-
-    Register r = RegisterClass_MachineRegStart(rc);
-    for(i = 0; i < cRegs; i++)
-      mRcColor_Reg[rc][i] = r++;
-  }
 }
 
 /*
@@ -454,6 +442,12 @@ void LiveRange_BuildInitialSSA()
 
   //create a mapping from ssa names to live range ids
   CreateLiveRangeNameMap(uf_arena);
+  if(fEnableRegisterClasses) //classes are by type
+  {
+    RegisterClass_CreateLiveRangeTypeMap(uf_arena,
+                                       uf_set_count,
+                                       lr_name_map);
+  }
 
   //now that we know how many live ranges we start with allocate them
   bb_stats = Compute_BBStats(uf_arena, SSA_def_count);
@@ -609,7 +603,6 @@ void CreateLiveRangeNameMap(Arena arena)
   }
   assert(idcnt == (uf_set_count)); //we start lrids at 1
 }
-
 
 /*
  *========================================
@@ -828,13 +821,8 @@ Register GetMachineRegAssignment(Block* b, LRID lrid)
   if(color == NO_COLOR)
     return REG_SPILL;
 
-  RegisterClass rc = LiveRange_RegisterClass(LiveRange_ForLRID(lrid));
-  return MachineRegForColor(color, rc);
-}
-
-Register MachineRegForColor(Color c, RegisterClass rc)
-{
-  return mRcColor_Reg[rc][c];
+  RegisterClass rc = LiveRange_RegisterClass(live_ranges[lrid]);
+  return RegisterClass_MachineRegForColor(rc, color);
 }
 
 /*

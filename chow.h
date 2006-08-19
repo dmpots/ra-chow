@@ -14,7 +14,6 @@
 /*
  * allocation parameters 
  */
-extern Unsigned_Int mRegisters;
 extern float mMVCost;
 extern float mLDSave;
 extern float mSTRSave;
@@ -48,7 +47,6 @@ struct chow_stat
 typedef struct bb_stat BB_Stat;
 typedef BB_Stat** BB_Stats;
 typedef struct chow_stat Chow_Stats;
-typedef Unsigned_Int RegisterClass;
 
 /* support multiple register classes */
 
@@ -65,7 +63,6 @@ MemoryLocation ReserveStackSpace(Unsigned_Int size);
 
 //globals
 extern Variable GBL_fp_origname;
-extern Unsigned_Int cRegisterClass;
 
 #endif
 

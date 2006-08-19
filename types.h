@@ -14,6 +14,7 @@ typedef Unsigned_Int Variable;
 typedef Unsigned_Int MemoryLocation;
 typedef Unsigned_Int LRID;
 typedef Unsigned_Int LOOPVAR;
+typedef Unsigned_Int RegisterClass;
 
 //simple switch to say where to insert an instruction
 enum InstInsertLocation {BEFORE_INST, AFTER_INST};

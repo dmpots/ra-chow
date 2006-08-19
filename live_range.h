@@ -87,7 +87,6 @@ struct lr_tuple
 /* functions */
 //LiveRange
 void LiveRange_AllocLiveRanges(Arena, LRList&, Unsigned_Int);
-LiveRange* LiveRange_Create(Arena);
 void LiveRange_Alloc(Arena);
 LiveUnit* LiveRange_AddLiveUnit(LiveRange*, LiveUnit*);
 LiveUnit* LiveRange_AddLiveUnitBlock(LiveRange*, Block*);
@@ -102,7 +101,6 @@ void LiveRange_RemoveInterference(LiveRange* from, LiveRange* with);
 void LiveRange_AssignColor(LiveRange* lr);
 void LiveRange_SplitNeighbors(LiveRange* lr, LRSet* , LRSet*);
 LRTuple LiveRange_Split(LiveRange* lr, LRSet* , LRSet* );
-Boolean LiveRange_RegistersAvailable(LiveRange* lr);
 LiveUnit* LiveRange_ChooseSplitPoint(LiveRange*);
 LiveUnit* LiveRange_IncludeInSplit(LiveRange*, LiveRange*, Block*);
 LiveUnit* LiveRange_LiveUnitForBlock(LiveRange* lr, Block* b);
@@ -123,11 +121,7 @@ void LiveRange_InsertLoad(LiveRange* lr, LiveUnit* unit);
 void LiveRange_InsertStore(LiveRange*lr, LiveUnit* unit);
 LiveRange* LiveRange_SplitFrom(LiveRange* origlr);
 MemoryLocation LiveRange_MemLocation(LiveRange* lr);
-
-
-
-//temporary while resolving VectorSet_Equal problem
-Boolean VectorSet_Empty(VectorSet set);
+RegisterClass LiveRange_RegisterClass(LiveRange* lr);
 
 //Dumps
 void LiveRange_DumpAll(LRList*);
