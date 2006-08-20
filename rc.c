@@ -147,6 +147,7 @@ void RegisterClass_CreateLiveRangeTypeMap(Arena arena,
     {
       def_type = Operation_Def_Type(c.op_pointer.operation, i);
     }
+    debug("LRID: %3d ==> Type: %d", mSSAName_LRID[i], def_type);
     mLrId_DefType[mSSAName_LRID[i]] = def_type;
   }
 }
@@ -169,7 +170,9 @@ Unsigned_Int RegisterClass_NumMachineReg(RegisterClass rc)
 Register RegisterClass_MachineRegForColor(RegisterClass rc, Color c)
 {
   //mRcColor_Reg[rc][c];
-  return (rc*REGCLASS_SPACE)+(c);
+  Register r = (rc*REGCLASS_SPACE)+(c);
+  debug("MACHINE REG(rc,c):(%d,%d) = %d",rc,c,r);
+  return  r;
 }
 
 VectorSet RegisterClass_TmpVectorSet(RegisterClass rc)

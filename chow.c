@@ -222,7 +222,12 @@ int main(Int argc, Char **argv)
         {
           if(c == param_table[i].name)
           {
-            param_table[i].func(&param_table[i], optarg);
+            char* val = optarg;
+            if(param_table[i].type == BOOL_PARAM)
+            {
+              val = "TRUE"; //the presence of the arg sets it to true
+            }
+            param_table[i].func(&param_table[i], val);
             break;
           } 
         }
@@ -408,6 +413,7 @@ void LiveRange_BuildInitialSSA()
   Unsigned_Int ssa_options = 0;
   ssa_options |= SSA_PRUNED;
   ssa_options |= SSA_BUILD_DEF_USE_CHAINS;
+  ssa_options |= SSA_BUILD_USE_DEF_CHAINS;
   ssa_options |= SSA_CONSERVE_LIVE_IN_INFO;
   ssa_options |= SSA_CONSERVE_LIVE_OUT_INFO;
   ssa_options |= SSA_IGNORE_TAGS;
@@ -1179,8 +1185,7 @@ int process_(Param_Details* param, char* arg)
         *((float*)(param->value)) = atof(arg);
         break;
       case BOOL_PARAM:
-        //TODO: implement boolean params
-        assert(0 == 1);
+        *((Boolean*)(param->value)) = TRUE;
         break;
       default:
         error("unknown type");
