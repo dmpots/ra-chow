@@ -29,7 +29,11 @@ end
 def sum(fname)
   counts = 
   File.readlines(fname).map do |line|
-    line.split(" ").last.to_i
+    if line =~ /^\w/ then
+      line.split(" ").last.to_i 
+    else
+      0
+    end
   end
   counts.inject(0) {|sum, cnt| sum + cnt}
 end

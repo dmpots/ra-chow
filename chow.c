@@ -50,6 +50,7 @@ static const Register REG_FP = 555;
 static const LRID     NO_LRID = (LRID)-1;//bigger than any lrid
 static MemoryLocation stack_pointer = 0;
 static LRID fp_lrid;
+static Unsigned_Int clrInitial = 0; //count of initial live ranges
 
 //controls which registers are considered temporary registers, the
 //large number is due to FRAME and JSR ops which may require a large
@@ -436,22 +437,23 @@ void LiveRange_BuildInitialSSA()
       }
     }
   }
+  clrInitial = uf_set_count - 1; //no lr for SSA name 0
   debug("SSA NAMES: %d", SSA_def_count);
-  debug("UNIQUE LRs: %d", uf_set_count);
-  chowstats.clrInitial = uf_set_count;
+  debug("UNIQUE LRs: %d", clrInitial);
+  chowstats.clrInitial = clrInitial;
 
   //create a mapping from ssa names to live range ids
   CreateLiveRangeNameMap(uf_arena);
   if(fEnableRegisterClasses) //classes are by type
   {
     RegisterClass_CreateLiveRangeTypeMap(uf_arena,
-                                       uf_set_count,
+                                       clrInitial,
                                        lr_name_map);
   }
 
   //now that we know how many live ranges we start with allocate them
   bb_stats = Compute_BBStats(uf_arena, SSA_def_count);
-  LiveRange_AllocLiveRanges(chow_arena, live_ranges, uf_set_count);
+  LiveRange_AllocLiveRanges(chow_arena, live_ranges, clrInitial);
 
   //build the interference graph
   //find all live ranges that are referenced or live out in this
@@ -465,7 +467,7 @@ void LiveRange_BuildInitialSSA()
   Operation** op;
   Unsigned_Int* reg;
   LOOPVAR j;
-  VectorSet lrset = VectorSet_Create(uf_arena, uf_set_count);
+  VectorSet lrset = VectorSet_Create(uf_arena, clrInitial);
   ForAllBlocks(b)
   {
 
@@ -576,8 +578,8 @@ Block* b)
 void CreateLiveRangeNameMap(Arena arena)
 {
   lr_name_map = (LRID*)
-        Arena_GetMemClear(arena,sizeof(LRID) * SSA_def_count);
-  Unsigned_Int idcnt = 0; //start the count at 1 to match SSA names
+        Arena_GetMemClear(arena,sizeof(LRID) * (SSA_def_count));
+  Unsigned_Int idcnt = 0; 
   Unsigned_Int setid; //a setid may be 0
   LOOPVAR i;
 
@@ -585,10 +587,10 @@ void CreateLiveRangeNameMap(Arena arena)
   for(i = 0; i < SSA_def_count; i++)
     lr_name_map[i] = NO_LRID;
   
-  for(i = 0; i < SSA_def_count; i++)
+  for(i = 1; i < SSA_def_count; i++)
   {
     setid = Find_Set(i)->id;
-    debug("name: %d setid: %d lrid: %d", i, setid, lr_name_map[setid]);
+    //debug("name: %d setid: %d lrid: %d", i, setid, lr_name_map[setid]);
     if(lr_name_map[setid] != NO_LRID)
     {
       lr_name_map[i] = lr_name_map[setid]; //already seen this lr
@@ -599,9 +601,9 @@ void CreateLiveRangeNameMap(Arena arena)
       lr_name_map[i] = lr_name_map[setid] = idcnt++;
     }
 
-    debug("variable: %d ==> LRID: %d", i, lr_name_map[i]);
+    debug("SSAName: %3d ==> LRID: %3d", i, lr_name_map[i]);
   }
-  assert(idcnt == (uf_set_count)); //we start lrids at 1
+  assert(idcnt == (clrInitial)); //we start lrids at 0
 }
 
 /*
@@ -679,7 +681,6 @@ void RenameRegisters()
         
         Operation_ForAllUses(reg, *op)
         {
-          //Block_Dump(b, NULL, TRUE);
           lrid = SSAName2LRID(*reg);
           *reg = GetMachineRegAssignment(b, lrid);
 
@@ -1039,7 +1040,7 @@ UFSet* Find_Set(Variable v)
 LRID SSAName2LRID(Variable v)
 {
   assert(v < SSA_def_count);
-  assert(lr_name_map[v] != NO_LRID);
+  assert((lr_name_map[v] != NO_LRID) || v == 0);
   return lr_name_map[v];
 }
 
