@@ -181,8 +181,8 @@ static Param_Details param_table[] =
   {'b', process_, 0,F,B, &pBBMaxInsts, INT_PARAM, HELP_BBMAXINSTS},
   {'r', process_, 32,F,B, &mRegisters, INT_PARAM, HELP_NUMREGISTERS},
   {'m', process_, I,1.0,B, &mMVCost, FLOAT_PARAM, HELP_MVCOST},
-  {'l', process_, I,2.0,B, &mLDSave, FLOAT_PARAM, HELP_LDSAVE},
-  {'s', process_, I,2.0,B,&mSTRSave, FLOAT_PARAM, HELP_STRSAVE},
+  {'l', process_, I,1.0,B, &mLDSave, FLOAT_PARAM, HELP_LDSAVE},
+  {'s', process_, I,1.0,B,&mSTRSave, FLOAT_PARAM, HELP_STRSAVE},
   {'d', process_, 0,10.0,B,&wLoopDepth, FLOAT_PARAM, HELP_LOOPDEPTH},
   {'p', process_, I,F,FALSE,&fEnableRegisterClasses, BOOL_PARAM, 
                                                   HELP_REGISTERCLASSES} 
