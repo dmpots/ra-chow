@@ -58,6 +58,7 @@ struct live_range
   Priority priority; /* priority for this to be in a live range */
   Boolean is_candidate; /* is possible to store this in a register */
   Def_Type type;
+  RegisterClass rc;
   Expr tag;
 } LiveRange;
 

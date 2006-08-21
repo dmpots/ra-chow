@@ -57,11 +57,11 @@ static Unsigned_Int clrInitial = 0; //count of initial live ranges
 //number of temporary registers (should only see this when pushed to
 //a very low number of registers in the allocation)
 static const Register tmpRegs[] =
-  {101,102,103,104,105,106,107,108,109, 110,111,112,113,114,
+  {901,902,903,904,905,906,907,908,909, 910,911,912,913,914,
     /* rkf45.i has JSRl with 22 param regs */
-   115,116,117,118,119,120,121,122,123,
+   915,916,917,918,919,920,921,922,923,
     /* efill.i has FRAME with 26 param regs */
-   124,125,126,127
+   924,925,926,927
    };
 static const Unsigned_Int num_tmp_regs =
   sizeof(tmpRegs)/sizeof(Register);
@@ -544,8 +544,13 @@ void LiveRange_BuildInitialSSA()
       VectorSet_ForAll(i, lrset)
       {
         if(v == i) continue; //skip yourself
-        debug("%d conflicts with %d", v, i);
-        LiveRange_AddInterference(lr, live_ranges[i]);
+        //add interference if in the same class
+        LiveRange* lrT = live_ranges[i];
+        if(LiveRange_RegisterClass(lr) == LiveRange_RegisterClass(lrT))
+        {
+          debug("%d conflicts with %d", v, i);
+          LiveRange_AddInterference(lr, lrT);
+        }
       }
     }
   }

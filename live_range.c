@@ -160,6 +160,7 @@ LiveRange* LiveRange_Create(Arena arena, RegisterClass rc)
   lr->is_candidate  = TRUE;
   lr->type = NO_DEFS;
   lr->tag = TAG_UNASSIGNED;
+  lr->rc  = rc;
 
   return lr;
 }
@@ -1528,8 +1529,7 @@ MemoryLocation LiveRange_MemLocation(LiveRange* lr)
  */
 RegisterClass LiveRange_RegisterClass(LiveRange* lr)
 {
-  //TODO: implement LiveRange_RegisterClass
-  return 0;
+  return lr->rc;
 }
 
 

@@ -25,6 +25,7 @@ static VectorSet* mRc_VsTmp;
 static const RegisterClass RegisterClass_UNIFIED = 0;
 static const RegisterClass RegisterClass_INT = 0;
 static const RegisterClass RegisterClass_FLOAT = 1;
+static const RegisterClass RegisterClass_DOUBLE = 2;
 //update this if adding more classes
 static const Unsigned_Int NUM_REG_CLASSES = 2; 
 //space between sequential allocation of registers per class.
