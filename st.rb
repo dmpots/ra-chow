@@ -10,15 +10,17 @@
 #
 ###############################################################
 
+require 'fileutils'
+
 def usage
   puts "usage: st basedir cvs_file"
   exit(1)
 end
 
 $stdir = ARGV[0]
-$cvs_file = ARGV[1]
+$csv_file = ARGV[1]
 $stdir   || usage()
-$cvs_file|| usage()
+$csv_file|| usage()
 
 #print file
 def cat(fname)
@@ -39,12 +41,32 @@ def sum(fname)
 end
 
 def dump_csv(header, values)
-  File.open($cvs_file, "w") {|csv|
+  File.open($csv_file, "w") {|csv|
     csv.print(header.join(",")+"\n")
     csv.print(values.join(",")+"\n")
   }
 end
 
+def csv(testname, fname)
+  rows = 
+  File.readlines(fname).map do |line|
+    if line =~ /^\w/ then
+      cols = line.split(" ")
+      fun = cols.first
+      cnt = cols.last
+      "#{fun},#{cnt}"
+    end
+  end
+  puts $csv_file
+  File.open($csv_file, "a") do |f|
+    f.puts
+    f.puts("#{testname}")
+    f.puts rows.join("\n")
+  end
+end
+
+#truncate csv file
+FileUtils.rm_f($csv_file)
 
 gtotal = 0
 totals = []
@@ -59,14 +81,16 @@ Dir.glob(stfiles).each do |f|
 
   ftotal = sum f
   gtotal += ftotal
+  csv(test,f)
   puts "  TOTAL: #{ftotal}"
 
   totals << ftotal
   tests << test
 end
 puts "GRAND TOTAL: #{gtotal}"
+cat $csv_file
 
-dump_csv(tests, totals)
+#dump_csv(tests, totals)
 
 
 
