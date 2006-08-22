@@ -261,7 +261,6 @@ int main(Int argc, Char **argv)
 
   //compute initial live ranges
   LiveRange_BuildInitialSSA();
-  ConvertLiveInNamespaceSSAToLiveRange();
   //DumpInitialLiveRanges();
 
   //compute loop nesting depth needed for computing priorities
@@ -450,6 +449,7 @@ void LiveRange_BuildInitialSSA()
 
   //create a mapping from ssa names to live range ids
   CreateLiveRangeNameMap(uf_arena);
+  ConvertLiveInNamespaceSSAToLiveRange();
   if(fEnableRegisterClasses) //classes are by type
   {
     RegisterClass_CreateLiveRangeTypeMap(uf_arena,
