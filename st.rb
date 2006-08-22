@@ -50,14 +50,14 @@ end
 def csv(testname, fname)
   rows = 
   File.readlines(fname).map do |line|
-    if line =~ /^\w/ then
+    if line =~ /^\w/ and line !~ /^procedure/ then
       cols = line.split(" ")
       fun = cols.first
       cnt = cols.last
       "#{fun},#{cnt}"
     end
   end
-  puts $csv_file
+  rows.compact! #get rid of nils
   File.open($csv_file, "a") do |f|
     f.puts
     f.puts("#{testname}")

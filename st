@@ -7,9 +7,9 @@ usage(){
 
 
 #register allocators
-CHOW_ARGS=""
-CHOW=`pwd`/chow $CHOW_ARGS
-RA=`pwd`/ra
+CHOW_ARGS="-p"
+CHOW="`pwd`/chow $CHOW_ARGS"
+RA="`pwd`/ra"
 
 #test directories
 FMM="/home/compiler/test/fmm"
