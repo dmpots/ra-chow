@@ -612,7 +612,7 @@ void CreateLiveRangeNameMap(Arena arena)
       lr_name_map[i] = lr_name_map[setid] = idcnt++;
     }
 
-    debug("SSAName: %3d ==> LRID: %3d", i, lr_name_map[i]);
+    debug("SSAName: %4d ==> LRID: %4d", i, lr_name_map[i]);
   }
   assert(idcnt == (clrInitial)); //we start lrids at 0
 }
@@ -641,9 +641,15 @@ void ConvertLiveInNamespaceSSAToLiveRange()
     info = SSA_live_in[id(blk)];
     for(j = 0; j < info.size; j++)
     {
-      debug("Converting LIVE: %d to LRID: %d",info.names[j],
-            SSAName2LRID(info.names[j]));
-      lrid = SSAName2LRID(info.names[j]);
+      Variable vLive = info.names[j];
+      if(!(vLive < SSA_def_count))
+      {
+        error("invalid live in name %d", vLive);
+        continue;
+      }
+      debug("Converting LIVE: %d to LRID: %d",vLive,
+             SSAName2LRID(vLive));
+      lrid = SSAName2LRID(vLive);
       info.names[j] = lrid;
     }
   }
@@ -689,7 +695,6 @@ void RenameRegisters()
     {
       Inst_ForAllOperations(op, inst)
       {
-        
         Operation_ForAllUses(reg, *op)
         {
           lrid = SSAName2LRID(*reg);
@@ -1305,6 +1310,7 @@ static void DumpChowStats()
   fprintf(stderr, "***** ALLOCATION STATISTICS *****\n");
   //note: +/- 1 colored/spill count is for frame pointer live range
 }
+
 
 
 /*
