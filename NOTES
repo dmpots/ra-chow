@@ -235,5 +235,61 @@ Thu Aug 17 15:20:46 CDT 2006
 + Crank the size of a basic block down to 1 and compare the allocation
 with Chaitin
 
+=================================
+Second Comparison 
+Wed Aug 23 15:52:28 CDT 2006
+=================================
+After the first comparison was found to be mostly bogus, I implemented
+the partitioned register set for chow. This allows, for example
+doubles and integers to be stored in separate register classes so that
+they do not interfere.
 
+Having done this the comparisons began.
+
+1) dead | valnum | lazy |cprop | coalesce | chow -p
+This showed that chow improved greatly on the fmm test set. It was 6%
+better on fmin and mostly < 10% worse on all the others.
+
+Spec was a different story. Chow was still doing quite bad going
+anywhere from 1% to 115% worse. The oddball was matrix300 which only
+was 1% worse. At this point I noticed that there were some small (42
+op) routines that were doing worse. It was because Chow's version had
+an extra dead instruction. It looks like ra does something to get rid
+of dead instructions on its own. I decided to put a pass of dead on to
+the end to see what would happen.
+
+2) dead | valnum | lazy |cprop | coalesce | dead | chow -p
+This helped quite a bit. Fmm all went down to being pretty even with
+ra.
+
+Spec got better, but still did quite bad on all the same suspects. 99%
+better was ra on fpppp. I decided to pull out the big guns and limit
+basic block sizes to see how much it helped
+
+3) dead | valnum | lazy |cprop | coalesce | dead | chow -p
+To my great disappointment Fmm went to shit. Most all of the programs
+jumped up to more than 10% worse. It was not good.
+
+Spec on the other hand did much better. fpppp dropped down to only 10%
+worse. The highest was tomcatv at 18% worse. 
+
+I was very suprised that reducing the basic block size did not help
+everything get better (why did it make some worse?). I thought that it
+would be useful to run tomcatv with various block sizes to see how it
+performed. Ran with 5..30 in increments of 5. There was a sweet spot
+at 25 that it actually performed better. Aha! So there was some hope.
+I then looked at another small program that was doing worse (by 7
+instructions). Turns out it was because of the extra JMP added when
+the blocks were cleaved. I decided to run a pass of clean after to see
+if it helped.
+
+4) dead | valnum | lazy |cprop | coalesce | dead | chow -p | clean
+Jackpot. This version was better on almost all programs and only very
+slightly worse on some fmm (< .01%). Clean helped a bunch. 
+
+But then I found out that ra was counting a double as using two float
+registers so my results were not as good. Now rerunning experiments.
+
+** why do I get different results than ra on the fmin which does not
+spill???
 
