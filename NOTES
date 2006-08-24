@@ -293,3 +293,130 @@ registers so my results were not as good. Now rerunning experiments.
 ** why do I get different results than ra on the fmin which does not
 spill???
 
+
+============================== 
+Second comparison explained
+Thu Aug 24 16:24:01 CDT 2006
+============================== 
+The second comparison showed the two allocators to be approximately
+equal. There is a problem though with how I am using temporaries. I am
+not reserving the temporaries from the genearl pool, so I am really
+cheating by having three-four extra registers. Need to fix that.
+
+
+============================== 
+Thu Aug 24 17:44:44 CDT 2006
+============================== 
+Notes from the conversation with Tim:
+
+*) To run the register allocator (ra) with a reduced number of registers
+use the following flags:
+  -r[num] #number of registers
+  -q      #"quality check" - make sure the number of registers will
+          #work with the code(check the min number needed in the code)
+
+*) Look at preston's thesis to see if you like the style of the literate
+programming. Consider using nuweb for writing your thesis.
+
+*) look at the code to make sure that it is doing what you want it to
+do. The biggest challenge you will face in your experiments is
+convincing people that you have implemented a chow allocator. And
+not just any chow allocator, but one of decent quality. The best way
+to to this is to come up with examples that show you are performing
+like you would expect a chow allocator to perform. Take figures from
+chow's paper and show how your allocator works just like the
+examples in chow's paper says.  
+  
+  *) splitting example - can only color by splitting
+  *) priority function example - should give higher priority to live
+     range that you think 
+  *) 
+You can have a whole chapter in your thesis that shows these
+examples along with links to your code that shows how you really did
+implement chow.
+
+*) Gather numbers on how often splitting helps you. We would like to
+know when you split a live range whether you end up being able to
+color part of it when you would have had to spill the entire thing if
+you had not split.
+
+*) Crank down the number of registers, try 16, 8 and see how the
+algorithms perform.
+
+*) Document your allocation parameters. We really need to have 4-5
+params to have a decent search space. Better would be 6-7. Waterman
+had 7 for his study of loop unrolling. So far we only have a couple
+  1) basic block length
+  2) priority function
+  3) split small priority live ranges
+  4) number of temporary register -- why would you want to reserve
+     more?
+  6) give clustered live ranges lower priority
+
+  // these seem like performance improvements, not sure they should be
+  // parameters
+  5) select forbidden color from neighbor
+  7) optimize load store placement
+*) Research hard what improvements have been made to the chow
+allocator. It is important that you find everything since missing a
+reference could lead to people dismissing your work.
+
+*) Read Waterman's study of loop unrolling. You will probably want to
+use the same methodolgy in your adaptive chow allocator.
+
+
+PLAN:
+0) Write up a summary of the work you have done so far. Describe your
+allocator and the choices you had to make. Also take the time to
+document the allocation parameters. Look at preston's thesis and
+literate programming.
+
+1) Change your code to reserve registers for dealing with spilt code.
+Now you cheat by assuming you have the correct number of registers
+reserved, but this is not fair. You must reserve them from your
+general pool.
+
+2) Rerun the numbers to see how the allocators compare. Crank down the
+number of registers and run those numbers as well. Gather the
+statistics on how much splitting helps you.
+
+3) Write the small code examples that mimic figures in chows paper and
+shows that your allocator does what chow says.
+
+4) Search the literature for how people have improved the chow
+allocator.
+
+5) Read Waterman's loop unrolling study
+
+============================== 
+Improvements to chow
+Thu Aug 24 17:46:52 CDT 2006
+============================== 
+1) When we are splitting I think that it is possible that we could add
+a bunch of basic blocks that are useless. When splitting we start at a
+def and then do a bfs search along our successors, adding blocks as
+we go. The problem is that if we never get to another use then all
+those blocks we added were useless. They should not be part of the
+live range since they contain no uses. Not sure if this is part of the
+algorithm as specified by chow, or if it even crops up in any of our
+tests.
+
+2) One possible way to do coalescing might be to split the block at a
+register to register copy and then not count that copy as an
+interference. It would be cool to implement this and see if it works
+and also to check to see if it would do some chaitain style
+coalescing. Although to coalesce we would then need to find live
+ranges that only interfere with a copy and say they are the same live
+range. Merging live ranges would actually be a pretty simple operation
+in chow I would think amounting to basically concatenating the
+bb_lists.
+
+3) Look for live ranges that have been split and then both parts 
+assigned a register. You might have a case where you have a store and
+then a load in a direct successor where the live range is split. In
+this case you could replace it with a register to register copy
+instead of the load/store. Implementing this would perhaps be tricky
+because you would need to know that both are assigned a color and then
+delete the store you inserted and replace it with a copy.
+
+
