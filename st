@@ -7,13 +7,14 @@ usage(){
 
 
 #register allocators
-CHOW_ARGS="-p"
+CHOW_ARGS="-p -b5"
 CHOW="`pwd`/chow $CHOW_ARGS"
 RA="`pwd`/ra"
 
 #test directories
 FMM="/home/compiler/test/fmm"
 SPEC="/home/compiler/test/spec"
+SPEC95="/home/compiler/test/spec95X"
 
 #process command line params to get register allocator and test dir
 case $1 in
@@ -29,6 +30,8 @@ case $2 in
     TESTDIR=$FMM;;
   "spec")
     TESTDIR=$SPEC;;
+  "spec95")
+    TESTDIR=$SPEC95;;
   *)
     usage;;
 esac
@@ -47,7 +50,9 @@ VALNUM=-v
 LAZY=-z
 CPROP=-c
 COALESCE=-s
-PASSES="$DEAD $VALNUM $LAZY $CPROP $COALESCE"
+CLEAN=-n
+GVAL="-g[-p]"
+PASSES="$DEAD $VALNUM $GVAL $LAZY $CPROP $COALESCE $DEAD"
 
 #statistics gathering program
 TMPDIR=scratch
@@ -63,10 +68,11 @@ pushd  $TMPDIR > /dev/null
 
 #---- run ctest ----#
 date > $STATOUT
-ctest $TESTDIR -I -i $PASSES -"{$REGALLOC}" \
+ctest $TESTDIR -I -i $PASSES -"{$REGALLOC}" $CLEAN\
  | grep 'Transformations:' >> $STATOUT 
 
 #---- gather stats ----#
+cat $STATOUT > $CSVOUT  #get header
 $STAT >> $STATOUT
 popd > /dev/null
 

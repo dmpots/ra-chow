@@ -66,7 +66,7 @@ def csv(testname, fname)
 end
 
 #truncate csv file
-FileUtils.rm_f($csv_file)
+#FileUtils.rm_f($csv_file)
 
 gtotal = 0
 totals = []
