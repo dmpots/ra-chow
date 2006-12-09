@@ -351,11 +351,11 @@ had 7 for his study of loop unrolling. So far we only have a couple
   3) split small priority live ranges
   4) number of temporary register -- why would you want to reserve
      more?
-  6) give clustered live ranges lower priority
+  5) give clustered live ranges lower priority
 
   // these seem like performance improvements, not sure they should be
   // parameters
-  5) select forbidden color from neighbor
+  6) select forbidden color from neighbor
   7) optimize load store placement
 *) Research hard what improvements have been made to the chow
 allocator. It is important that you find everything since missing a
