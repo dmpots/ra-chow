@@ -1,0 +1,40 @@
+==================================================================
+(O) live_range.c -- LiveRange_ChooseSplitPoint
+
+opened: Mon Jan  8 16:51:54 CST 2007
+closed:
+==================================================================
+You are not selecting the first liveunit that starts with a
+definition. You will choose the last unit that starts with a
+definition unless you find one that is an entry point. You should
+really only take the first one that starts with a def if you can not
+find one that is an entry point.
+
+==================================================================
+(O) live_range.c -- LiveRange_Split
+
+opened: Mon Jan  8 16:51:54 CST 2007
+closed:
+==================================================================
+You do not update the forbidden list for the new live range (newlr) as
+you split it off from the original live range. In the function
+LiveRange_IncludeInSplit you check to see if a unit can be added by
+checking to see if the union of the forbidden list for newlr and the 
+colors used in the unit's block make a completely full set. If the set
+is not full you say it is ok to add the unit, but then you never
+update the forbidden set. You should be updating the forbidden set to
+include the colors used in that block when you add the unit.
+
+note:
+I think this can be solved easily by updating the forbidden set in the
+TransferLiveUnit() function. It looks like it is only called from the
+split function and could do the job easily.
+
+
+==================================================================
+(O) filename.c -- Function
+
+opened: <r !date>
+closed:
+==================================================================
+
