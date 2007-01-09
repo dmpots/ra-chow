@@ -6,7 +6,10 @@ DEAD=-d
 VALNUM=-v
 LAZY=-z
 CPROP=-c
-EXTRA="$DEAD $VALNUM $LAZY $CPROP $DEAD"
+GVAL="-g[-p]"
+COALESCE=-s
+CLEAN=-n
+EXTRA="$DEAD $VALNUM $GVAL $LAZY $CPROP $COALESCE $DEAD"
 
 mkdir $TMPDIR
 pushd $TMPDIR
@@ -14,10 +17,10 @@ pushd $TMPDIR
 #fmm
 #ctest /home/compiler/test/fmm/fmin/  -"{$CHOW $NREG}"
 #ctest /home/compiler/test/fmm/zeroin/  -"{$CHOW $NREG}"
-ctest /home/compiler/test/fmm/  $EXTRA -"{$CHOW $NREG}"
+ctest /home/compiler/test/fmm/ $EXTRA -"{$CHOW $NREG}" $CLEAN
 
 #spec
-ctest /home/compiler/test/spec/matrix300/ $EXTRA -"{$CHOW $NREG}"
+ctest /home/compiler/test/spec/matrix300/ $EXTRA -"{$CHOW $NREG}" $CLEAN
 #ctest /home/compiler/test/spec/doduc/ $EXTRA -"{$CHOW $NREG}"
 
 #spec95x

@@ -437,3 +437,19 @@ with Chaitin
 beneficial live ranges to registers we allocate the most costly to
 spill.
 
+=================================
+Problem running st
+Tue Jan  9 15:47:31 CST 2007
+=================================
+The stats collecting script st does not work properly on my mac. When
+it trys to link the files together it gets an error:
+
+  g77 *.o -o main  /home/compiler/installed/i2c/libi2c.a \
+    /home/compiler/tools/cache/libcachesim.a 
+  /usr/bin/ld: Undefined symbols:
+  _fprintf$LDBLStub
+  collect2: ld returned 1 exit status
+It looks from the web like this is a problem with using fortran and
+gcc togeher. Just have to run stats on godzilla from now on.
+
+

@@ -9,7 +9,10 @@ DEAD=-d
 VALNUM=-v
 LAZY=-z
 CPROP=-c
-EXTRA="$DEAD $VALNUM $LAZY $CPROP"
+GVAL="-g[-p]"
+COALESCE=-s
+CLEAN=-n
+EXTRA="$DEAD $VALNUM $GVAL $LAZY $CPROP $COALESCE $DEAD"
 
 mkdir $TMPDIR
 pushd $TMPDIR
@@ -20,15 +23,15 @@ pushd $TMPDIR
 #ctest /home/compiler/test/fmm/solve/ -"{$CHOW $NREG}"
 #ctest /home/compiler/test/fmm/urand/ -"{$CHOW $NREG}"
 #ctest /home/compiler/test/fmm/zeroin/ -"{$CHOW $NREG}"
-ctest /home/compiler/test/fmm/ $EXTRA -"{$CHOW $NREG}"
+ctest /home/compiler/test/fmm/ $EXTRA -"{$CHOW $NREG}" $CLEAN
 
 #spec
-ctest /home/compiler/test/spec/doduc/ $EXTRA  -"{$CHOW $NREG}"
-ctest /home/compiler/test/spec/matrix300/ $EXTRA -"{$CHOW $NREG}"
-#ctest /home/compiler/test/spec/fpppp/ $EXTRA -"{$CHOW $NREG}"
-ctest /home/compiler/test/spec/tomcatv/ $EXTRA -"{$CHOW $NREG}"
+ctest /home/compiler/test/spec/doduc/ $EXTRA  -"{$CHOW $NREG}" $CLEAN
+ctest /home/compiler/test/spec/matrix300/ $EXTRA -"{$CHOW $NREG}" $CLEAN
+#ctest /home/compiler/test/spec/fpppp/ $EXTRA -"{$CHOW $NREG}" $CLEAN
+ctest /home/compiler/test/spec/tomcatv/ $EXTRA -"{$CHOW $NREG}" $CLEAN
 
 #spec95
-ctest /home/compiler/test/spec95X/applu $EXTRA  -"{$CHOW $NREG}"
+ctest /home/compiler/test/spec95X/applu $EXTRA  -"{$CHOW $NREG}" $CLEAN
 popd
 
