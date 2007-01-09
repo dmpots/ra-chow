@@ -1056,6 +1056,9 @@ void Def_CollectUniqueUseNames(Variable v, std::list<Variable>& vgrp)
         {
           Variable vPhi;
           vPhi = pcln->chain.op_pointer.phi_node->new_name;
+          //TODO: I think the test for membership in vgrp is
+          //unecessary here since we also test when removing from the
+          //worklist
           if(find(vgrp.begin(), vgrp.end(), vPhi) == vgrp.end())
           {
             debug("use (%d) is a phi node in %s(%d)", vPhi, bname(blk), id(blk)); 

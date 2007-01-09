@@ -229,13 +229,6 @@ be causing a lot more spilling.  Next steps to attack:
 
 
 =================================
-List of experiments
-Thu Aug 17 15:20:46 CDT 2006
-=================================
-+ Crank the size of a basic block down to 1 and compare the allocation
-with Chaitin
-
-=================================
 Second Comparison 
 Wed Aug 23 15:52:28 CDT 2006
 =================================
@@ -419,4 +412,28 @@ instead of the load/store. Implementing this would perhaps be tricky
 because you would need to know that both are assigned a color and then
 delete the store you inserted and replace it with a copy.
 
+
+============================== 
+Questions to answer
+Tue Jan  9 10:32:27 CST 2007
+============================== 
+1) Chow claims that "splitting and spilling will most likely occur on
+low priority live ranges"(pg. 515). Verify that this is the case.
+
+2) Chow claims that using clustering as part of the metric for
+computing priority would not make much of a difference, espically when
+the number of registers is large (pg 513). Check to see if this is
+true.
+
+=================================
+List of experiments
+Tue Jan  9 10:59:25 CST 2007
+Thu Aug 17 15:20:46 CDT 2006
+=================================
++ Crank the size of a basic block down to 1 and compare the allocation
+with Chaitin
+
++ Try inverting priority so that instead of allocating the most
+beneficial live ranges to registers we allocate the most costly to
+spill.
 
