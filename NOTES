@@ -453,3 +453,140 @@ It looks from the web like this is a problem with using fortran and
 gcc togeher. Just have to run stats on godzilla from now on.
 
 
+=================================
+How to deal with temporary registers for JSR/FRAME ops
+Notes from a converstation with Tim.
+Wed Jan 10 15:23:29 CST 2007
+=================================
+I am trying to fix my allocator to be realistic and faithful to Chow's
+implementation. I need to reserve a few registers in order to deal
+with temporary values that are spilled. Right now I am pulling
+temporary registers out of thin air. 
+
+Chow says in his paper that he reserves 4 registers for the later code
+generation phase. It is not clear why he needs four. Here is one
+guess: look at the instruction
+
+ADD X,Y => Z
+
+Now if we are spilling X and Y we generate code like this
+
+  LD R1,R2 => R3
+  LD R1,R2 => R4
+  ADD R3,R4 => R3
+  ST R1,R2,R3
+
+Here, R1 and R2 are base and offset registers. The instructions for
+putting the correct values in those registers are omitted. We assume
+Chow has an architecture like this so he has to reserve the four
+registers. We can get by with only three since we do not need an
+offset register, but can use an immediate value instead. One register
+for the base value (frame pointer), one for the first operand and one
+for the second operand.
+
+Now because of the architecture of iloc we have a problem with the
+FRAME and JSR instructions. Iloc assumes that all parameters to
+functions are passed in registers. This means that we require the
+number of registers to be at least as many as the number of parameters
+passed to any function in the code. So there are two cases to check
+
+1) There is a function which takes more parameters than k - the number
+of machine registers. In this case we exit with an error and say the
+allocation is impossible.
+
+2) No function takes more than k registers. In this case we can
+allocate the code. A problem arises in the rewriting phase when there
+are more than two unallocated parameters in the function call. If this
+happens then we will run out of reserved registers, since we only
+reserved enough for the normal three address instruction. In order to
+solve this problem here is what we do. Look at this example in which
+X,Y,Z are not allocated registers. Assume five registers total.
+
+  JSR X,Y,Z
+
+We would generate code like this
+  LD R1,R2 => R3    #for X
+  LD R1,R2 => R4    #for Y
+at this point we are stuck for Z since there are no more reserved
+registers. We get around this by using the following algorithm:
+
+  1) Walk instruction from Left to Right examining all registers
+  2) If a register is unallocated then try to grab a reserved register
+  3) If a reserved register is available generate the LD
+  4) If a reserved register is not available make sure we are on a
+  JSR/FRAME instruction.
+  5) Spill a register that is not used in the instruction and use that
+  for a temporary register.
+  6) Load the spilled value back into the temp register at the latest
+  possible time. This is either
+    a) at its first use in the remainder of the basic block
+    b) at the end of the basic block (here we could actually do better
+    and look for the first use along the paths leading from this
+    block, but we just load at the basic block for now and we can go
+    back and make it better at some later time).
+
+Using that algorithm the code would be rewritten like:
+
+  #assume R5 is in use here
+  LD R1,R2 => R3    #for X
+  LD R1,R2 => R4    #for Y
+  ST R1,R2,R5       #store the value in R5 so we can use it
+  LD R1,R2 => R5
+  JSR R3,R4,R5
+  #reload R5 at earliest opportunity
+
+Fairness discussion:
+We need to make sure what we are doing is fair to Chow. He was not
+expecting this kind of instruction (with more than two operands) so we
+have to do what seems right. The method proposed will add a few extra
+LD and ST operations, but they are necessary for corectness. Chaitin
+will have to do the same thing in order to execute the iloc code so
+nobody gets an unfair advantage. Chow is at a bit of a disadvantage
+since when we spill we have to reload at some point that may not be
+the best (for example we may have to reload at the end of the basic
+block but the next use could be much farther along). Chaitin will not
+have this problem because he will be spilling globally and therefore
+will not reload the register until it is needed at the next use.
+
+=================================
+Example of why pre-coloing for machine registers can make code
+uncolorable.
+Wed Jan 10 16:14:34 CST 2007
+=================================
+When you pre-color virtual registers to correspond to machine
+registers, for example to make the calling convention work out for the
+parameters that are passed in registers, you can run into a problem
+that would make your code uncolorable. Look at this
+
+         a <- 
+         b <- 
+      /       \
+     /         \
+  jsr a b     jsr b a
+
+
+If we pre-color to match the required machine registers then we can
+not color this code since we require a and b to be in different colors
+on different sides of the branch. We get around this by inserting
+copies before the jsr.
+         a <- 
+         b <- 
+      /       \
+     /         \
+  y <- a      y <- b
+  z <- b      z <- a
+  jsr y z     jsr y z
+
+George and Appel found this problem because of a bug in thier compiler
+(according to tim) and were getting uncolorable graphs after
+coalescing. They invented iterated coalescing in order to get around
+it by doing a round of coalescing and the backing off if the graph
+became uncolorable.
+
+
+
+
+
+
+
+
