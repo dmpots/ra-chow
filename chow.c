@@ -28,6 +28,7 @@
 #define SUCCESS 0
 #define ERROR -1
 #define EMPTY_NAME '\0'
+#define NUM_RESERVED_REGS 2
 
 /* types */
 //using namespace std;
@@ -44,8 +45,7 @@ Chow_Stats chowstats = {0};
 
 /* locals */
 static LRID* lr_name_map;
-static const Register REG_SPILL = 666;
-static const Register REG_UNASSIGNED = 999;
+static const Register REG_UNALLOCATED = 666;
 static const Register REG_FP = 555;
 static const LRID     NO_LRID = (LRID)-1;//bigger than any lrid
 static MemoryLocation stack_pointer = 0;
@@ -257,7 +257,8 @@ int main(Int argc, Char **argv)
   CleaveBlocks();
   
   //initialize the register class data structures 
-  InitRegisterClasses(chow_arena, mRegisters, fEnableRegisterClasses);
+  InitRegisterClasses(chow_arena, mRegisters, fEnableRegisterClasses,
+                      NUM_RESERVED_REGS);
 
   //compute initial live ranges
   LiveRange_BuildInitialSSA();
@@ -700,7 +701,7 @@ void RenameRegisters()
           lrid = SSAName2LRID(*reg);
           *reg = GetMachineRegAssignment(b, lrid);
 
-          if(*reg == REG_SPILL)
+          if(*reg == REG_UNALLOCATED)
           {
             tmpReg = get_free_tmp_reg();
             Insert_Load(lrid, inst, tmpReg, REG_FP);
@@ -712,7 +713,7 @@ void RenameRegisters()
         {
           lrid = SSAName2LRID(*reg);
           *reg = GetMachineRegAssignment(b, lrid); 
-          if(*reg == REG_SPILL)
+          if(*reg == REG_UNALLOCATED)
           {
             tmpReg = get_free_tmp_reg();
             //instert the load and update the iterator because we
@@ -832,11 +833,11 @@ Register GetMachineRegAssignment(Block* b, LRID lrid)
   if(lrid == fp_lrid)
     return REG_FP;
 
-   /* return REG_SPILL; spill everything */
+   /* return REG_UNALLOCATED; spill everything */
 
   Register color = mBlkIdSSAName_Color[id(b)][lrid];
   if(color == NO_COLOR)
-    return REG_SPILL;
+    return REG_UNALLOCATED;
 
   RegisterClass rc = LiveRange_RegisterClass(live_ranges[lrid]);
   return RegisterClass_MachineRegForColor(rc, color);
@@ -850,6 +851,12 @@ Register GetMachineRegAssignment(Block* b, LRID lrid)
  * available free temp registers
  **/
 Register get_free_tmp_reg()
+{
+  assert(tmp_reg_indx < num_tmp_regs);
+  return tmpRegs[tmp_reg_indx++]; 
+}
+
+Register get_free_tmp_reg(Operation* op, LRID lrid)
 {
   assert(tmp_reg_indx < num_tmp_regs);
   return tmpRegs[tmp_reg_indx++]; 

@@ -1,5 +1,5 @@
 #!/bin/bash
-NREG="-r16 -b5"
+NREG="-r16 -b5 -p"
 TMPDIR=scratch
 CHOW=`pwd`/chow
 DEAD=-d

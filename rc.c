@@ -19,6 +19,7 @@ static Def_Type* mLrId_DefType;
 static Unsigned_Int* mRc_CReg;
 static Boolean fEnableMultipleClasses = FALSE;
 static VectorSet* mRc_VsTmp; 
+static ReservedRegsInfo* mRc_ReservedRegs;
 //static Register**  mRcColor_Reg= NULL;
 
 /* constants */
@@ -33,13 +34,19 @@ static const Unsigned_Int NUM_REG_CLASSES = 2;
 //rc*REGCLASS_SPACE 
 static const Unsigned_Int REGCLASS_SPACE = 100;
 
+/* local functions */
+Unsigned_Int RegisterClass_FirstRegister(RegisterClass rc);
+
 
 /*
  *========================
  * RegisterClass_Init()
  *========================
  */
-void InitRegisterClasses(Arena arena, Unsigned_Int cReg, Boolean fEnableClasses)
+void InitRegisterClasses(Arena arena, 
+                         Unsigned_Int cReg, 
+                         Boolean fEnableClasses,
+                         Unsigned_Int cReserved)
 {
   cRegisterClass = 1;
   fEnableMultipleClasses = fEnableClasses;
@@ -54,26 +61,45 @@ void InitRegisterClasses(Arena arena, Unsigned_Int cReg, Boolean fEnableClasses)
     Arena_GetMemClear(arena, sizeof(Unsigned_Int)* cRegisterClass);
   for(RegisterClass rc = 0; rc < cRegisterClass; rc++)
   {
-    mRc_CReg[rc] = cReg;
+    mRc_CReg[rc] = cReg - cReserved;
   }
 
-//allocate a map from colors to machine registers. we need such a
-  //mapping because we use VectorSets to represent colors but don't
-  //necessarily want color 0 to map to machine register 0
-  /*
-  mRcColor_Reg = (Unsigned_Int**)
-     Arena_GetMemClear(arena, sizeof(Unsigned_Int) * cRegisterClass);
+  //allocate an array of reserved register structs. these are used
+  //during register assignment when we need registers for holding
+  //spilled values
+  mRc_ReservedRegs = (ReservedRegsInfo*)
+    Arena_GetMemClear(arena, sizeof(ReservedRegsInfo) * cRegisterClass);
   for(RegisterClass rc = 0; rc < cRegisterClass; rc++)
   {
-    Unsigned_Int cRegs = mRc_CReg[rc];
-    mRcColor_Reg[rc] = (Unsigned_Int*)
-      Arena_GetMemClear(chow_arena, sizeof(Register) * cRegs);
-    Register r = RegisterClass_MachineRegStart(rc);
-    for(i = 0; i < cRegs; i++)
-      mRcColor_Reg[rc][i] = r++;
-  }
-  */
+    //allocate and initialize the array of registers for this class
+    ReservedRegsInfo* reserved = &(mRc_ReservedRegs[rc]);
+    reserved->regs = (Register*)
+      Arena_GetMemClear(arena, sizeof(Register) * cReserved);
+    for(LOOPVAR i = 0; i < cReserved; i++)
+    {
+      reserved->regs[i] = RegisterClass_FirstRegister(rc)+i;
+    }
 
+    //initialize remaing struct values
+    reserved->next_free = 0;
+    reserved->cReserved = cReserved;
+  }
+
+  //reserve registers for addressability. at this time we only reserve
+  //one register for addressing, which is the frame pointer. stores
+  //and loads are generated using an immediate offset from the frame
+  //pointer. we adjust the reserved registers for register class zero
+  //(integers) to account for this. we save r0 for the frame pointer
+  //so we bump the remaining regs by one. actually I think this is a
+  //little silly and most machines would have a special register
+  //already reserved for this purpose.
+  ReservedRegsInfo* reservedIntRegs = &(mRc_ReservedRegs[0]);
+  reservedIntRegs->cReserved++;
+  for(LOOPVAR i = 0; i < cReserved; i++)
+  {
+    reservedIntRegs->regs[i]++;
+  }  
+  mRc_CReg[0]--;
 
   //allocate temporary vector sets sized to the number of available
   //registers for a given class. used in various live range
@@ -84,6 +110,8 @@ void InitRegisterClasses(Arena arena, Unsigned_Int cReg, Boolean fEnableClasses)
   {
     mRc_VsTmp[rc] = VectorSet_Create(arena, mRc_CReg[rc]);
   }
+
+
 }
 
 /*
@@ -167,11 +195,27 @@ Unsigned_Int RegisterClass_NumMachineReg(RegisterClass rc)
   return mRc_CReg[rc];
 }
 
+/*
+ *========================
+ * RegisterClass_FirstRegister()
+ *========================
+ * Returns the first machine register used for a given register class.
+ * The remaining registers should be sequential starting from this
+ * base regiser.
+ */
+Unsigned_Int RegisterClass_FirstRegister(RegisterClass rc)
+{
+  return rc*REGCLASS_SPACE;
+}
 
 Register RegisterClass_MachineRegForColor(RegisterClass rc, Color c)
 {
   //mRcColor_Reg[rc][c];
-  Register r = (rc*REGCLASS_SPACE)+(c);
+  //compute machine register as class base register number + color +
+  //number of reserved registers for that class
+  Register r = (RegisterClass_FirstRegister(rc))
+               + (c) 
+               + (mRc_ReservedRegs[rc].cReserved);
   debug("MACHINE REG(rc,c):(%d,%d) = %d",rc,c,r);
   return  r;
 }
