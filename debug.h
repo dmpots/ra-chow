@@ -26,6 +26,6 @@
 
 #define id(b) ((b)->preorder_index)
 #define bname(b) (Label_Get_String((b)->labels->label))
-#define oname(op) (opcode_specs[op->opcode].opcode)
+#define oname(op) ((opcode_specs[(op)->opcode]).opcode)
 
 #endif /* __DEBUG_H */

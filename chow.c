@@ -104,6 +104,7 @@ static UFSet* Find_Set(Variable v);
 static LRID SSAName2LRID(Variable v);
 static void DumpInitialLiveRanges();
 static void ConvertLiveInNamespaceSSAToLiveRange();
+static void CheckRegisterLimitFeasibility(Unsigned_Int cRegMax);
 
 /*
  * allocation parameters 
@@ -248,6 +249,9 @@ int main(Int argc, Char **argv)
     Block_Init(argv[optind]);
   else
     Block_Init(NULL);
+
+  //make an initial check to ensure not too many registers are used
+  CheckRegisterLimitFeasibility(mRegisters);
 
   //areana for all chow memory allocations
   chow_arena = Arena_Create(); 
@@ -1318,7 +1322,59 @@ static void DumpChowStats()
   //note: +/- 1 colored/spill count is for frame pointer live range
 }
 
+/*
+ *====================================
+ * CheckRegisterLimitFeasibility()
+ *====================================
+ * This function makes sure that we can allocate the code given the
+ * number of machine registers. We walk the code and look for the
+ * maximum number of registers used/defined in any instruction and
+ * make sure that number is fewer than the number of machine registers
+ * we are given.
+ ***/
+static void CheckRegisterLimitFeasibility(Unsigned_Int cRegMax)
+{
+  Block* b;
+  Inst* inst;
+  Operation** op;
+  Register* reg;
+  Unsigned_Int cRegUses;
+  Unsigned_Int cRegDefs;
 
+  ForAllBlocks(b)
+  {
+    Block_ForAllInsts(inst, b)
+    {
+      cRegUses = 0;
+      cRegDefs = 0;
+      Inst_ForAllOperations(op, inst)
+      {
+        Operation_ForAllUses(reg, *op)
+        {
+          cRegUses++;
+        }
+
+        Operation_ForAllDefs(reg, *op)
+        {
+          cRegDefs++;
+        }
+        if(cRegUses > cRegMax || cRegDefs > cRegMax)
+        {
+          Block_Dump(b, NULL, TRUE);
+          fprintf(stderr, 
+"Impossible allocation.\n\
+You asked me to allocate with %d registers, but I found an operation\n\
+with %d registers used and %d registers defined: %s. Sorry, but this\n\
+is a research compiler not a magic wand. The offending block is \n\
+printed above.\n", cRegMax,cRegUses,cRegDefs, oname(*op));
+          exit(EXIT_FAILURE);
+        }
+      }
+    } 
+
+
+  }
+}
 
 /*
  *===========
