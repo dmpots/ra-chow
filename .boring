@@ -42,3 +42,5 @@
 ^vtest$
 \.stats$
 \.gdb_history$
+^test$
+^tmp$
