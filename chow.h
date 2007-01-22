@@ -60,9 +60,14 @@ extern Chow_Stats chowstats;
 Inst* Insert_Store(LRID,Inst*,Register,Register,InstInsertLocation);
 void Insert_Load(LRID, Inst*, Register, Register);
 MemoryLocation ReserveStackSpace(Unsigned_Int size);
+LRID SSAName2LRID(Variable v);
+Register GetMachineRegAssignment(Block*, LRID);
+
 
 //globals
 extern Variable GBL_fp_origname;
+const Register REG_UNALLOCATED = 666;
+const Register REG_FP = 555;
 
 #endif
 

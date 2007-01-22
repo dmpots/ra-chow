@@ -585,8 +585,30 @@ became uncolorable.
 
 
 
+========================================================
+One example of what better tmp asssignment should fix
+Fri Jan 19 11:27:22 CST 2007
+========================================================
+In simp.i we see the following code
 
+_main:	0	FRAME	36 => r555 r1  [ i i ] 	# function prologue
+	0	iSSTor	@SPILL_1_1 4 12 r555 r1 
+	3	iLDI	1 => r3 
+	3	i2i	r3 => r4 
+	4	iADDI	0 r555 => r5 	# get address of main_k
+	4	iLDI	0 => r6 
+	4	iSSTor	@main_k_0 4 0 r5 r6 
+	7	i2i	r4 => r7 
+	7	iLDI	0 => r2 
+	0	iSSTor	@SPILL_7_7 4 16 r555 r2 
+	0	iSLDor	@SPILL_7_7 4 16 r555 => r1 
+	7	iCMPne	r7 r1 => r1 
+	0	iSSTor	@SPILL_8_8 4 20 r555 r1 
+	0	iSLDor	@SPILL_8_8 4 20 r555 => r1 
+	7	BR	L1_main L4_main r1 
 
-
+The store/load in the middle and end should not exist. we are storing
+and then loading from the same location. if we know we have that lr in
+a register there is no need for the load to exist.
 
 

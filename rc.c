@@ -7,8 +7,14 @@
  ********************************************************************/
 
 #include <stdlib.h>
+#include <vector>
+#include <map>
+#include <list>
+#include <utility>
+
 #include <SSA.h>
 #include "rc.h"
+#include "assign.h"
 #include "debug.h"
 
 /* global variabls */
@@ -20,6 +26,7 @@ static Unsigned_Int* mRc_CReg;
 static Boolean fEnableMultipleClasses = FALSE;
 static VectorSet* mRc_VsTmp; 
 static ReservedRegsInfo* mRc_ReservedRegs;
+static RegisterContents* mRc_RegisterContents = NULL;
 //static Register**  mRcColor_Reg= NULL;
 
 /* constants */
@@ -54,6 +61,7 @@ void InitRegisterClasses(Arena arena,
   {
     cRegisterClass = NUM_REG_CLASSES;
   }
+  debug("using %d register classes", cRegisterClass);
 
   //for now we have all register classes use the same number of
   //registers 
@@ -81,7 +89,6 @@ void InitRegisterClasses(Arena arena,
     }
 
     //initialize remaing struct values
-    reserved->next_free = 0;
     reserved->cReserved = cReserved;
   }
 
@@ -94,11 +101,11 @@ void InitRegisterClasses(Arena arena,
   //little silly and most machines would have a special register
   //already reserved for this purpose.
   ReservedRegsInfo* reservedIntRegs = &(mRc_ReservedRegs[0]);
-  reservedIntRegs->cReserved++;
   for(LOOPVAR i = 0; i < cReserved; i++)
   {
     reservedIntRegs->regs[i]++;
   }  
+  reservedIntRegs->cReserved++;
   mRc_CReg[0]--;
 
   //allocate temporary vector sets sized to the number of available
@@ -110,6 +117,56 @@ void InitRegisterClasses(Arena arena,
   {
     mRc_VsTmp[rc] = VectorSet_Create(arena, mRc_CReg[rc]);
   }
+
+  //allocate register_contents structs per register class. these are
+  //used during register assignment to find temporary registers when
+  //we need to evict a register if we don't have enough reserved
+  //registers to satisfy the needs of the instruction
+
+  //RegisterContents** mRc_pRegisterContents = NULL;
+  mRc_RegisterContents = (RegisterContents*)
+    Arena_GetMemClear(arena, sizeof(RegisterContents) * cRegisterClass);
+  for(RegisterClass rc = 0; rc < cRegisterClass; rc++)
+  {
+    mRc_RegisterContents[rc].evicted = 
+      new std::list< std::pair<LRID,Register> >;
+    mRc_RegisterContents[rc].all= new std::vector<ReservedReg*>(); 
+    mRc_RegisterContents[rc].regMap = new std::map<LRID,ReservedReg*>; 
+    mRc_RegisterContents[rc].reserved= new std::vector<ReservedReg*>;
+
+    //TODO: need to add the correct registers to the all and reserved list
+    //first add the reserved registers
+    //actual reserved must be calculated in this way since we reserve
+    //an extra register for the frame pointer, but it is not available
+    //to be used as a temporary register so we must remember this when
+    //building the reserved regs list
+    ReservedRegsInfo rri = mRc_ReservedRegs[rc];
+    Unsigned_Int cActualReserved = 
+      (rc == RegisterClass_INT ?  rri.cReserved-1 : rri.cReserved);
+    for(LOOPVAR i = 0; i < cActualReserved; i++)
+    {
+      ReservedReg* rr = (ReservedReg*)
+        Arena_GetMemClear(arena, sizeof(ReservedReg));
+      
+      rr->machineReg = rri.regs[i];
+      rr->free = TRUE; 
+      mRc_RegisterContents[rc].reserved->push_back(rr);
+    }
+
+    //now build the list of all remaining machine registers for this
+    //register class.
+    Register base = RegisterClass_FirstRegister(rc) + rri.cReserved;
+    for(LOOPVAR i = 0; i < mRc_CReg[rc]; i++)
+    {
+      ReservedReg* rr = (ReservedReg*)
+        Arena_GetMemClear(arena, sizeof(ReservedReg));
+      
+      rr->machineReg = base+i;
+      rr->free = TRUE; 
+      mRc_RegisterContents[rc].all->push_back(rr);
+    }
+  }
+
 
 
 }
@@ -223,5 +280,19 @@ Register RegisterClass_MachineRegForColor(RegisterClass rc, Color c)
 VectorSet RegisterClass_TmpVectorSet(RegisterClass rc)
 {
   return mRc_VsTmp[rc];
+}
+
+
+RegisterContents*
+RegisterClass_GetRegisterContentsForLRID(LRID lrid)
+{
+  RegisterClass rc = RegisterClass_InitialRegisterClassForLRID(lrid);
+  return &mRc_RegisterContents[rc];
+}
+
+RegisterContents*
+RegisterClass_GetRegisterContentsForRegisterClass(RegisterClass rc)
+{
+  return &mRc_RegisterContents[rc];
 }
 

@@ -7,6 +7,7 @@
 
 #ifndef __GUARD_TYPES_H
 #define __GUARD_TYPES_H
+#include <vector>
 
 typedef Unsigned_Int Register;
 typedef Unsigned_Int Color;
@@ -18,5 +19,9 @@ typedef Unsigned_Int RegisterClass;
 
 //simple switch to say where to insert an instruction
 enum InstInsertLocation {BEFORE_INST, AFTER_INST};
+typedef enum {FOR_USE, FOR_DEF} RegPurpose;
+
+//
+typedef std::vector<Register> RegisterList;
 
 #endif

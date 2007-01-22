@@ -12,7 +12,6 @@
 typedef struct reserved_regs_info
 {
   Register* regs;         /* array of temporary registers */
-  Unsigned_Int next_free; /* next free register from the pool */ 
   Unsigned_Int cReserved; /* count of number reserved */
 } ReservedRegsInfo;
 
@@ -32,5 +31,15 @@ void InitRegisterClasses(Arena arena,
                          Unsigned_Int cReserved);
 VectorSet RegisterClass_TmpVectorSet(RegisterClass rc);
 
-
+//TODO: HERE construct the RegisterContents* for each register class
+struct register_contents;
+struct register_contents* 
+  RegisterClass_GetRegisterContentsForLRID(LRID);
+struct register_contents*
+  RegisterClass_GetRegisterContentsForRegisterClass(RegisterClass);
+/*RegisterContents* 
+  RegisterClass_GetRegisterContentsForLRID(LRID);
+RegisterContents*
+  RegisterClass_GetRegisterContentsForRegisterClass(RegisterClass);
+*/
 #endif

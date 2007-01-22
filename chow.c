@@ -14,6 +14,10 @@
 #include <set>
 #include <vector>
 #include <stack>
+#include <map>
+#include <algorithm>
+#include <functional>
+#include <utility>
 
 #include "chow.h"
 #include "live.h"
@@ -24,6 +28,7 @@
 #include "cleave.h"
 #include "ra.h" //for computing loop nesting depth
 #include "rc.h" //RegisterClass definitions 
+#include "assign.h" //Handles some aspects of register assignment
 
 #define SUCCESS 0
 #define ERROR -1
@@ -45,8 +50,6 @@ Chow_Stats chowstats = {0};
 
 /* locals */
 static LRID* lr_name_map;
-static const Register REG_UNALLOCATED = 666;
-static const Register REG_FP = 555;
 static const LRID     NO_LRID = (LRID)-1;//bigger than any lrid
 static MemoryLocation stack_pointer = 0;
 static LRID fp_lrid;
@@ -65,7 +68,6 @@ static const Register tmpRegs[] =
    };
 static const Unsigned_Int num_tmp_regs =
   sizeof(tmpRegs)/sizeof(Register);
-static Unsigned_Int tmp_reg_indx = 0;
 
 /* local functions */
 static void DumpParams(void);
@@ -78,10 +80,7 @@ static void RenameRegisters();
 static BB_Stats Compute_BBStats(Arena, Unsigned_Int);
 static void CreateLiveRangeNameMap(Arena);
 static void assert_same_orig_name(LRID,Variable,VectorSet,Block* b);
-static Register get_free_tmp_reg();
-static void reset_free_tmp_regs();
 static void AllocChowMemory();
-static Register GetMachineRegAssignment(Block*, LRID);
 static Operation* get_frame_operation();
 static MemoryLocation Frame_GetStackSize(Operation* frame_op);
 static void Frame_SetStackSize(Operation* frame_op, MemoryLocation sp);
@@ -101,7 +100,6 @@ static Inst* Inst_CreateStore(Opcode_Names opcode,
                       Register val);
 static void InitChow();
 static UFSet* Find_Set(Variable v);
-static LRID SSAName2LRID(Variable v);
 static void DumpInitialLiveRanges();
 static void ConvertLiveInNamespaceSSAToLiveRange();
 static void CheckRegisterLimitFeasibility(Unsigned_Int cRegMax);
@@ -692,45 +690,71 @@ void RenameRegisters()
   Inst* inst;
   Operation** op;
   Unsigned_Int* reg;
-  Register tmpReg;
   LRID lrid;
+  std::vector<Register> instUses;
+  std::vector<Register> instDefs;
+
   ForAllBlocks(b)
   {
     Block_ForAllInsts(inst, b)
     {
+      /* collect a list of uses and defs used in this regist that is
+       * used in algorithms when deciding which registers can be
+       * evicted for temporary uses */
+      instUses.clear();
+      instDefs.clear();
+      Inst_ForAllOperations(op, inst)
+      {
+        Operation_ForAllUses(reg, *op)
+        {
+          LRID lrid = SSAName2LRID(*reg);
+          instUses.push_back(lrid);
+        }
+
+        Operation_ForAllDefs(reg, *op)
+        {
+          LRID lrid = SSAName2LRID(*reg);
+          instDefs.push_back(lrid);
+        }
+      } 
+
+      /* rename uses and then defs */
+      //we need to keep the original inst separate. when we call
+      //ensure_reg_assignment it may be the case that we insert some
+      //stores after this instruction. we don't want to process those
+      //store instructions in the register allocator so we have to
+      //update the value of the inst pointer. thus we keep origInst
+      //and updatedInst separate.
+      Inst* origInst = inst;
+      Inst** updatedInst = &inst;
       Inst_ForAllOperations(op, inst)
       {
         Operation_ForAllUses(reg, *op)
         {
           lrid = SSAName2LRID(*reg);
           *reg = GetMachineRegAssignment(b, lrid);
-
-          if(*reg == REG_UNALLOCATED)
-          {
-            tmpReg = get_free_tmp_reg();
-            Insert_Load(lrid, inst, tmpReg, REG_FP);
-            *reg = tmpReg;
-          }
+          //make sure the live range is in a register
+          ensure_reg_assignment(reg, lrid, b, origInst, updatedInst,
+                                *op, FOR_USE,
+                                instUses, instDefs);
         }
 
         Operation_ForAllDefs(reg, *op)
         {
           lrid = SSAName2LRID(*reg);
           *reg = GetMachineRegAssignment(b, lrid); 
-          if(*reg == REG_UNALLOCATED)
-          {
-            tmpReg = get_free_tmp_reg();
-            //instert the load and update the iterator because we
-            //don't want to process the instruction we just inserted
-            inst = Insert_Store(lrid, inst, tmpReg, REG_FP, AFTER_INST);
-            *reg = tmpReg;
-          }
+          //make sure the live range is in a register
+          ensure_reg_assignment(reg, lrid, b, origInst, updatedInst,
+                               *op, FOR_DEF,
+                                instUses, instDefs);
         }
 
-        //make available the tmp regs used in this instruction
-        reset_free_tmp_regs(); 
       } 
     }
+    //make available the tmp regs used in this instruction
+    //pass in a pointer to the last instruction in the block so
+    //that we can insert loads for evicted registers
+    reset_free_tmp_regs(b->inst->prev_inst); 
   }
 
   //finally rewrite the frame statement to have the first register be
@@ -846,39 +870,6 @@ Register GetMachineRegAssignment(Block* b, LRID lrid)
   RegisterClass rc = LiveRange_RegisterClass(live_ranges[lrid]);
   return RegisterClass_MachineRegForColor(rc, color);
 }
-
-/*
- *===================
- * get_free_tmp_reg()
- *===================
- * gets the next available free tmp register from the pool of
- * available free temp registers
- **/
-Register get_free_tmp_reg()
-{
-  assert(tmp_reg_indx < num_tmp_regs);
-  return tmpRegs[tmp_reg_indx++]; 
-}
-
-Register get_free_tmp_reg(Operation* op, LRID lrid)
-{
-  assert(tmp_reg_indx < num_tmp_regs);
-  return tmpRegs[tmp_reg_indx++]; 
-}
-
-/*
- *===================
- * reset_free_tmp_regs()
- *===================
- * used to reset the count of which temporary registers are in use for
- * an instruction
- **/
-void reset_free_tmp_regs()
-{
-  tmp_reg_indx = 0;
-}
-
-
 /*
  *===================
  * Insert_Load()

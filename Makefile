@@ -9,6 +9,7 @@ SRCFILES=union_find.c\
          cleave.c\
          depths.c\
          rc.c\
+         assign.c\
 
 OBJS=${SRCFILES:.c=.o}
 
@@ -21,9 +22,10 @@ OBJS=${SRCFILES:.c=.o}
 # compiler to use is made above.  For what we need here, the
 # CFLAGS are the same for both cc and gcc.
 #
-CFLAGS  =    -Wall -O3 
-#CFLAGS =    -Wall -03 -D__DEBUG 
-#CFLAGS = -g -Wall     -D__DEBUG 
+#CFLAGS  =    -Wall -O3 
+#CFLAGS =    -Wall -O3 -D__DEBUG 
+CFLAGS = -g -Wall     -D__DEBUG 
+#CFLAGS = -g -Wall
 
 
 #
