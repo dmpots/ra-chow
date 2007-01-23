@@ -50,7 +50,6 @@ Chow_Stats chowstats = {0};
 
 /* locals */
 static LRID* lr_name_map;
-static const LRID     NO_LRID = (LRID)-1;//bigger than any lrid
 static MemoryLocation stack_pointer = 0;
 static LRID fp_lrid;
 static Unsigned_Int clrInitial = 0; //count of initial live ranges

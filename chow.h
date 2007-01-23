@@ -68,6 +68,7 @@ Register GetMachineRegAssignment(Block*, LRID);
 extern Variable GBL_fp_origname;
 const Register REG_UNALLOCATED = 666;
 const Register REG_FP = 555;
+const LRID     NO_LRID = (LRID)-1;//bigger than any lrid
 
 #endif
 

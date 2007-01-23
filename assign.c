@@ -43,6 +43,7 @@ void remove_unusable_reg(std::list<ReservedReg*>& potentials,
 Boolean has_been_evicted(LRID lrid, Register reg);
 /* --- end functions --- */
 
+/* debug routines */
 void dump_map_contents(ReservedRegMap& regMap)
 {
   debug("-- map contents --");
@@ -50,6 +51,15 @@ void dump_map_contents(ReservedRegMap& regMap)
   for(rmIt = regMap.begin(); rmIt != regMap.end(); rmIt++)
     debug("  %d --> %d", (*rmIt).first, ((*rmIt).second)->machineReg);
   debug("-- end map contents --");
+}
+
+void dump_reglist_contents(RegisterList& regList)
+{
+  debug("-- reglist contents --");
+  RegisterList::iterator rmIt;
+  for(rmIt = regList.begin(); rmIt != regList.end(); rmIt++)
+    debug("  %d", (*rmIt));
+  debug("-- end reglist contents --");
 }
 
 /*
@@ -242,6 +252,9 @@ get_free_tmp_reg(LRID lrid, Block* blk, Inst* inst, Operation* op,
                  const RegisterList& instUses, 
                  const RegisterList& instDefs)
 {
+  debug("looking for temporary reg for %s of lrid: %d",
+    (purpose == FOR_USE ? "FOR_USE" : "FOR_DEF"), lrid);
+
   std::pair<Register,bool> regXneedMem;
   regXneedMem.second = true; //default is needs memory load/store
 
@@ -301,7 +314,6 @@ get_free_tmp_reg(LRID lrid, Block* blk, Inst* inst, Operation* op,
   //with too many uses. make sure this only happens for FRAME and JSR
   //operations
   debug("no more reserved regs available must evict an allocted reg");
-  assert(false); //for now
   assert(op->opcode == FRAME ||
          op->opcode == JSRr  ||
          op->opcode == iJSRr ||
@@ -396,6 +408,7 @@ Register mark_register_used(ReservedReg* tmpReg,
 {
   //remove any previous mapping that may exist for the live range in
   //this temporary register
+  debug("marking reg: %d used for lrid: %d",tmpReg->machineReg, lrid);
   LRID prevLRID = tmpReg->forLRID;
   RegMapIterator rmIt = regMap.find(prevLRID);
   if(rmIt != regMap.end()){regMap.erase(rmIt);}
@@ -461,6 +474,7 @@ ReservedReg* find_usable_reg(const std::vector<ReservedReg*>* reserved,
  **/
 void reset_free_tmp_regs(Inst* last_inst)
 {
+  debug("resetting free tmp regs");
   //take care of business for each register class
   for(RegisterClass rc = 0; rc < cRegisterClass; rc++)
   {
@@ -491,6 +505,8 @@ void reset_free_tmp_regs(Inst* last_inst)
     for(resIT = reserved->begin(); resIT != reserved->end(); resIT++)
     {
       (*resIT)->free = TRUE;
+      (*resIT)->forLRID = NO_LRID;
+      (*resIT)->forInst = NULL;
     }
 
     //4) clear the regMap
