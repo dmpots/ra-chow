@@ -256,14 +256,11 @@ get_free_tmp_reg(LRID lrid, Block* blk, Inst* inst, Operation* op,
   if(it != regMap->end()) //found it
   {
     debug("found the live range already in a temporary register");
-    //HERE: update the forInst field. seems like it would be easy to
-    //do this by keeping the registermap to hold <LRID,ReservedReg*>
-    //pairs
     ReservedReg* rReg  = ((*it).second);
     rReg->forInst = inst;
     rReg->forPurpose = purpose;
     regXneedMem.first  = rReg->machineReg;
-    regXneedMem.second = false;
+    if(purpose == FOR_USE) {regXneedMem.second = false;}
     return regXneedMem;
   }
 
@@ -495,6 +492,9 @@ void reset_free_tmp_regs(Inst* last_inst)
     {
       (*resIT)->free = TRUE;
     }
+
+    //4) clear the regMap
+    regContents->regMap->clear();
   }
 }
 
