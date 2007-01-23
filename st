@@ -7,7 +7,7 @@ usage(){
 
 
 #register allocators
-CHOW_ARGS="-p -b5"
+CHOW_ARGS="-r32 -p"
 CHOW="`pwd`/chow $CHOW_ARGS"
 RA="`pwd`/ra"
 
@@ -52,7 +52,8 @@ CPROP=-c
 COALESCE=-s
 CLEAN=-n
 GVAL="-g[-p]"
-PASSES="$DEAD $VALNUM $GVAL $LAZY $CPROP $COALESCE $DEAD"
+PRE_PASS="$DEAD $VALNUM $GVAL $LAZY $CPROP $COALESCE $DEAD"
+POST_PASS="$CLEAN"
 
 #statistics gathering program
 TMPDIR=scratch
@@ -68,7 +69,7 @@ pushd  $TMPDIR > /dev/null
 
 #---- run ctest ----#
 date > $STATOUT
-ctest $TESTDIR -I -i $PASSES -"{$REGALLOC}" $CLEAN\
+ctest $TESTDIR -I -i $PRE_PASS -"{$REGALLOC}" $POST_PASS\
  | grep 'Transformations:' >> $STATOUT 
 
 #---- gather stats ----#
