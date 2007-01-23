@@ -1,6 +1,59 @@
-#!/bin/bash
-#NREG="-r16"
-NREG="-r16 -b5 -p"
+#!/bin/env ruby
+require 'fileutils'
+require 'benchmark'
+require 'optparse'
+
+#function to execute a shell command
+def sh(cmd)
+  `#{cmd}`
+end
+
+#test lists
+TEST_BASE_DIR="/home/compiler/test/"
+ALL_TESTS=["fmm", "spec", "spec95x"]
+FULL_TESTS=["fmm", "spec", "spec95x/applu"]
+QUICK_TESTS=["fmm", "spec/matrix300"]
+
+#PARSE COMMAND LINE ARGUMENTS
+chow_args = "-r32 -p"
+selected_tests = QUICK_TESTS
+opts = 
+OptionParser.new do |opt|
+  opt.banner = "usage: rt [options]\nRun tests for the chow allocator"
+  opt.separator ""
+  #log file
+  opt.on("-c ARGS", "--chow-args ARGS", Array, 
+          "Arguments passed to the chow allocator") do |list|
+    chow_args = list.join(" ")
+  end
+
+  opt.on("-t TEST","--test TEST", [:quick, :full],
+                "Select test type (quick, full, auto)") do |t|
+    case t 
+      when :quick 
+        selected_tests = QUICK_TESTS
+      when :full  
+        selected_tests = FULL_TESTS
+      else raise "bad test option"
+    end
+  end
+#  opt.on("-l=LOG_FILE", "--logfile=LOG_FILE",
+#        "Set the log file for the server") {|f|
+#    $logfile = f
+#  }
+#  opt.on("-d", "--daemonize", "Run server as a daemon") {$daemon=true }
+end
+begin
+  opts.parse!
+rescue 
+  puts opts.help
+  exit
+end
+
+
+#BEGIN SCRIPT HEADER
+HEADER=<<HEADER
+#!/bin/env bash
 TMPDIR=scratch
 CHOW=`pwd`/chow
 CLEAVE=`pwd`/cleave
@@ -12,26 +65,50 @@ CPROP=-c
 GVAL="-g[-p]"
 COALESCE=-s
 CLEAN=-n
-EXTRA="$DEAD $VALNUM $GVAL $LAZY $CPROP $COALESCE $DEAD"
 
-mkdir $TMPDIR
-pushd $TMPDIR
+HEADER
+#END SCRIPT HEADER
+PRE_OPT_PASSES="$DEAD $VALNUM $GVAL $LAZY $CPROP $COALESCE $DEAD"
+POST_OPT_PASSES="$CLEAN"
+CHOW="$CHOW"
 
-#fmm
-#ctest /home/compiler/test/fmm/fmin/  -"{$CHOW $NREG}"
-#ctest /home/compiler/test/fmm/seval/ -"{$CHOW $NREG}"
-#ctest /home/compiler/test/fmm/solve/ -"{$CHOW $NREG}"
-#ctest /home/compiler/test/fmm/urand/ -"{$CHOW $NREG}"
-#ctest /home/compiler/test/fmm/zeroin/ -"{$CHOW $NREG}"
-ctest /home/compiler/test/fmm/ $EXTRA -"{$CHOW $NREG}" $CLEAN
+#generate the strings for the tests
+tests = selected_tests.map do |t| 
+  "ctest #{TEST_BASE_DIR+t} #{PRE_OPT_PASSES}"+
+        " -\"{#{CHOW} #{chow_args}}\" #{POST_OPT_PASSES}"
+end
 
-#spec
-ctest /home/compiler/test/spec/doduc/ $EXTRA  -"{$CHOW $NREG}" $CLEAN
-ctest /home/compiler/test/spec/matrix300/ $EXTRA -"{$CHOW $NREG}" $CLEAN
-#ctest /home/compiler/test/spec/fpppp/ $EXTRA -"{$CHOW $NREG}" $CLEAN
-ctest /home/compiler/test/spec/tomcatv/ $EXTRA -"{$CHOW $NREG}" $CLEAN
+# BEGIN SCRIPT BODY
+script = HEADER
+script += <<BODY
+mkdir $TMPDIR 2>/dev/null
+pushd $TMPDIR 2>/dev/null
 
-#spec95
-ctest /home/compiler/test/spec95X/applu $EXTRA  -"{$CHOW $NREG}" $CLEAN
-popd
+#{tests.join("\n")}
+
+popd 2>/dev/null
+BODY
+
+#puts script
+
+#write the script file
+SCRIPT_FILE = "./testChow"
+File.open(SCRIPT_FILE, "w+") do |f|
+  f.puts(script)
+end
+FileUtils.chmod 0755, SCRIPT_FILE
+
+#run tests
+errors = ""
+tms = Benchmark.measure do
+  errors = sh SCRIPT_FILE
+end
+
+puts "================== SUMMARY ======================"
+puts ("tests completed in %.0f minutes %.2f seconds" % 
+      [(tms.real/60), ((tms.real) % 60)])
+errorMsgs = errors.grep(/ERROR/)
+if errorMsgs == [] then puts "NO ERRORS DETECTED :)"
+else puts "THERE WERE SOME ERRORS :("; puts errorMsgs.join() end
+puts "================ END SUMMARY ===================="
 
