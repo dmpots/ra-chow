@@ -107,6 +107,9 @@ end
 puts "================== SUMMARY ======================"
 puts ("tests completed in %.0f minutes %.2f seconds" % 
       [(tms.real/60), ((tms.real) % 60)])
+puts "ran tests: "+(selected_tests.join(" "))
+puts "CHOW ARGS: #{chow_args}"
+puts ""
 errorMsgs = errors.grep(/ERROR/)
 if errorMsgs == [] then puts "NO ERRORS DETECTED :)"
 else puts "THERE WERE SOME ERRORS :("; puts errorMsgs.join() end
