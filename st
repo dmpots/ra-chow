@@ -1,13 +1,13 @@
 #!/bin/env bash
 
 usage(){
-  echo "usage: st [chow|ra] [fmm|spec]"
+  echo "usage: st [chow|ra] [fmm|spec|spec95]"
   exit
 }
 
 
 #register allocators
-CHOW_ARGS="-r32 -p"
+CHOW_ARGS="-r32 -p -b5"
 CHOW="`pwd`/chow $CHOW_ARGS"
 RA="`pwd`/ra"
 

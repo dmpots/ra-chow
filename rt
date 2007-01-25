@@ -10,9 +10,10 @@ end
 
 #test lists
 TEST_BASE_DIR="/home/compiler/test/"
-ALL_TESTS=["fmm", "spec", "spec95x"]
-FULL_TESTS=["fmm", "spec", "spec95x/applu"]
+ALL_TESTS=["fmm", "spec", "spec95X"]
+FULL_TESTS=["fmm", "spec", "spec95X/applu"]
 QUICK_TESTS=["fmm", "spec/matrix300"]
+SPEC95_TESTS=["spec95X"]
 
 #PARSE COMMAND LINE ARGUMENTS
 chow_args = "-r32 -p"
@@ -27,13 +28,15 @@ OptionParser.new do |opt|
     chow_args = list.join(" ")
   end
 
-  opt.on("-t TEST","--test TEST", [:quick, :full],
-                "Select test type (quick, full, auto)") do |t|
+  opt.on("-t TEST","--test TEST", [:quick, :full, :spec95],
+                "Select test type (quick, full, spec95)") do |t|
     case t 
       when :quick 
         selected_tests = QUICK_TESTS
       when :full  
         selected_tests = FULL_TESTS
+      when :spec95
+        selected_tests = SPEC95_TESTS
       else raise "bad test option"
     end
   end
