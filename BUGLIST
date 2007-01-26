@@ -2,7 +2,7 @@
 (X) live_range.c -- LiveRange_ChooseSplitPoint
 
 opened: Mon Jan  8 16:51:54 CST 2007
-closed:
+closed: Thu Jan 25 22:46:24 CST 2007
 id: 002
 ==================================================================
 You are not selecting the first liveunit that starts with a
@@ -12,10 +12,10 @@ really only take the first one that starts with a def if you can not
 find one that is an entry point.
 
 ==================================================================
-(O) live_range.c -- LiveRange_Split
+(X) live_range.c -- LiveRange_Split
 
 opened: Mon Jan  8 16:51:54 CST 2007
-closed:
+closed: Thu Jan 25 22:46:24 CST 2007
 id: 001
 ==================================================================
 You do not update the forbidden list for the new live range (newlr) as
@@ -32,6 +32,11 @@ I think this can be solved easily by updating the forbidden set in the
 TransferLiveUnit() function. It looks like it is only called from the
 split function and could do the job easily.
 
+update:
+Well actually you do update the forbidden set in the
+LiveRange_AddBlock() function. This is called from the AddLiveUnit()
+function which is called from TransferLiveUnit which is called from
+the Split() function. So no bug.
 
 ==================================================================
 (O) filename.c -- Function
