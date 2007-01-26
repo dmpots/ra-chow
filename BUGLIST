@@ -1,8 +1,9 @@
 ==================================================================
-(O) live_range.c -- LiveRange_ChooseSplitPoint
+(X) live_range.c -- LiveRange_ChooseSplitPoint
 
 opened: Mon Jan  8 16:51:54 CST 2007
 closed:
+id: 002
 ==================================================================
 You are not selecting the first liveunit that starts with a
 definition. You will choose the last unit that starts with a
@@ -15,6 +16,7 @@ find one that is an entry point.
 
 opened: Mon Jan  8 16:51:54 CST 2007
 closed:
+id: 001
 ==================================================================
 You do not update the forbidden list for the new live range (newlr) as
 you split it off from the original live range. In the function

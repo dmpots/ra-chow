@@ -851,11 +851,15 @@ LiveUnit* LiveRange_ChooseSplitPoint(LiveRange* lr)
       //prefer starting with a def
       if(unit->start_with_def)
       {
-        startdefunit = unit;
+        startdefunit = (startdefunit == NULL) ? unit : startdefunit;
 
         //and if its an entry point we cant do better than that
-        if(LiveRange_EntryPoint(lr,startdefunit))
+        if(LiveRange_EntryPoint(lr,unit))
         {
+          //need the assignment here because we may not have assigned
+          //to startdefunit if this was not the first unit that has a
+          //def
+          startdefunit = unit; 
           break;
         }
       }
