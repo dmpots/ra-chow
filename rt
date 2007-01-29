@@ -22,14 +22,14 @@ opts =
 OptionParser.new do |opt|
   opt.banner = "usage: rt [options]\nRun tests for the chow allocator"
   opt.separator ""
-  #log file
+  #arguments passed to the chow allocator
   opt.on("-c ARGS", "--chow-args ARGS", Array, 
           "Arguments passed to the chow allocator") do |list|
     chow_args = list.join(" ")
   end
 
-  opt.on("-t TEST","--test TEST", [:quick, :full, :spec95],
-                "Select test type (quick, full, spec95)") do |t|
+  opt.on("-t TEST","--tests TEST", [:quick, :full, :spec95,:all],
+                "Select test type (quick, full, spec95,all)") do |t|
     case t 
       when :quick 
         selected_tests = QUICK_TESTS
@@ -37,6 +37,8 @@ OptionParser.new do |opt|
         selected_tests = FULL_TESTS
       when :spec95
         selected_tests = SPEC95_TESTS
+      when :all
+        selected_tests = ALL_TESTS
       else raise "bad test option"
     end
   end
