@@ -611,4 +611,27 @@ The store/load in the middle and end should not exist. we are storing
 and then loading from the same location. if we know we have that lr in
 a register there is no need for the load to exist.
 
+========================================================
+Problem With Splitting Algorithm
+Fri Jan 26 11:30:37 CST 2007
+========================================================
+it seems that the splitting algorithm can add live units to the split
+live range even when there is no point. we split the live range by
+looking for a place where it starts with a def or a use and then do a
+bfs of the nodes in the origlr from there adding any node that does
+not fill up the forbidden register set. now suppose that we don't get
+to another use of the live range in any block that we add, this means
+that if we allocate this split live range it could tie up all those
+blocks even though it serves no purpose to have that register tied up
+since there are no uses beyond the first.
+
+The solution may be this:
+1) run split as normal
+2) when finished then check the leaves of the live range. walk up the
+leaves tword the root. remove any blocks along the way that are
+present before the first use is encountered. this should keep only the
+blocks that are "useful" in the live range. (draw a picture it will
+help)
+
+
 
