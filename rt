@@ -12,8 +12,9 @@ end
 TEST_BASE_DIR="/home/compiler/test/"
 ALL_TESTS=["fmm", "spec", "spec95X"]
 FULL_TESTS=["fmm", "spec", "spec95X/applu"]
-QUICK_TESTS=["fmm", "spec/matrix300"]
+QUICK_TESTS=["fmm", "spec/matrix300", "spec/tomcatv"]
 SPEC95_TESTS=["spec95X"]
+DEBUG_TESTS=["spec/tomcatv"]
 
 #PARSE COMMAND LINE ARGUMENTS
 chow_args = "-r32 -p"
@@ -28,7 +29,7 @@ OptionParser.new do |opt|
     chow_args = list.join(" ")
   end
 
-  opt.on("-t TEST","--tests TEST", [:quick, :full, :spec95,:all],
+  opt.on("-t TEST","--tests TEST", [:quick, :full, :spec95,:all,:debug],
                 "Select test type (quick, full, spec95,all)") do |t|
     case t 
       when :quick 
@@ -39,6 +40,8 @@ OptionParser.new do |opt|
         selected_tests = SPEC95_TESTS
       when :all
         selected_tests = ALL_TESTS
+      when :debug
+        selected_tests = DEBUG_TESTS
       else raise "bad test option"
     end
   end
@@ -46,7 +49,15 @@ OptionParser.new do |opt|
 #        "Set the log file for the server") {|f|
 #    $logfile = f
 #  }
-#  opt.on("-d", "--daemonize", "Run server as a daemon") {$daemon=true }
+  opt.on("-d", "--debug-tests", "Run debug set of tests") {
+        selected_tests = DEBUG_TESTS
+  }
+  opt.on("-q", "--quick-tests", "Run quick set of tests") {
+        selected_tests = QUICK_TESTS
+  }
+  opt.on("-f", "--full-tests", "Run full (almost) set of tests") {
+        selected_tests = FULL_TESTS
+  }
 end
 begin
   opts.parse!
