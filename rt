@@ -12,8 +12,9 @@ end
 TEST_BASE_DIR="/home/compiler/test/"
 ALL_TESTS=["fmm", "spec", "spec95X"]
 FULL_TESTS=["fmm", "spec", "spec95X/applu"]
-QUICK_TESTS=["fmm", "spec/matrix300", "spec/tomcatv"]
+QUICK_TESTS=["fmm", "spec/matrix300"]
 SPEC95_TESTS=["spec95X"]
+MAC_TESTS=["fmm", "spec/doduc", "spec/fpppp", "spec/matrix300", "spec95X/applu"]
 DEBUG_TESTS=["spec/tomcatv"]
 
 #PARSE COMMAND LINE ARGUMENTS
@@ -58,6 +59,9 @@ OptionParser.new do |opt|
   opt.on("-f", "--full-tests", "Run full (almost) set of tests") {
         selected_tests = FULL_TESTS
   }
+  opt.on("-m", "--mac-tests", "Run tests known to work on mac os x"){
+        selected_tests = MAC_TESTS
+  }
 end
 begin
   opts.parse!
@@ -73,6 +77,7 @@ HEADER=<<HEADER
 TMPDIR=scratch
 CHOW=`pwd`/chow
 CLEAVE=`pwd`/cleave
+SPLIT_EDGES=-"{`pwd`/splitE}"
 FIX_UNDEF=-"{`pwd`/fix_undef}"
 DEAD=-d
 VALNUM=-v

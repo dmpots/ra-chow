@@ -26,6 +26,7 @@
 #include "debug.h"
 #include "util.h"
 #include "cleave.h"
+#include "cfg_tools.h"
 
 //file local variables
 static Unsigned_Int cinLast = 0;
@@ -36,14 +37,9 @@ static Arena arnCleave = NULL;
 static Inst* In_CleavePred(Block* blk);
 static Block* Blk_CleaveBlock(Block* blk, Inst* in);
 static BlockTuple Blk2_CleaveBlockAt(Inst* in, Block* blk);
-static Block* Blk_CreateBlock();
 static Inst* MoveInstTo(Inst* in, Block* blk);
-static void InsertJumpFromTo(Block* blkFrom, Block* blkTo);
 static void RemoveInstFromBlock(Inst* in);
 static void InsertInstInsertAfter(Inst* inInsert, Inst* inAfter);
-static Inst* In_CreateJmpTo(Expr ex);
-static Expr Ex_ExprFromLabel(Label* plbl);
-static Inst* In_LastInst(Block* blk);
 static void FixControlFlow(Block* blkTop, Block* blkBot);
 static Inst* In_FirstInst(Block* blk);
 
@@ -58,6 +54,7 @@ void InitCleaver(Arena arn, Unsigned_Int cinLastT)
   fnCleavePred = &In_CleavePred;
   cinLast = cinLastT;
   arnCleave = arn;
+  InitCFGTools(arn);
 
   assert(cinLast != 1);//min 2 inst: 1 inst + 1 control flow
 }
@@ -185,7 +182,7 @@ BlockTuple Blk2_CleaveBlockAt(Inst* inLast, Block* blk)
 {
   Inst* in;
   Inst* inIterFix;
-  Block* blkNew = Blk_CreateBlock();
+  Block* blkNew = CreateEmptyBlock();
 
   debug("cleaving block: %s(%d)", bname(blk), id(blk));
   //walk up the insts backward until arriving at the clip point
@@ -248,31 +245,6 @@ void RemoveInstFromBlock(Inst* in)
 
 /*
  *========================
- * InsertJumpFromTo()
- *========================
- * 
- ***/
-void InsertJumpFromTo(Block* blkFrom, Block* blkTo)
-{
-  Inst* in = In_CreateJmpTo(Ex_ExprFromLabel(blkTo->labels));
-  InsertInstInsertAfter(in, In_LastInst(blkFrom));
-
-}
-
-/*
- *========================
- * InsertJumpFromTo()
- *========================
- * 
- ***/
-Inst* In_LastInst(Block* blk)
-{
-  return blk->inst->prev_inst;
-}
-
-
-/*
- *========================
  * FixControlFlow()
  *========================
  * 
@@ -325,26 +297,6 @@ void FixControlFlow(Block* blkTop, Block* blkBot)
 
 
 
-/*
- *========================
- * Blk_CreateBlock()
- *========================
- * 
- ***/
-Block* Blk_CreateBlock()
-{
-  Block* blk = Block_Build_Drone_Block();
-
-  //create a new label
-  Label* plbl = Label_Invent();
-  plbl->next = blk->labels;
-  blk->labels = plbl;
-
-  block_count++;
-
-  return blk;
-}
-
 
 
 
@@ -371,40 +323,4 @@ Inst* In_FirstInst(Block* blk)
 
 
 
-
-/*
- *========================
- * In_CreateJmpTo()
- *========================
- * 
- ***/
-static const int JMPL_OPSIZE = 7;
-Inst* In_CreateJmpTo(Expr ex)
-{
-  Inst* inJmp;
-  Operation* opJmp;
-
-  //allocate a new instruction and operation
-  inJmp = (Inst*)Inst_Allocate(arnCleave, 1);
-  opJmp = (Operation*) Operation_Allocate(arnCleave, JMPL_OPSIZE);
-  
-  //attach operation to instruction
-  inJmp->operations[0] = opJmp;
-  inJmp->operations[1] = NULL;
-
-  //fill in struct
-  opJmp->opcode  = JMPl;
-  opJmp->comment = 0;
-  opJmp->source_line_ref = Expr_Install_String("0");
-  opJmp->constants = 1;
-  opJmp->referenced = 1;
-  opJmp->defined = 1;
-  opJmp->critical = FALSE;
-
-  //fill in arguments array
-  opJmp->arguments[0] = ex;
-  opJmp->arguments[1] = 0;
-
-  return inJmp;
-}
 

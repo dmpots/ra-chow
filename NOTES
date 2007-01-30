@@ -634,4 +634,26 @@ blocks that are "useful" in the live range. (draw a picture it will
 help)
 
 
+========================================================
+Issue with tomcatv saveFP
+Mon Jan 29 18:23:08 CST 2007
+========================================================
+There seems to be some issue with mixing code compiled with g77 and
+gcc4. You end up with these link errors for function saveFP. This
+makes it look as though tomcatv fails, but actually it is just a link
+error. It may be possible to fix the problem by using gfortran, but
+that needs to be installed.
+
+I solved the problem as follows:
+1) install gfortran from the mac hpc site
+2) modify /home/compiler/tools/ctest/test.script and replace all
+instances of g77 with gfortran.
+
+At this point quick tests were passing except for tomcatv, which was
+having a problem with the unresolved symbol _exit_. Well tomcatv.i was
+calling exit for some reason (tomcatv.f does not) with a JSR so I just
+deleted the line that does the JSR. That seemed to make the tests
+pass.
+
+now main.f in fpppp gets a type conversion error :\
 

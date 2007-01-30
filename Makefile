@@ -10,6 +10,7 @@ SRCFILES=union_find.c\
          depths.c\
          rc.c\
          assign.c\
+         cfg_tools.c\
 
 OBJS=${SRCFILES:.c=.o}
 
@@ -35,9 +36,10 @@ CFLAGS = -g -Wall     -D__DEBUG
 CHOW=chow
 DOT_DUMP=dot_dump
 CLEAVE=cleave
+SPLIT=splitE
 VECTOR_TEST=vtest
 SSA_DUMP=ssa_dump
-ALL = $(CHOW) $(DOT_DUMP) $(VECTOR_TEST) $(CLEAVE)
+ALL = $(CHOW) $(DOT_DUMP) $(VECTOR_TEST) $(CLEAVE) $(SPLIT)
 
 
 #########################################
@@ -91,7 +93,11 @@ $(DOT_DUMP): dot_dump.o
 	@ $(CC) -o $@ $(LDFLAGS) $^ $(LIBS)
 	@ echo " -- make $@ (Done)"
 
-$(CLEAVE): cleave.o cleave.main.o
+$(CLEAVE): cfg_tools.o cleave.o cleave.main.o
+	@ $(CC) -o $@ $(LDFLAGS) $^ $(LIBS)
+	@ echo " -- make $@ (Done)"
+
+$(SPLIT): cfg_tools.o cfg_tools.main.o
 	@ $(CC) -o $@ $(LDFLAGS) $^ $(LIBS)
 	@ echo " -- make $@ (Done)"
 
