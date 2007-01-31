@@ -25,7 +25,7 @@ main(Int argc, Char **argv)
   else
     Block_Init(NULL);
   
-  InitCleaver(arnCleave, 3);
+  InitCleaver(arnCleave, 5);
   CleaveBlocks();
 
   /* dump out the results */

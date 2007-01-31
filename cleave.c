@@ -265,12 +265,14 @@ void FixControlFlow(Block* blkTop, Block* blkBot)
   blkBot->pred = edgBotPred;
   blkBot->succ = blkTop->succ; //previous whole block succ list
 
-  //need to fix the pred edge for the succs of the blkTop 
-  //to point to blkBot
+  //fix up the succ edges of the top block by moving them to the
+  //bottom block. then fix up the pred edges for all succsors of the
+  //top to point to the new bottom
   Edge* edg;
   Edge* edgT;
   Block_ForAllSuccs(edg, blkTop)
   {
+    edg->pred = blkBot; //new predecessor is the bottom block
     Block_ForAllPreds(edgT, edg->succ)
     {
       if(edgT->pred == blkTop)
