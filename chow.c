@@ -88,12 +88,14 @@ static Variable Frame_GetRegFP(Operation* frame_op);
 static Inst* Inst_CreateLoad(Opcode_Names opcode,
                              Expr tag, 
                              Unsigned_Int alignment, 
+                             Comment_Val comment,
                              Unsigned_Int offset,
                              Register base_reg,
                              Register dest_reg);
 static Inst* Inst_CreateStore(Opcode_Names opcode,
                       Expr tag,
                       Unsigned_Int alignment, 
+                      Comment_Val comment,
                       Unsigned_Int offset,
                       Register base_reg,
                       Register val);
@@ -889,8 +891,13 @@ void Insert_Load(LRID lrid, Inst* before_inst, Register dest,
   debug("Inserting load for LR: %d, to reg: %d, from offset: %d,"
          "base: %d", lrid, dest, offset, base);
 
+  //generate a comment
+  char str[64];
+  sprintf(str, "LOAD %d_%d", lr->orig_lrid, lr->id); 
+  Comment_Val comment = Comment_Install(str);
+
   Inst* ld_inst = 
-    Inst_CreateLoad(opcode, tag, alignment, offset, base, dest);
+    Inst_CreateLoad(opcode, tag, alignment, comment, offset, base, dest);
 
   //finally insert the new instruction
   Block_Insert_Instruction(ld_inst, before_inst);
@@ -906,9 +913,10 @@ void Insert_Load(LRID lrid, Inst* before_inst, Register dest,
  *  iLDor  @ref align offset base => reg
  */
 static const int LD_OPSIZE = 7;
-Inst* Inst_CreateLoad(Opcode_Names opcode,
+static Inst* Inst_CreateLoad(Opcode_Names opcode,
                       Expr tag,
                       Unsigned_Int alignment, 
+                      Comment_Val comment,
                       Unsigned_Int offset,
                       Register base_reg,
                       Register dest_reg)
@@ -922,7 +930,7 @@ Inst* Inst_CreateLoad(Opcode_Names opcode,
 
   //fill in struct
   ld_op->opcode  = opcode;
-  ld_op->comment = 0;
+  ld_op->comment = comment;
   ld_op->source_line_ref = Expr_Install_String("0");
   ld_op->constants = 3;
   ld_op->referenced = 4;
@@ -962,10 +970,18 @@ Inst* Insert_Store(LRID lrid, Inst* around_inst, Register src,
   debug("Inserting store for LR: %d, from reg: %d to offset: %d",
          lrid, src, offset);
 
+  //generate a comment
+  char str[64]; 
+  sprintf(str, "STORE %d_%d", lr->orig_lrid, lr->id); 
+  Comment_Val comment = Comment_Install(str);
+
+  //get opcode and alignment for live range
   Opcode_Names opcode = LiveRange_StoreOpcode(lr);
   Unsigned_Int alignment = LiveRange_GetAlignment(lr);
+
+  //create a new store instruction
   Inst* st_inst = 
-    Inst_CreateStore(opcode, tag, alignment, offset, base, src);
+    Inst_CreateStore(opcode, tag, alignment, comment, offset, base, src);
 
   //finally insert the new instruction
   if(loc == AFTER_INST)
@@ -985,9 +1001,10 @@ Inst* Insert_Store(LRID lrid, Inst* around_inst, Register src,
  *  iSSTor @ref align offset base val
  */
 static const int ST_OPSIZE = 7;
-Inst* Inst_CreateStore(Opcode_Names opcode,
+static Inst* Inst_CreateStore(Opcode_Names opcode,
                       Expr tag,
                       Unsigned_Int alignment, 
+                      Comment_Val comment,
                       Unsigned_Int offset,
                       Register base_reg,
                       Register val)
@@ -1001,7 +1018,7 @@ Inst* Inst_CreateStore(Opcode_Names opcode,
 
   //fill in struct
   st_op->opcode  = opcode;
-  st_op->comment = 0;
+  st_op->comment = comment;
   st_op->source_line_ref = Expr_Install_String("0");
   st_op->constants = 3;
   st_op->referenced = 5;

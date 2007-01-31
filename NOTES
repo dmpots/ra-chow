@@ -657,3 +657,31 @@ pass.
 
 now main.f in fpppp gets a type conversion error :\
 
+
+========================================================
+Cexam Question
+Tue Jan 30 17:24:25 CST 2007
+========================================================
+Q: So should you do register allocation before scheduling, or after
+scheduling?
+
+A: Both!
+The generally accpeted way to do scheduling and register allocation is
+to first do a round of scheduling over a large namespace, this allows
+you to rename variables to avoid anti-dependencies (WAR). In this
+round of scheduling you want to not schedule to make register pressure
+too high. (why?) scheduling changes the live ranges so that a variable
+can be live for much longer than it needs to be. Stretching out a
+bunch of live ranges makes you have to spill more.
+
+Next you do a register allocation. This may require you to insert
+spill code. This will mess with the previous schedule. Hopefully you
+should be able to schedule since register pressure was taken into
+consideration in the first round of scheduling.
+
+Finally you do another round of scheduling to fix up the schedule for
+any loads or stores you had to insert. The scheduler will not be able
+to move code around so much this time since the namespace is fixed.
+
+
+

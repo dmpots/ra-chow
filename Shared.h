@@ -700,7 +700,7 @@ Tag_Node *Alias_Retrieve_Tag(Tag tag_name);
 Unsigned_Int Tag_Get_Tag_Offset(Void);
 
 
-
+Comment_Val Comment_Install(Char *comment_string); //for c++ to see
 #ifdef __cplusplus
 };
 #endif /*__cpluplus */

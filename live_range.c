@@ -1505,7 +1505,8 @@ Expr LiveRange_GetTag(LiveRange* lr)
   if(lr->tag == TAG_UNASSIGNED)
   {
     char str[32];
-    sprintf(str, "@SPILL_%d_%d", lr->orig_lrid, lr->id);
+    sprintf(str, "@SPILL_%d(%d)", lr->orig_lrid, 
+                                  LiveRange_MemLocation(lr));
     lr->tag = Expr_Install_String(str);
   }
 
