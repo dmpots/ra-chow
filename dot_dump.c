@@ -131,7 +131,7 @@ void color(Block* b, LiveRange* lr, char* buf)
       sprintf(buf, "[style=filled, fillcolor=blue]");
   }
   else
-    buf[0] = NULL;
+    buf[0] = '\0';
 }
 
 
