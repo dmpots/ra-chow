@@ -728,6 +728,85 @@ was saying it needed a load at the very first block of its live range
 since it had a predecessor not in the live range.  (fmin.i lr:55_55)
 
 
+========================================================
+Chow's Splitting Algorithm
+Thu Feb  1 13:45:58 CST 2007
+========================================================
+The problem with Chow's splitting algorithm is that it is not
+agressive engouh. This means it does not try to squeeze as much
+register use as possible out of the code. 
 
+Two improvements to splitting would be:
+
+1) Search the live range up predecessors and down successors at the
+same time. This would increase the size of the live range and let you
+keep more values in a register. One problem with this is that you can
+end up getting a live range that contains a bunch of uses which may
+not be very interesting to keep in a live range. Look at this code
+
+
+                  z               z
+                  x <-            x <-
+                    \             /
+                     \           /
+                      \         /
+                       \       /
+                        \     /
+                         \   /
+                           x <-  (A)
+                           |
+                           |
+                           |
+                           |
+                            <- x y
+                            <- x y
+                            <- x y
+                              
+If we search down the graph from node A we can get the uses of x
+below. If we search up and down we may add the defs of x above first.
+Assume both z and y are assigned registers, then we can only get
+either the uses or the defs, but not both. Getting only the defs here
+would mean a lot more loads and stores overall.
+
+
+2) Search agressively for the uses and only add stores when it is not
+going to cause a problem. The idea would be that starting with a def
+we would like to connect up to as many uses as possible. We can also
+modify this to use some kind of cost function to decide whether or not
+we should be adding a block. There might be room for adaptive
+compiling in the cost function. Another problem is this graph:
+
+
+                            x <- (A)
+                             /\
+                            /  \
+                           /    \
+                          /      \
+                    (B) x <-     |
+                        y        /
+                          \     /
+                           \   /
+                            \ /
+                          <- x  (C)
+                             z
+
+If we get the live range AC then we need 1 store (in B) and one load
+(in C). But if we get AB then we need two stores (in A and B) and one
+load (in C)... So obviously there is room for improvement in the
+simple algorithm of breadth first search.
+
+The splitting algorithm is an obvious place for improving chow.
+Perhaps people did not care before because they just wanted somethiing
+quick and dirty, but I care. I want a really good allocation.
+
+
+========================================================
+Thesis contents
+Thu Feb  1 13:45:58 CST 2007
+========================================================
+In my thesis I should have the flow of
+1) chow's algorithm as described in the paper
+2) practicle engineering improvements to chow
+3) the adaptive chow algorithm
 
 
