@@ -109,10 +109,11 @@ static void CheckRegisterLimitFeasibility(Unsigned_Int cRegMax);
  * allocation parameters 
  */
 Unsigned_Int pBBMaxInsts;
-float mMVCost;
-float mLDSave;
-float mSTRSave;
+float mMVCost = 1.0;
+float mLDSave = 1.0;
+float mSTRSave = 1.0;
 float wLoopDepth;
+Boolean PARAM_moveLoadsAndStores;
 //
 static Boolean fEnableRegisterClasses;
 static Unsigned_Int mRegisters;
@@ -135,7 +136,8 @@ typedef enum
   HELP_LDSAVE,
   HELP_STRSAVE,
   HELP_LOOPDEPTH,
-  HELP_REGISTERCLASSES
+  HELP_REGISTERCLASSES,
+  HELP_LOADSTOREMOVEMENT
 } Param_Help;
 
 
@@ -180,15 +182,17 @@ static Param_Details param_table[] =
 {
   {'b', process_, 0,F,B, &pBBMaxInsts, INT_PARAM, HELP_BBMAXINSTS},
   {'r', process_, 32,F,B, &mRegisters, INT_PARAM, HELP_NUMREGISTERS},
-  {'m', process_, I,1.0,B, &mMVCost, FLOAT_PARAM, HELP_MVCOST},
-  {'l', process_, I,1.0,B, &mLDSave, FLOAT_PARAM, HELP_LDSAVE},
-  {'s', process_, I,1.0,B,&mSTRSave, FLOAT_PARAM, HELP_STRSAVE},
   {'d', process_, 0,10.0,B,&wLoopDepth, FLOAT_PARAM, HELP_LOOPDEPTH},
   {'p', process_, I,F,FALSE,&fEnableRegisterClasses, BOOL_PARAM, 
-                                                  HELP_REGISTERCLASSES} 
+                                                  HELP_REGISTERCLASSES},
+  {'m', process_, I,F,FALSE,&PARAM_moveLoadsAndStores, BOOL_PARAM, 
+                                                  HELP_LOADSTOREMOVEMENT}
+//  {'m', process_, I,1.0,B, &mMVCost, FLOAT_PARAM, HELP_MVCOST},
+//  {'l', process_, I,1.0,B, &mLDSave, FLOAT_PARAM, HELP_LDSAVE},
+//  {'s', process_, I,1.0,B,&mSTRSave, FLOAT_PARAM, HELP_STRSAVE},
 };
 #define NPARAMS (sizeof(param_table) / sizeof(param_table[0]))
-#define PARAMETER_STRING ":b:r:m:l:s:d:p"
+#define PARAMETER_STRING ":b:r:d:mp"
 
 /*
  *===========
@@ -378,6 +382,7 @@ void InitChow()
 {
   AllocChowMemory();
 
+
   //the register that holds the frame pointer is not a candidate for
   //allocation since it resides in a special reserved register. remove
   //this from the interference graph and remember which lrid holds the
@@ -528,7 +533,7 @@ void LiveRange_BuildInitialSSA()
     info = SSA_live_out[id(b)];
     for(j = 0; j < info.size; j++)
     {
-      debug("LIVE: %d is LRID: %d",info.names[j], SSAName2LRID(info.names[j]));
+      //debug("LIVE: %d is LRID: %d",info.names[j], SSAName2LRID(info.names[j]));
       //add block to each live range
       lrid = SSAName2LRID(info.names[j]);
       //VectorSet_Insert(lrset, lrid);
@@ -552,7 +557,7 @@ void LiveRange_BuildInitialSSA()
         LiveRange* lrT = live_ranges[i];
         if(LiveRange_RegisterClass(lr) == LiveRange_RegisterClass(lrT))
         {
-          debug("%d conflicts with %d", v, i);
+          //debug("%d conflicts with %d", v, i);
           LiveRange_AddInterference(lr, lrT);
         }
       }
@@ -577,8 +582,8 @@ Block* b)
   if(VectorSet_Member(set,lrid))
   {
     LiveUnit* unit = LiveRange_LiveUnitForBlock(live_ranges[lrid],b);
-    debug("already present: %d, orig_name: %d new_orig: %d  block: %s (%d)", 
-                            lrid, unit->orig_name, v, bname(b), id(b));
+    //debug("already present: %d, orig_name: %d new_orig: %d  block: %s (%d)", 
+   //                       lrid, unit->orig_name, v, bname(b), id(b));
     assert(unit->orig_name == v);
   }
 }
@@ -651,8 +656,8 @@ void ConvertLiveInNamespaceSSAToLiveRange()
         error("invalid live in name %d", vLive);
         continue;
       }
-      debug("Converting LIVE: %d to LRID: %d",vLive,
-             SSAName2LRID(vLive));
+      //debug("Converting LIVE: %d to LRID: %d",vLive,
+      //       SSAName2LRID(vLive));
       lrid = SSAName2LRID(vLive);
       info.names[j] = lrid;
     }
@@ -1267,6 +1272,10 @@ static const char* get_usage(Param_Help idx)
 
     case HELP_NUMREGISTERS:
       return "[int]\tnumber of machine registers";
+
+    case  HELP_LOADSTOREMOVEMENT:
+      return 
+      "[bool]\tenable movement of load/store at live range boundaries";
 
     default:
       return " UNKNOWN PARAMETER\n";

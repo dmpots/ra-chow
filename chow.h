@@ -18,6 +18,7 @@ extern float mMVCost;
 extern float mLDSave;
 extern float mSTRSave;
 extern float wLoopDepth;
+extern Boolean PARAM_moveLoadsAndStores;
 
 
 
