@@ -9,25 +9,51 @@
 #include <stdio.h>
 #include <string.h>
 #include "debug.h"
+#include "live_range.h"
+#include "dot_dump.h"
 
 #define puts(...) \
                  {fprintf(stdout,__VA_ARGS__);\
                  fprintf(stdout, "\n");}
+#define isdot(c) ((c) == '.')
 
-void name(Block*, char*);
 
-int main(Int argc, Char **argv)
+void dot_dump_lr(LiveRange* lr){dot_dump_lr(lr, stdout);}
+void dot_dump_lr(LiveRange* lr, FILE* outfile)
+{
+  Block* b;
+  Edge* e;
+  char buf[512] = {'\0'};
+  char buf2[512] = {'\0'};
+  char buf3[1024] = {'\0'};
+
+  puts("digraph {");
+  /* nodes */ 
+  ForAllBlocks(b){
+   name(b, lr, buf);
+   color(b, lr, buf2);
+   sprintf(buf3, "\"%s\" %s", buf, buf2);
+   puts("%s;", buf3);  
+  }
+  /* edges */
+  ForAllBlocks(b){
+    Block_ForAllSuccs(e, b)
+    {
+      name(b, lr, buf);
+      name(e->succ, lr, buf2);
+      puts("\"%s\" -> \"%s\";",buf, buf2);
+    } 
+  }
+  puts("}"); //graph
+}
+
+
+void dot_dump()
 {
   Block* b;
   Edge* e;
   char buf[1024] = {'\0'};
   char buf2[1024] = {'\0'};
-
-  if (argc == 2)
-    Block_Init(argv[1]);
-  else
-    Block_Init(NULL);
- 
  
   puts("digraph {");
  
@@ -46,11 +72,8 @@ int main(Int argc, Char **argv)
     } 
   }
   puts("}"); //graph
-
-  return 0;
 } /* main */
 
-#define isdot(c) ((c) == '.')
 void name(Block* b, char* buf)
 {
   unsigned int i,k;
@@ -63,4 +86,53 @@ void name(Block* b, char* buf)
   buf[i] = '\0';
 }
  
+
+void name(Block* b, LiveRange* lr, char* buf)
+{
+  char bufT[100] = {'\0'};
+  char bufT2[100] = {'\0'};
+  char bufT3[100] = {'\0'};
+  char bufTD[100] = {'\0'};
+
+  name(b, bufT);
+  if(LiveRange_ContainsBlock(lr,b))
+  {
+    LiveUnit* lu = LiveRange_LiveUnitForBlock(lr, b);
+    if(lu->start_with_def && lu->defs > 0)
+    {
+      sprintf(bufTD, "\\n(def %d_%d)", lr->id, lr->orig_lrid);
+    }
+    if(lu->uses > 0)
+    {
+      sprintf(bufT2, "\\n(use %d_%d)", lr->id, lr->orig_lrid);
+    }
+    if(lu->defs > 0 && !(lu->start_with_def))
+    {
+      sprintf(bufT3, "\\n(def %d_%d)", lr->id, lr->orig_lrid);
+    }
+  }
+
+  sprintf(buf,"%s%s%s%s", bufT, bufTD, bufT2, bufT3);
+}
+
+
+void color(Block* b, LiveRange* lr, char* buf)
+{
+  if(LiveRange_ContainsBlock(lr,b))
+  {
+    LiveUnit* lu = LiveRange_LiveUnitForBlock(lr, b);
+    if(lu->uses > 0 && lu->defs > 0)
+      sprintf(buf, "[style=filled, fillcolor=yellow]");
+    else if(lu->uses > 0)
+      sprintf(buf, "[style=filled, fillcolor=green]");
+    else if(lu->defs > 0)
+      sprintf(buf, "[style=filled, fillcolor=red]");
+    else
+      sprintf(buf, "[style=filled, fillcolor=blue]");
+  }
+  else
+    buf[0] = NULL;
+}
+
+
 

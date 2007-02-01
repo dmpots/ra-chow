@@ -11,9 +11,10 @@ SRCFILES=union_find.c\
          rc.c\
          assign.c\
          cfg_tools.c\
-         chow.main.c\
+         dot_dump.c\
 
 OBJS=${SRCFILES:.c=.o}
+MAIN=chow.main.o
 
 
 #use different load flags depending on which compiler we use
@@ -85,12 +86,12 @@ all: $(ALL)
 # RULES
 ######################################
 
-$(CHOW): $(OBJS)
+$(CHOW): $(OBJS) $(MAIN)
 	@ $(CC) -o $@ $(LDFLAGS) $^ $(LIBS)
 	@ echo " -- make $@ (Done)"
 
 
-$(DOT_DUMP): dot_dump.o
+$(DOT_DUMP): dot_dump.o dot_dump.main.o $(OBJS)
 	@ $(CC) -o $@ $(LDFLAGS) $^ $(LIBS)
 	@ echo " -- make $@ (Done)"
 
@@ -115,7 +116,7 @@ $(SSA_DUMP): ssa_dump.o
 	@ echo " -- make $@ (Done)"
 
 clean:
-	@ rm -f $(OBJS)
+	@ rm -f $(OBJS) $(MAIN)
 	@ rm -f *.o
 	@ rm -f $(ALL)
 	@ echo " -- make clean (Done)"
