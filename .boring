@@ -43,5 +43,5 @@
 \.stats$
 \.gdb_history$
 ^test$
-^tmp$
+^tmp.*$
 ^testChow$

@@ -684,4 +684,50 @@ any loads or stores you had to insert. The scheduler will not be able
 to move code around so much this time since the namespace is fixed.
 
 
+========================================================
+Comp512 Notes
+========================================================
+possible choices for optimizations:
+  DVNT
+  Balanced Tree expressions - Kathryn Mckinely
+  Instruction Scheduler - Shilke forward/back
+the three lies - modula 3 - powell
+pldi 2001 - pointer disambiguation good paper with study of ms office
+john lu - register promotion in c programs
+
+========================================================
+Placement of Loads and Stores
+Wed Jan 31 23:20:24 CST 2007
+========================================================
+I think Chow does not state preciesly how this should be computed. He
+says to see if a block needs a node to check to see if it has a
+predecessor that is not in the same live range. If there exists such a
+predecessor then look at the block to see if it has a use
+before a def, if so then put a load in. 
+
+But this is no good because there may be no use in this block which is
+the entry point, but there is a use somewhere down the line. So really
+I would think that you want to check whether the variable is live out
+from the entry point and if so put in a load. But even this is not
+enough, since you could have a pred that is not in the live range but
+there is no def along that pred. I think this would only happen in
+case of an uninitalized variable. Checking liveout on the pred does
+not help since it could have a use somewhere in our live range. What
+we would really like to see is if there is any definition coming along
+that edge. We can perhaps do this by checking for a phi-node for this
+live range in that node and seeing if the path coming into the
+phi-node from that pred is uninitalized. If so then the load is not
+needed for that pred.
+
+This all came about when implementing optimized placement of loads and
+stores. I was moving the loads and stores onto edges, but never
+actually moving them into blocks (just for testing) and I noticed that
+some of the benchmarks ran correctly. This means those loads and
+stores were pointless. This lead to the discovery that a live range
+was saying it needed a load at the very first block of its live range
+since it had a predecessor not in the live range.  (fmin.i lr:55_55)
+
+
+
+
 
