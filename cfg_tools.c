@@ -14,7 +14,6 @@
 
 /*------------------MODULE LOCAL DEFINITIONS-------------------*/
 /* module types */
-enum EdgeOwner{PRED, SUCC};
 
 /* module variables */
 static Arena tools_arena;
@@ -23,7 +22,6 @@ static Arena tools_arena;
 static void AddEdgePart(Block* blkPred, Block* blkSucc, EdgeOwner owner);
 static void RewriteControlFlow(Block*,Block*,Block*);
 static Inst* CreateJmpTo(Block* blk);
-static Edge* FindEdge(Block* blkPred, Block* blkSucc, EdgeOwner owner);
 
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
@@ -45,22 +43,22 @@ Block* SplitEdge(Block* blkPred, Block* blkSucc)
   RewriteControlFlow(blkPred, blkNew, blkSucc);
 
   //update predecessor's edge to have a sink at the new block
-  Edge* edgPred = FindEdge(blkPred, blkSucc, PRED);
+  Edge* edgPred = FindEdge(blkPred, blkSucc, PRED_OWNS);
   edgPred->succ = blkNew;
 
   //add new edge to blkNew for pred -> blkNew
-  AddEdgePart(blkPred, blkNew, SUCC);
+  AddEdgePart(blkPred, blkNew, SUCC_OWNS);
 
   /* -- fix succssor --*/
   //insert control flow to jump from the new block to the successor
   InsertJumpFromTo(blkNew, blkSucc);
 
   //update the succesor's edge to have a source at the new block
-  Edge* edgSucc = FindEdge(blkPred, blkSucc, SUCC);
+  Edge* edgSucc = FindEdge(blkPred, blkSucc, SUCC_OWNS);
   edgSucc->pred = blkNew;
 
   //add new edge to blkNew for blkNew -> succ
-  AddEdgePart(blkNew, blkSucc, PRED);
+  AddEdgePart(blkNew, blkSucc, PRED_OWNS);
 
   return blkNew;
 }
@@ -196,7 +194,7 @@ RewriteControlFlow(Block* blkPred, Block* blkSucc, Block* blkOldSucc)
 static void AddEdgePart(Block* blkPred, Block* blkSucc, EdgeOwner owner)
 {
   Edge* edge = (Edge*) Arena_GetMem(tools_arena, sizeof(Edge));
-  Block* blkOwner = (owner == PRED ? blkPred : blkSucc);
+  Block* blkOwner = (owner == PRED_OWNS ? blkPred : blkSucc);
 
   edge->next_pred = blkOwner->pred;
   edge->next_succ = blkOwner->succ;
@@ -206,7 +204,7 @@ static void AddEdgePart(Block* blkPred, Block* blkSucc, EdgeOwner owner)
   edge->edge_extension = NULL;
 
 
-  if(owner == PRED)
+  if(owner == PRED_OWNS)
   {
     blkOwner->succ = edge;
   }
@@ -333,11 +331,11 @@ Inst* LastInst(Block* blk)
  * returns the edge for blkPred ---> blkSucc. The edge returned is the
  * one owned by the requested block.
  ***/
-static Edge* FindEdge(Block* blkPred, Block* blkSucc, EdgeOwner owner)
+Edge* FindEdge(Block* blkPred, Block* blkSucc, EdgeOwner owner)
 {
   Edge* edge;
 
-  if(owner == PRED)
+  if(owner == PRED_OWNS)
   {
     Block_ForAllSuccs(edge, blkPred)
     {
