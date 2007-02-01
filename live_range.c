@@ -390,7 +390,7 @@ Priority LiveRange_ComputePriority(LiveRange* lr)
   LiveRange_ForAllUnits(lr, lu)
   {
     pr += LiveUnit_ComputePriority(lu) * 
-          pow(wLoopDepth, depths[id(lu->block)]);
+          pow(PARAM_LoopDepthWeight, depths[id(lu->block)]);
     clu++;
   }
   return pr/clu;
