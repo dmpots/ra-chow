@@ -17,6 +17,7 @@
 #include "live_range.h"
 #include "debug.h"
 #include "chow.h"
+#include "chow_params.h"
 #include "util.h"
 #include "ra.h" //for computing loop nesting depth
 #include "rc.h" //RegisterClass definitions 
@@ -404,9 +405,9 @@ Priority LiveRange_ComputePriority(LiveRange* lr)
 Priority LiveUnit_ComputePriority(LiveUnit* lu)
 {
   return
-    mLDSave  * lu->uses 
-  + mSTRSave * lu->defs 
-  - mMVCost  * (lu->need_store + lu->need_load);
+    PARAM_LDSave  * lu->uses 
+  + PARAM_STRSave * lu->defs 
+  - PARAM_MVCost  * (lu->need_store + lu->need_load);
 }
 
 /*

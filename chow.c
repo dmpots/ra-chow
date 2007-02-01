@@ -20,20 +20,15 @@
 #include <utility>
 
 #include "chow.h"
+#include "chow_params.h"
 #include "live.h"
 #include "live_range.h"
 #include "union_find.h"
 #include "reach.h"
 #include "debug.h"
-#include "cleave.h"
-#include "ra.h" //for computing loop nesting depth
 #include "rc.h" //RegisterClass definitions 
 #include "assign.h" //Handles some aspects of register assignment
 
-#define SUCCESS 0
-#define ERROR -1
-#define EMPTY_NAME '\0'
-#define NUM_RESERVED_REGS 2
 
 /* types */
 //using namespace std;
@@ -69,13 +64,6 @@ static const Unsigned_Int num_tmp_regs =
   sizeof(tmpRegs)/sizeof(Register);
 
 /* local functions */
-static void DumpParams(void);
-static void DumpChowStats(void);
-static void Output(void);
-static void Param_InitDefaults(void);
-static void LiveRange_BuildInitialSSA(void);
-static void RunChow();
-static void RenameRegisters();
 static BB_Stats Compute_BBStats(Arena, Unsigned_Int);
 static void CreateLiveRangeNameMap(Arena);
 static void assert_same_orig_name(LRID,Variable,VectorSet,Block* b);
@@ -101,190 +89,7 @@ static Inst* Inst_CreateStore(Opcode_Names opcode,
                       Register val);
 static void InitChow();
 static UFSet* Find_Set(Variable v);
-static void DumpInitialLiveRanges();
 static void ConvertLiveInNamespaceSSAToLiveRange();
-static void CheckRegisterLimitFeasibility(Unsigned_Int cRegMax);
-
-/*
- * allocation parameters 
- */
-Unsigned_Int pBBMaxInsts;
-float mMVCost = 1.0;
-float mLDSave = 1.0;
-float mSTRSave = 1.0;
-float wLoopDepth;
-Boolean PARAM_moveLoadsAndStores;
-//
-static Boolean fEnableRegisterClasses;
-static Unsigned_Int mRegisters;
-
-/* used to keep track of the type of a parameter in the param table */
-typedef enum
-{
-  INT_PARAM,
-  FLOAT_PARAM,
-  BOOL_PARAM
-} Param_Type;
-
-/* index for help messages */
-typedef enum
-{
-  NO_HELP,
-  HELP_BBMAXINSTS,
-  HELP_NUMREGISTERS,
-  HELP_MVCOST,
-  HELP_LDSAVE,
-  HELP_STRSAVE,
-  HELP_LOOPDEPTH,
-  HELP_REGISTERCLASSES,
-  HELP_LOADSTOREMOVEMENT
-} Param_Help;
-
-
-/* info used to process parameters */
-typedef struct param_details
-{
-  char name;
-  int (*func)(struct param_details*, char*);
-  //union {
-    Int      idefault;
-    float    fdefault;
-    Boolean  bdefault;
-  //};
-  void* value;
-  Param_Type type;
-  Param_Help usage;
-} Param_Details;
-
-/* define these values to "block out" useless columns in the param
- * table. we can not use a union for the default value since only one
- * value of a union can be initialized */
-static const int     I = 0;
-static const float   F = 0.0;
-static const Boolean B = FALSE;
-
-/* functions to process parameters */
-int process_(Param_Details*, char*);
-static const char* get_usage(Param_Help idx);
-static void usage(Boolean);
-
-/* table of all parameters we accept. the idea for using a table 
- * like this was taken from the code for the zfs file system in
- * the file zpool_main.c
- *
- * each entry has the paramerter character, a function for
- * processing that parameter, a default value, and tag used for
- * listing help for that parameter. the default value is a union
- * to allow for different types of parameters.
- *
- */
-static Param_Details param_table[] = 
-{
-  {'b', process_, 0,F,B, &pBBMaxInsts, INT_PARAM, HELP_BBMAXINSTS},
-  {'r', process_, 32,F,B, &mRegisters, INT_PARAM, HELP_NUMREGISTERS},
-  {'d', process_, 0,10.0,B,&wLoopDepth, FLOAT_PARAM, HELP_LOOPDEPTH},
-  {'p', process_, I,F,FALSE,&fEnableRegisterClasses, BOOL_PARAM, 
-                                                  HELP_REGISTERCLASSES},
-  {'m', process_, I,F,FALSE,&PARAM_moveLoadsAndStores, BOOL_PARAM, 
-                                                  HELP_LOADSTOREMOVEMENT}
-//  {'m', process_, I,1.0,B, &mMVCost, FLOAT_PARAM, HELP_MVCOST},
-//  {'l', process_, I,1.0,B, &mLDSave, FLOAT_PARAM, HELP_LDSAVE},
-//  {'s', process_, I,1.0,B,&mSTRSave, FLOAT_PARAM, HELP_STRSAVE},
-};
-#define NPARAMS (sizeof(param_table) / sizeof(param_table[0]))
-#define PARAMETER_STRING ":b:r:d:mp"
-
-/*
- *===========
- * main()
- *===========
- *
- ***/
-int main(Int argc, Char **argv)
-{
-  LOOPVAR i;
-  int c;
-
-  /* process arguments */ 
-  Param_InitDefaults();
-  while((c = getopt(argc, argv, PARAMETER_STRING)) != -1)
-  {
-    switch(c)
-    {
-      case ':' :
-        fprintf(stderr, "missing argument for '%c' option\n", optopt);
-        usage(FALSE);
-        break;
-
-      case '?' :
-        fprintf(stderr, "invalid option '%c' option\n", optopt);
-        usage(FALSE);
-        break;
-
-      default :
-        for(i = 0; i < NPARAMS; i++)
-        {
-          if(c == param_table[i].name)
-          {
-            char* val = optarg;
-            if(param_table[i].type == BOOL_PARAM)
-            {
-              val = "TRUE"; //the presence of the arg sets it to true
-            }
-            param_table[i].func(&param_table[i], val);
-            break;
-          } 
-        }
-        
-        //make sure we recognize the parameter
-        if(i == NPARAMS)
-        {
-          fprintf(stderr,"BAD PARAMETER: %c\n",c);
-          abort();
-        }
-    }
-
-  }
-
-
-  //assumes file is in first argument after the params
-  if (optind < argc)
-    Block_Init(argv[optind]);
-  else
-    Block_Init(NULL);
-
-  //make an initial check to ensure not too many registers are used
-  CheckRegisterLimitFeasibility(mRegisters);
-
-  //areana for all chow memory allocations
-  chow_arena = Arena_Create(); 
-
-  //split basic blocks to desired size
-  InitCleaver(chow_arena, pBBMaxInsts);
-  CleaveBlocks();
-  
-  //initialize the register class data structures 
-  InitRegisterClasses(chow_arena, mRegisters, fEnableRegisterClasses,
-                      NUM_RESERVED_REGS);
-
-  //compute initial live ranges
-  LiveRange_BuildInitialSSA();
-  //DumpInitialLiveRanges();
-
-  //compute loop nesting depth needed for computing priorities
-  find_nesting_depths(chow_arena);
-  
-  //run the priority algorithm
-  RunChow();
-  RenameRegisters();
-  
-  //Dump(); 
-  Output(); 
-  DumpParams();
-  DumpChowStats();
-  return EXIT_SUCCESS;
-} /* main */
-
 
 /*
  *=======================
@@ -459,7 +264,7 @@ void LiveRange_BuildInitialSSA()
   //create a mapping from ssa names to live range ids
   CreateLiveRangeNameMap(uf_arena);
   ConvertLiveInNamespaceSSAToLiveRange();
-  if(fEnableRegisterClasses) //classes are by type
+  if(PARAM_EnableRegisterClasses) //classes are by type
   {
     RegisterClass_CreateLiveRangeTypeMap(uf_arena,
                                        clrInitial,
@@ -662,19 +467,6 @@ void ConvertLiveInNamespaceSSAToLiveRange()
       info.names[j] = lrid;
     }
   }
-}
-
-void DumpInitialLiveRanges()
-{
-  LOOPVAR i;
-  for(i = 0; i < SSA_def_count; i++)
-  {
-    debug("SSA_map: %d ==> %d", i, SSA_name_map[i]);
-    SSA_name_map[i] = SSAName2LRID(i);
-  }
-  SSA_Restore();   
-  Output();
-  exit(0);
 }
 
 
@@ -1141,204 +933,6 @@ BB_Stats Compute_BBStats(Arena arena, Unsigned_Int variable_count)
 }
 
 /*
- *======================
- * Param_InitDefaults()
- *======================
- *
- ***/
-void Param_InitDefaults()
-{
-  LOOPVAR i;
-  Param_Details param;
-
-  for(i = 0; i < NPARAMS; i++)
-  {
-    param = param_table[i];
-    if(param.name != EMPTY_NAME)
-    {
-      param.func(&param, NULL);
-    }
-  }
-}
-
-
-/*
- *========
- * Output
- *========
- *
- ***/
-void Output()
-{
-  Block_Put_All(stdout);
-}
-
-
-
-
-/*
- *================
- * process_
- *================
- * default function for processing parameters. will set the default
- * value and parse an arg to the correct type if given.
- *
- * custom parameter processing functions can be defined if needed and
- * used by setting the appropriate entry in the param table.
- *
- ***/
-int process_(Param_Details* param, char* arg)
-{
-  if(arg == NULL)
-  {
-    switch(param->type)
-    {
-      case INT_PARAM:
-        *((int*)(param->value))   = (int)param->idefault;
-        break;
-      case FLOAT_PARAM:
-        *((float*)(param->value)) = param->fdefault;
-        break;
-      case BOOL_PARAM:
-        *((Boolean*)(param->value)) = param->bdefault;
-        break;
-      default:
-        error("unknown type");
-        abort();
-    }
-  }
-  else
-  {
-    switch(param->type)
-    {
-      case INT_PARAM:
-        *((int*)(param->value)) = atoi(arg);
-        break;
-      case FLOAT_PARAM:
-        *((float*)(param->value)) = atof(arg);
-        break;
-      case BOOL_PARAM:
-        *((Boolean*)(param->value)) = TRUE;
-        break;
-      default:
-        error("unknown type");
-        abort();
-    }
-  }
-
-  return SUCCESS;
-}
-
-
-/*
- *===========
- * usage()
- *===========
- *
- ***/
-void usage(Boolean requested)
-{
-  LOOPVAR i;
-  FILE* fp = stdout;
-
-  fprintf(fp, "usage: chow <params> [file]\n");
-  fprintf(fp, "'file' is the iloc file (stdin if not given)\n");
-  fprintf(fp, "'params' are one of the following \n\n");
-  for(i = 0; i < NPARAMS; i++)
-  {
-    if(param_table[i].name == EMPTY_NAME)
-      fprintf(fp, "\n");
-    else
-      fprintf(fp, "-%c%s\n", param_table[i].name,
-                           get_usage(param_table[i].usage));
-  }
-  fprintf(fp, "\n");
-  exit(requested ? SUCCESS : ERROR);
-} 
-
-/*
- *============
- * get_usage()
- *============
- *
- ***/
-static const char* get_usage(Param_Help idx)
-{
-  //switch eventually
-  switch(idx)
-  {
-    case HELP_BBMAXINSTS:
-      return "[int]\tmaximum number of instructions in a basic block";
-
-    case HELP_NUMREGISTERS:
-      return "[int]\tnumber of machine registers";
-
-    case  HELP_LOADSTOREMOVEMENT:
-      return 
-      "[bool]\tenable movement of load/store at live range boundaries";
-
-    default:
-      return " UNKNOWN PARAMETER\n";
-  }
-}
-
-/*
- *===========
- * DumpParams()
- *===========
- *
- ***/
-void DumpParams()
-{
-  LOOPVAR i;
-  Param_Details param;
-  for(i = 0; i < NPARAMS; i++)
-  {
-    param = param_table[i];
-    fprintf(stderr, "%c ==> ", param.name);
-    switch(param.type)
-    {
-      case INT_PARAM:
-        fprintf(stderr, "%d", *((int*)param.value));
-        break;
-      case FLOAT_PARAM:
-        fprintf(stderr, "%f", *((float*)param.value));
-        break;
-      case BOOL_PARAM:
-        fprintf(stderr, "%s", *((Boolean*)param.value) ? "TRUE":"FALSE" );
-        break;
-      default:
-        error("unknown type");
-        abort();
-    }
-    fprintf(stderr, "\n");
-  }
-}
-
-
-/*
- *================
- * DumpChowStats()
- *================
- *
- ***/
-static void DumpChowStats()
-{
-  fprintf(stderr, "***** ALLOCATION STATISTICS *****\n");
-  fprintf(stderr, " Inital  LiveRange Count: %d\n",
-                                           chowstats.clrInitial);
-  fprintf(stderr, " Final   LiveRange Count: %d\n",
-                                           chowstats.clrFinal);
-  fprintf(stderr, " Colored LiveRange Count: %d\n",
-                                           chowstats.clrColored+1);
-  fprintf(stderr, " Spilled LiveRange Count: %d\n", 
-                                           chowstats.cSpills-1);
-  fprintf(stderr, " Number of Splits: %d\n", chowstats.cSplits);
-  fprintf(stderr, "***** ALLOCATION STATISTICS *****\n");
-  //note: +/- 1 colored/spill count is for frame pointer live range
-}
-
-/*
  *====================================
  * CheckRegisterLimitFeasibility()
  *====================================
@@ -1348,7 +942,7 @@ static void DumpChowStats()
  * make sure that number is fewer than the number of machine registers
  * we are given.
  ***/
-static void CheckRegisterLimitFeasibility(Unsigned_Int cRegMax)
+void CheckRegisterLimitFeasibility(Unsigned_Int cRegMax)
 {
   Block* b;
   Inst* inst;

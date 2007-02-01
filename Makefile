@@ -11,6 +11,7 @@ SRCFILES=union_find.c\
          rc.c\
          assign.c\
          cfg_tools.c\
+         chow.main.c\
 
 OBJS=${SRCFILES:.c=.o}
 

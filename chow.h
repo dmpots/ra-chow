@@ -11,17 +11,6 @@
 #include <Shared.h>
 #include "types.h"
 
-/*
- * allocation parameters 
- */
-extern float mMVCost;
-extern float mLDSave;
-extern float mSTRSave;
-extern float wLoopDepth;
-extern Boolean PARAM_moveLoadsAndStores;
-
-
-
 /* constants */
 const Color NO_COLOR = -1u;
 
@@ -55,7 +44,7 @@ typedef struct chow_stat Chow_Stats;
 extern BB_Stats bb_stats;
 extern Unsigned_Int** mBlkIdSSAName_Color;
 extern Chow_Stats chowstats;
-
+extern Arena chow_arena;
 
 /* exported functions */
 Inst* Insert_Store(LRID,Inst*,Register,Register,InstInsertLocation);
@@ -63,6 +52,10 @@ void Insert_Load(LRID, Inst*, Register, Register);
 MemoryLocation ReserveStackSpace(Unsigned_Int size);
 LRID SSAName2LRID(Variable v);
 Register GetMachineRegAssignment(Block*, LRID);
+void CheckRegisterLimitFeasibility(Unsigned_Int cRegMax);
+void LiveRange_BuildInitialSSA(void);
+void RunChow();
+void RenameRegisters();
 
 
 //globals
