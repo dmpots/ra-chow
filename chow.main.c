@@ -7,6 +7,7 @@
 #include "debug.h"
 #include "ra.h" //for computing loop nesting depth
 #include "rc.h" //RegisterClass definitions 
+#include "dot_dump.h"
 
 /*------------------MODULE LOCAL DEFINITIONS-------------------*/
 /*#### module types ####*/
@@ -58,22 +59,12 @@ static void DumpParams(void);
 static void DumpChowStats(void);
 static void Output(void);
 static void DumpInitialLiveRanges();
+static void DotDumpLR(LRID);
 
 /*#### module variables ####*/
 static const int SUCCESS = 0;
 static const int ERROR = -1;
 static const char EMPTY_NAME = '\0';
-
-/* allocation parameters */
-Boolean      PARAM_MoveLoadsAndStores;
-float        PARAM_LoopDepthWeight;
-unsigned int PARAM_BBMaxInsts;
-unsigned int PARAM_NumMachineRegs;
-Boolean      PARAM_EnableRegisterClasses;
-float        PARAM_MVCost = 1.0;
-float        PARAM_LDSave = 1.0;
-float        PARAM_STRSave = 1.0;
-unsigned int PARAM_NumReservedRegs = 2;
 
 /* define these values to "block out" useless columns in the param
  * table. we can not use a union for the default value since only one
@@ -189,6 +180,7 @@ int main(Int argc, Char **argv)
 
   //compute initial live ranges
   LiveRange_BuildInitialSSA();
+  DotDumpLR(54);
   //DumpInitialLiveRanges();
 
   //compute loop nesting depth needed for computing priorities
@@ -415,5 +407,12 @@ void DumpInitialLiveRanges()
   Output();
   exit(0);
 }
+
+void DotDumpLR(LRID lrid)
+{
+  dot_dump_lr(live_ranges[lrid]);
+  exit(0);
+}
+
 
 

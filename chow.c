@@ -43,6 +43,17 @@ Variable GBL_fp_origname;
 Unsigned_Int* depths; //loop nesting depth
 Chow_Stats chowstats = {0};
 
+/* allocation parameters */
+Boolean      PARAM_MoveLoadsAndStores;
+float        PARAM_LoopDepthWeight;
+unsigned int PARAM_BBMaxInsts;
+unsigned int PARAM_NumMachineRegs;
+Boolean      PARAM_EnableRegisterClasses;
+float        PARAM_MVCost = 1.0;
+float        PARAM_LDSave = 1.0;
+float        PARAM_STRSave = 1.0;
+unsigned int PARAM_NumReservedRegs = 2;
+
 /* locals */
 static LRID* lr_name_map;
 static MemoryLocation stack_pointer = 0;
