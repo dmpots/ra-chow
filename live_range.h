@@ -27,6 +27,7 @@ struct live_unit
 {
   Boolean need_load;
   Boolean need_store;
+  Boolean internal_store; /* is the need_store for an internal store*/
   Boolean dead_on_exit;
   Boolean start_with_def;
   Unsigned_Int uses;
@@ -169,6 +170,13 @@ for (LRSet::iterator i = ((lrs)->begin()); \
    if(((lr) = *i) && lr->is_candidate) 
 
 
-
+enum SpillType  {STORE_SPILL, LOAD_SPILL};
+struct edge_extension
+{
+  struct edge_extension* next;
+  LiveRange* lr;
+  SpillType spill_type;
+  Block* orig_blk;
+};
 
 #endif

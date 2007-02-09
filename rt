@@ -15,7 +15,7 @@ FULL_TESTS=["fmm", "spec", "spec95X/applu"]
 QUICK_TESTS=["fmm", "spec/matrix300"]
 SPEC95_TESTS=["spec95X"]
 MAC_TESTS=["fmm", "spec/doduc", "spec/fpppp", "spec/matrix300", "spec95X/applu"]
-DEBUG_TESTS=["spec/tomcatv"]
+DEBUG_TESTS=["fmm/urand"]
 
 #PARSE COMMAND LINE ARGUMENTS
 chow_args = "-r32 -p"

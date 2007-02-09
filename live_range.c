@@ -1,8 +1,6 @@
 /*====================================================================
  * 
  *====================================================================
- * $Id: live_range.c 170 2006-08-02 01:14:10Z dmp $
- * $HeadURL: http://dmpots.com/svn/research/compilers/regalloc/src/live_range.c $
  ********************************************************************/
 
 #include <Shared.h>
@@ -21,6 +19,8 @@
 #include "util.h"
 #include "ra.h" //for computing loop nesting depth
 #include "rc.h" //RegisterClass definitions 
+#include "cfg_tools.h" //control graph manipulation utilities
+#include "dot_dump.h" //control graph manipulation utilities
 
 /* local variables */
 static Arena lr_arena;
@@ -41,6 +41,7 @@ static Boolean LiveRange_ColorsAvailable(LiveRange* lr);
 static Boolean VectorSet_Full(VectorSet vs);
 static LiveRange* LiveRange_Create(Arena, RegisterClass);
 static VectorSet LiveRange_UsedColorSet(LiveRange* lr, Block* blk);
+static void AddEdgeExtensionNode(Edge*, LiveRange*, LiveUnit*,SpillType);
 
 //iterate through interference list. if stmt used as a cheat for its
 //side effect 
@@ -179,7 +180,7 @@ LiveUnit* AddLiveUnitOnce(LRID lrid,
                           VectorSet lrset, 
                           Variable orig_name)
 {
-  debug("ADDING: %d BLOCK: %s (%d)", lrid, bname(b), id(b));
+  //debug("ADDING: %d BLOCK: %s (%d)", lrid, bname(b), id(b));
   LiveUnit* new_unit = NULL;
   if(!VectorSet_Member(lrset, lrid))
   {
@@ -209,6 +210,7 @@ LiveUnit* LiveRange_AddLiveUnitBlock(LiveRange* lr, Block* b)
   unit->uses = stat.uses;
   unit->defs = stat.defs;
   unit->start_with_def = stat.start_with_def;
+  unit->internal_store = FALSE;
   
   LiveRange_AddLiveUnit(lr, unit);
   return unit;
@@ -479,6 +481,8 @@ void LiveRange_MarkNonCandidateAndDelete(LiveRange* lr)
  ***/
 void LiveRange_AssignColor(LiveRange* lr)
 {
+  //TODO: pick a better color, i.e. one that is used by neighbors
+  //neighbors
   //for now just pick the first available color
   VectorSet vsT =
     RegisterClass_TmpVectorSet(LiveRange_RegisterClass(lr));
@@ -500,7 +504,7 @@ void LiveRange_AssignColor(LiveRange* lr)
                                                         intf_lr->id)
   }
 
-  //update the basic block taken set
+  //update the basic block taken set and add loads and stores
   LiveRange_ForAllUnits(lr, unit)
   {
     VectorSet vs = LiveRange_UsedColorSet(lr, unit->block);
@@ -508,15 +512,77 @@ void LiveRange_AssignColor(LiveRange* lr)
     VectorSet_Insert(vs, color);
     mBlkIdSSAName_Color[id(unit->block)][lr->orig_lrid] = color;
 
-    if(unit->need_load)
+    if(PARAM_MoveLoadsAndStores)
     {
-      LiveRange_InsertLoad(lr, unit);
+      if(unit->need_load)
+      {
+        debug("unit: %s needs load", bname(unit->block));
+        //look at all block predecessors, if find one not in the live
+        //range then move the load onto that edge
+        Edge* e;
+        Boolean moved = FALSE;
+        Block_ForAllPreds(e, unit->block)
+        {
+          if(!LiveRange_ContainsBlock(lr, e->pred))
+          {
+            debug("moving load for lr: %d_%d to edge %s --> %s",
+              lr->orig_lrid, lr->id, bname(e->pred), bname(e->succ));
+
+            //add this spill to list of spills on this edge
+            AddEdgeExtensionNode(e, lr, unit, LOAD_SPILL);
+            moved = TRUE;
+          }
+        }
+        assert(moved);
+      }
+      //insert a store unless the store is only internal in which case
+      //we can delete it (by never inserting it in the first place :)
+      if(unit->need_store && !unit->internal_store)
+      {
+        debug("unit: %s needs store", bname(unit->block));
+        //look at all block successors, if find one not in the live
+        //range then move the store onto that edge
+        Edge* e;
+        Boolean moved = FALSE;
+        Block_ForAllSuccs(e, unit->block)
+        {
+          if(!LiveRange_ContainsBlock(lr, e->succ))
+          {
+            //add this spill to list of spills on this edge
+            debug("moving store for lr: %d_%d to edge %s --> %s",
+              lr->orig_lrid, lr->id, bname(e->pred), bname(e->succ));
+            AddEdgeExtensionNode(e, lr, unit, STORE_SPILL);
+            moved = TRUE;
+          }
+        }
+        assert(moved);
+      }
     }
-    if(unit->need_store)
+    // -------------- NO LOAD STORE OPTIMIZATION ----------------
+    else
     {
-      LiveRange_InsertStore(lr, unit);
+      if(unit->need_load)
+        LiveRange_InsertLoad(lr, unit);
+      if(unit->need_store)
+        LiveRange_InsertStore(lr, unit);
     }
   }
+}
+
+static void 
+AddEdgeExtensionNode(Edge* e, LiveRange* lr, LiveUnit* unit, 
+                     SpillType spillType)
+{
+  Edge_Extension* ee = (Edge_Extension*) 
+    Arena_GetMemClear(lr_arena, sizeof(Edge_Extension));
+
+  //always add to the predecessor version of the edge
+  Edge* edgPred = FindEdge(e->pred, e->succ, PRED_OWNS);
+  ee->next = edgPred->edge_extension;
+  ee->lr = lr;
+  ee->spill_type = spillType;
+  ee->orig_blk = unit->block;
+  edgPred->edge_extension = ee;
 }
 
 /*
@@ -685,6 +751,13 @@ LRTuple LiveRange_Split(LiveRange* origlr,
   
   LRTuple ret;
   ret.fst = newlr; ret.snd = origlr;
+
+  if(DEBUG_DotDumpLR && DEBUG_DotDumpLR == newlr->orig_lrid)
+  {
+    char fname[32] = {0};
+    sprintf(fname, "tmp_%d_%d.dot", newlr->orig_lrid, newlr->id);
+    dot_dump_lr(newlr, fname);
+  }
   return ret;
 }
 
@@ -967,13 +1040,15 @@ debug("*** MARKING STORES for LR: %d ***\n", lr->id);
       Edge* edg;
       Block* blkSucc;
       LiveUnit* luSucc;
+      Boolean internal_store = TRUE; //keep track of why store needed
+      unit->internal_store = FALSE;
       Block_ForAllSuccs(edg, unit->block)
       {
         blkSucc = edg->succ;
         if(LiveRange_ContainsBlock(lr,blkSucc))
         { 
-          debug("checking lr: %d successor block %s(%d)",
-                lr->id, bname(blkSucc), id(blkSucc));
+          //debug("checking lr: %d successor block %s(%d)",
+          //      lr->id, bname(blkSucc), id(blkSucc));
           luSucc = LiveRange_LiveUnitForBlock(lr, blkSucc);
 
           //a direct successor in our live range needs a load
@@ -996,11 +1071,12 @@ debug("*** MARKING STORES for LR: %d ***\n", lr->id);
             Liveness_Info info = SSA_live_in[id(blkSucc)];
             for(LOOPVAR j = 0; j < info.size; j++)
             {
-              debug("LIVE_IN: %d in %s",info.names[j], bname(blkSucc));
+              //debug("LIVE_IN: %d in %s",info.names[j], bname(blkSucc));
               //def is live along this path
               if(lr->orig_lrid == info.names[j])
               {
                 unit->need_store = TRUE;
+                internal_store = FALSE;
                 debug("store needed for lr: %d block(%s) "
                       "because it is live in at successor %s(%d)\n",
                       lr->id, bname(unit->block), 
@@ -1012,6 +1088,11 @@ debug("*** MARKING STORES for LR: %d ***\n", lr->id);
           }
         }//else
       }//ForAllSuccs
+      //now mark whether this store is internal to the live range only
+      if(unit->need_store && internal_store)
+      {
+        unit->internal_store = TRUE;
+      }
     }//ForAllUnits()
   }//if(fStore)
 

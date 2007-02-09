@@ -59,7 +59,7 @@ static void DumpParams(void);
 static void DumpChowStats(void);
 static void Output(void);
 static void DumpInitialLiveRanges();
-static void DotDumpLR(LRID);
+static void DotDumpLR(LRID lrid, const char* tag);
 
 /*#### module variables ####*/
 static const int SUCCESS = 0;
@@ -180,16 +180,18 @@ int main(Int argc, Char **argv)
 
   //compute initial live ranges
   LiveRange_BuildInitialSSA();
-  DotDumpLR(54);
+  //DotDumpLR(DEBUG_DotDumpLR);
   //DumpInitialLiveRanges();
+  if(DEBUG_DotDumpLR){DotDumpLR(DEBUG_DotDumpLR, "initial");}
 
   //compute loop nesting depth needed for computing priorities
   find_nesting_depths(chow_arena);
   
   //run the priority algorithm
   RunChow();
+  if(DEBUG_DotDumpLR){DotDumpLR(DEBUG_DotDumpLR, "final");}
   RenameRegisters();
-  
+ 
   //Dump(); 
   Output(); 
   DumpParams();
@@ -408,11 +410,15 @@ void DumpInitialLiveRanges()
   exit(0);
 }
 
-void DotDumpLR(LRID lrid)
+void DotDumpLR(LRID lrid, const char* tag)
 {
-  dot_dump_lr(live_ranges[lrid]);
-  exit(0);
+  char fname[32] = {0};
+  sprintf(fname, "tmp_%d_%d_%s.dot", lrid, lrid, tag);
+  dot_dump_lr(live_ranges[lrid], fname);
 }
 
-
-
+//define this to avoid a compiler warning for unused functions
+void thisMayGiveACompilerWarning()
+{
+  DotDumpLR(0, "bullshit"); DumpInitialLiveRanges();
+}

@@ -28,6 +28,7 @@
 #include "debug.h"
 #include "rc.h" //RegisterClass definitions 
 #include "assign.h" //Handles some aspects of register assignment
+#include "cfg_tools.h" 
 
 
 /* types */
@@ -53,6 +54,9 @@ float        PARAM_MVCost = 1.0;
 float        PARAM_LDSave = 1.0;
 float        PARAM_STRSave = 1.0;
 unsigned int PARAM_NumReservedRegs = 2;
+
+/* allocation debugging */
+unsigned int DEBUG_DotDumpLR = 0; //use to dump a lr and its splits
 
 /* locals */
 static LRID* lr_name_map;
@@ -101,6 +105,7 @@ static Inst* Inst_CreateStore(Opcode_Names opcode,
 static void InitChow();
 static UFSet* Find_Set(Variable v);
 static void ConvertLiveInNamespaceSSAToLiveRange();
+static void MoveLoadsAndStores();
 
 /*
  *=======================
@@ -165,6 +170,7 @@ void RunChow()
     LiveRange_AssignColor(lr);
     debug("LR: %d is given color:%d", lr->id, lr->color);
   }
+
   //record some statistics about the allocation
   chowstats.clrFinal = live_ranges.size();
 }
@@ -213,6 +219,18 @@ void InitChow()
   //we need to insert loads and stores
   stack_pointer = Frame_GetStackSize(frame_op);
   GBL_fp_origname = Frame_GetRegFP(frame_op);
+
+  //clear out edge extensions if needed
+  if(PARAM_MoveLoadsAndStores)
+  {
+    Block* b;
+    Edge* e;
+    ForAllBlocks(b)
+    {
+      Block_ForAllPreds(e,b) e->edge_extension = NULL;
+      Block_ForAllSuccs(e,b) e->edge_extension = NULL;
+    }
+  }
 }
 
 /*
@@ -566,6 +584,14 @@ void RenameRegisters()
     reset_free_tmp_regs(b->inst->prev_inst); 
   }
 
+  //if we are to optimize positions of loads and stores, do so after
+  //assigning registers
+  if(PARAM_MoveLoadsAndStores)
+  {
+    debug("moving loads and stores to \"optimal\" position");
+    MoveLoadsAndStores();
+  }
+
   //finally rewrite the frame statement to have the first register be
   //the frame pointer and to adjust the stack size
   Operation* frame_op = get_frame_operation();
@@ -762,8 +788,8 @@ static Inst* Inst_CreateLoad(Opcode_Names opcode,
  *===================
  * Insert_Store()
  *===================
- * Inserts a store instruction for the given live range before the
- * passed instruction.
+ * Inserts a store instruction for the given live range around the
+ * passed instruction based on the loc paramerter (before or after).
  *
  * returns the instruction inserted
  */
@@ -996,6 +1022,104 @@ printed above.\n", cRegMax,cRegUses,cRegDefs, oname(*op));
 
   }
 }
+
+
+/*
+ *=======================
+ * MoveLoadsAndStores()
+ *=======================
+ * Moves the loads and stores to a better position so that they might
+ * be executed less times.
+ *
+ * IMPORTANT NOTE: This function must be called the RenameRegisters
+ * function. The reason is that we are inserting loads and stores for
+ * MACHINE REGISTERS, not for SSA names. We have to do this because we
+ * keep a map from <block id, lrid> --> allocated color. Since we are
+ * moving instructions to different blocks and possibly adding blocks
+ * this map would be difficult to maintain. So we solve that by simply
+ * moving the stores and loads after renaming and using the machine
+ * register assignments
+ ***/
+void MoveLoadsAndStores()
+{
+  //we should already have the loads and stores moved onto the
+  //appropriate edge. all that remains is to walk the graph and
+  //actually insert the instructions, splitting edges as needed.
+  Block* blk;
+  Boolean need_reorder = FALSE;
+  ForAllBlocks(blk)
+  {
+    Edge* edg;
+    Block_ForAllSuccs(edg, blk)
+    {
+      if(edg->edge_extension)
+      {
+        //when do we need to split the block?
+        //1) we are inserting a store and the successor has more than
+        //one pred
+        //2) we are inserting a load and the predecessor has more than
+        //one successor
+        Edge_Extension* ee;
+        Boolean need_split = FALSE;
+        for(ee = edg->edge_extension; ee; ee = ee->next)
+        {
+          if( ee->spill_type == STORE_SPILL && 
+              Block_PredCount(edg->succ) > 1)
+          {
+            need_split = TRUE;
+            break;
+          }
+          else if(ee->spill_type == LOAD_SPILL &&
+                  Block_SuccCount(edg->pred) > 1)
+          {
+            need_split = TRUE;
+            break;
+          }
+        }
+
+        //split edge if needed
+        Block* blkLD = edg->pred;
+        Block* blkST = edg->succ;
+        if(need_split)
+        {
+          Block* blkT = SplitEdge(edg->pred, edg->succ);
+          blkLD = blkST = blkT;
+          need_reorder = TRUE;
+        }
+
+        //now we know where to move the ld/store lets actually do it
+        for(ee = edg->edge_extension; ee; ee = ee->next)
+        {
+          //use machine registers for these loads/stores 
+          Register mReg =
+            GetMachineRegAssignment(ee->orig_blk, ee->lr->orig_lrid);
+          if(ee->spill_type == STORE_SPILL)
+          {
+            debug("moving store from %s to %s for lrid: %d_%d",
+                   bname(ee->orig_blk), bname(blkST),
+                   ee->lr->orig_lrid, ee->lr->id);
+            Insert_Store(ee->lr->id, Block_FirstInst(blkST),
+                         mReg, REG_FP,
+                         BEFORE_INST);
+          }
+          else
+          {
+            debug("moving load from %s to %s for lrid: %d_%d",
+                   bname(ee->orig_blk), bname(blkLD),
+                   ee->lr->orig_lrid, ee->lr->id);
+            Insert_Load(ee->lr->id, Block_LastInst(blkLD), 
+                        mReg, REG_FP);
+          }
+        }
+      }
+    }
+  }
+  if(need_reorder)
+  {
+    Block_Order();
+  }
+}
+
 
 /*
  *===========

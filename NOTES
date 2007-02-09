@@ -810,3 +810,17 @@ In my thesis I should have the flow of
 3) the adaptive chow algorithm
 
 
+========================================================
+Debugging Tip
+Fri Feb  9 11:24:37 CST 2007
+========================================================
+When you see strange things happening such as values appearing to
+change on random instructions then you need to make sure that your
+stack is in order. This was the cause of a "hard to find" bug I
+introduced when implementing MoveLoadsAndStores(). I was rewriting the
+frame pointer before moving loads and stores which means that any new
+spills were not getting the correct amount of stack space. I needed to
+rewrite the frame op *after* moving loads and stores.
+
+
+

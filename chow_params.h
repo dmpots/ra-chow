@@ -16,4 +16,6 @@ extern unsigned int PARAM_NumReservedRegs;
 extern unsigned int PARAM_NumMachineRegs;
 extern Boolean      PARAM_EnableRegisterClasses;
 
+extern unsigned int DEBUG_DotDumpLR;
+
 #endif
