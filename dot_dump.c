@@ -15,10 +15,20 @@
 #define puts(...) \
                  {fprintf(stdout,__VA_ARGS__);\
                  fprintf(stdout, "\n");}
+#define putso(...) \
+                 {fprintf(outfile,__VA_ARGS__);\
+                 fprintf(outfile, "\n");}
 #define isdot(c) ((c) == '.')
 
 
 void dot_dump_lr(LiveRange* lr){dot_dump_lr(lr, stdout);}
+void dot_dump_lr(LiveRange* lr, const char* fname )
+{
+  FILE* fp = fopen(fname, "w");
+  if(fp == NULL) {error("unable to open file: %s", fname); abort();}
+  dot_dump_lr(lr, fp);
+  fclose(fp);
+}
 void dot_dump_lr(LiveRange* lr, FILE* outfile)
 {
   Block* b;
@@ -27,13 +37,13 @@ void dot_dump_lr(LiveRange* lr, FILE* outfile)
   char buf2[512] = {'\0'};
   char buf3[1024] = {'\0'};
 
-  puts("digraph {");
+  putso("digraph {");
   /* nodes */ 
   ForAllBlocks(b){
    name(b, lr, buf);
    color(b, lr, buf2);
    sprintf(buf3, "\"%s\" %s", buf, buf2);
-   puts("%s;", buf3);  
+   putso("%s;", buf3);  
   }
   /* edges */
   ForAllBlocks(b){
@@ -41,10 +51,10 @@ void dot_dump_lr(LiveRange* lr, FILE* outfile)
     {
       name(b, lr, buf);
       name(e->succ, lr, buf2);
-      puts("\"%s\" -> \"%s\";",buf, buf2);
+      putso("\"%s\" -> \"%s\";",buf, buf2);
     } 
   }
-  puts("}"); //graph
+  putso("}"); //graph
 }
 
 

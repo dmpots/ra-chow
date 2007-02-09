@@ -10,6 +10,7 @@ void name(Block*, LiveRange*, char*);
 void color(Block*, LiveRange*, char*);
 void dot_dump();
 void dot_dump_lr(LiveRange* lr, FILE* outfile);
+void dot_dump_lr(LiveRange* lr, const char* fname);
 void dot_dump_lr(LiveRange* lr);
 
 #endif
