@@ -126,8 +126,7 @@ RewriteControlFlow(Block* blkPred, Block* blkSucc, Block* blkOldSucc)
     i = op->defined;
     while((*exprp = op->arguments[i]))
     {
-      debug("checking expr: %d",*exprp);
-      debug("label: %s", Label_Get_String(*exprp));
+      debug("expr: %d is label: %s", *exprp, Label_Get_String(*exprp));
      
       for(Label* label = blkOldSucc->labels; label != NULL; 
           label = label->next)
@@ -150,10 +149,9 @@ RewriteControlFlow(Block* blkPred, Block* blkSucc, Block* blkOldSucc)
 
     Operation_ForAllConstants(exprp, op)
     {
-      debug("checking expr: %d",*exprp);
       //if(Expr_Is_Block_Label(*exprp)) does not work for new labels
       //{
-        debug("label: %s", Label_Get_String(*exprp));
+        debug("expr: %d is label: %s", *exprp, Label_Get_String(*exprp));
         //see if this label corresponds to the block we cloned
         for(Label* label = blkOldSucc->labels; label != NULL; 
             label = label->next)
@@ -260,7 +258,7 @@ Operation* GetControlFlowOp(Block* b)
 void InsertJumpFromTo(Block* blkFrom, Block* blkTo)
 {
   Inst* in = CreateJmpTo(blkTo);
-  InsertInstAfter(in, LastInst(blkFrom));
+  InsertInstAfter(in, Block_LastInst(blkFrom));
 }
 
 /*
@@ -318,10 +316,52 @@ void InsertInstAfter(Inst* newInst, Inst* afterInst)
  *========================
  * 
  ***/
-Inst* LastInst(Block* blk)
+Inst* Block_LastInst(Block* blk)
 {
   return blk->inst->prev_inst;
 }
+
+/*
+ *========================
+ * FirstInst()
+ *========================
+ * 
+ ***/
+Inst* Block_FirstInst(Block* blk)
+{
+  return blk->inst->next_inst;
+}
+
+/*
+ *========================
+ * PredCount()
+ *========================
+ * 
+ ***/
+Unsigned_Int Block_PredCount(Block* blk)
+{
+  Unsigned_Int cnt = 0;
+  Edge* e;
+  Block_ForAllPreds(e, blk) cnt++;
+
+  return cnt;
+}
+
+/*
+ *========================
+ * SuccCount()
+ *========================
+ * 
+ ***/
+Unsigned_Int Block_SuccCount(Block* blk)
+{
+  Unsigned_Int cnt = 0;
+  Edge* e;
+  Block_ForAllSuccs(e, blk) cnt++;
+
+  return cnt;
+}
+
 
 
 /*
