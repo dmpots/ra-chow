@@ -45,3 +45,5 @@
 ^test$
 ^tmp.*$
 ^testChow$
+^dots$
+^dotfiles$
