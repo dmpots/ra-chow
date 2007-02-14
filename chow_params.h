@@ -7,6 +7,7 @@
 #define __GUARD_CHOW_PARAMS_H
 
 extern Boolean      PARAM_MoveLoadsAndStores;
+extern bool         PARAM_EnhancedCodeMotion;
 extern float        PARAM_MVCost;
 extern float        PARAM_LDSave;
 extern float        PARAM_STRSave;

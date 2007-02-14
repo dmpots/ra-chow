@@ -30,7 +30,8 @@ typedef enum
   HELP_STRSAVE,
   HELP_LOOPDEPTH,
   HELP_REGISTERCLASSES,
-  HELP_LOADSTOREMOVEMENT
+  HELP_LOADSTOREMOVEMENT,
+  HELP_ENHANCEDCODEMOTION
 } Param_Help;
 
 
@@ -60,6 +61,7 @@ static void DumpChowStats(void);
 static void Output(void);
 static void DumpInitialLiveRanges();
 static void DotDumpLR(LRID lrid, const char* tag);
+static void EnforceParameterConsistency();
 
 /*#### module variables ####*/
 static const int SUCCESS = 0;
@@ -94,13 +96,15 @@ static Param_Details param_table[] =
   {'p', process_, I,F,FALSE,&PARAM_EnableRegisterClasses, BOOL_PARAM, 
                                                   HELP_REGISTERCLASSES},
   {'m', process_, I,F,FALSE,&PARAM_MoveLoadsAndStores, BOOL_PARAM, 
-                                                  HELP_LOADSTOREMOVEMENT}
+                                                  HELP_LOADSTOREMOVEMENT},
+  {'e', process_, I,F,FALSE,&PARAM_EnhancedCodeMotion, BOOL_PARAM, 
+                                                  HELP_ENHANCEDCODEMOTION}
 //  {'m', process_, I,1.0,B, &mMVCost, FLOAT_PARAM, HELP_MVCOST},
 //  {'l', process_, I,1.0,B, &mLDSave, FLOAT_PARAM, HELP_LDSAVE},
 //  {'s', process_, I,1.0,B,&mSTRSave, FLOAT_PARAM, HELP_STRSAVE},
 };
 #define NPARAMS (sizeof(param_table) / sizeof(param_table[0]))
-#define PARAMETER_STRING ":b:r:d:mp"
+#define PARAMETER_STRING ":b:r:d:mpe"
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
 /*
@@ -161,6 +165,10 @@ int main(Int argc, Char **argv)
     Block_Init(argv[optind]);
   else
     Block_Init(NULL);
+
+  //some paramerters should implicitly set other params, and this
+  //function takse care of making sure our flags are consistent
+  EnforceParameterConsistency();
 
   //make an initial check to ensure not too many registers are used
   CheckRegisterLimitFeasibility(PARAM_NumMachineRegs);
@@ -288,6 +296,20 @@ int process_(Param_Details* param, char* arg)
   return SUCCESS;
 }
 
+/*
+ *===========
+ * EnforceParameterConsistency()
+ *===========
+ * some paramerters should implicitly set other params, and this
+ * function takse care of making sure our flags are consistent
+ * 
+ * For example: enhanced motion of loads and stores should make sure
+ * that the move loads and stores flag is set.
+ ***/
+void EnforceParameterConsistency()
+{
+  if(PARAM_EnhancedCodeMotion) PARAM_MoveLoadsAndStores = true;
+}
 
 /*
  *===========
@@ -327,15 +349,20 @@ static const char* get_usage(Param_Help idx)
   switch(idx)
   {
     case HELP_BBMAXINSTS:
-      return "[int]\tmaximum number of instructions in a basic block";
+      return "[int]    maximum number of instructions in a basic block";
 
     case HELP_NUMREGISTERS:
-      return "[int]\tnumber of machine registers";
+      return "[int]    number of machine registers";
 
     case  HELP_LOADSTOREMOVEMENT:
       return 
-      "[bool]\tenable movement of load/store at live range boundaries";
+      "         enable movement of load/store at live range boundaries";
 
+    case  HELP_ENHANCEDCODEMOTION:
+      return 
+      "         connect live ranges with copy instead of load/store if\n" 
+      "           possible. This flag automatically turns on -m to move\n"
+      "           loads and stores";
     default:
       return " UNKNOWN PARAMETER\n";
   }

@@ -520,20 +520,40 @@ void LiveRange_AssignColor(LiveRange* lr)
         //look at all block predecessors, if find one not in the live
         //range then move the load onto that edge
         Edge* e;
-        Boolean moved = FALSE;
+        int lrPreds = 0;
+
+        //count the number of predecessor not in this live range 
         Block_ForAllPreds(e, unit->block)
         {
-          if(!LiveRange_ContainsBlock(lr, e->pred))
-          {
-            debug("moving load for lr: %d_%d to edge %s --> %s",
-              lr->orig_lrid, lr->id, bname(e->pred), bname(e->succ));
+          if(LiveRange_ContainsBlock(lr, e->pred)) lrPreds++;
+        }
 
-            //add this spill to list of spills on this edge
-            AddEdgeExtensionNode(e, lr, unit, LOAD_SPILL);
-            moved = TRUE;
+        //we actually move the load if we are using the non-standard
+        //chow method, or if we are using chow method and there is at
+        //least one predecessor block that is not part of the live
+        //range
+        bool moveit = (PARAM_EnhancedCodeMotion || lrPreds > 0);
+
+        if(moveit) 
+        {
+          Block_ForAllPreds(e, unit->block)
+          {
+            if(!LiveRange_ContainsBlock(lr, e->pred))
+            {
+              debug("moving load for lr: %d_%d to edge %s --> %s",
+                lr->orig_lrid, lr->id, bname(e->pred), bname(e->succ));
+
+              //add this spill to list of spills on this edge
+              AddEdgeExtensionNode(e, lr, unit, LOAD_SPILL);
+            }
           }
         }
-        assert(moved);
+        else
+        {
+          debug("load for lr: %d_%d will not be moved. Inserting now",
+                 lr->orig_lrid, lr->id);
+          LiveRange_InsertLoad(lr, unit);
+        }
       }
       //insert a store unless the store is only internal in which case
       //we can delete it (by never inserting it in the first place :)
@@ -543,19 +563,41 @@ void LiveRange_AssignColor(LiveRange* lr)
         //look at all block successors, if find one not in the live
         //range then move the store onto that edge
         Edge* e;
-        Boolean moved = FALSE;
+        bool moved = FALSE;
+        int lrSuccs = 0;
+
+        //count the number of successors not in this live range 
         Block_ForAllSuccs(e, unit->block)
         {
-          if(!LiveRange_ContainsBlock(lr, e->succ))
+          if(LiveRange_ContainsBlock(lr, e->succ)) lrSuccs++;
+        }
+
+        //we actually move the store if we are not using the standard
+        //chow method, or if we are using chow method and there is at
+        //least one predecessor block that is not part of the live
+        //range
+        bool moveit = (PARAM_EnhancedCodeMotion || lrSuccs > 0);
+
+        if(moveit)
+        {
+          Block_ForAllSuccs(e, unit->block)
           {
-            //add this spill to list of spills on this edge
-            debug("moving store for lr: %d_%d to edge %s --> %s",
-              lr->orig_lrid, lr->id, bname(e->pred), bname(e->succ));
-            AddEdgeExtensionNode(e, lr, unit, STORE_SPILL);
-            moved = TRUE;
+            if(!LiveRange_ContainsBlock(lr, e->succ))
+            {
+              //add this spill to list of spills on this edge
+              debug("moving store for lr: %d_%d to edge %s --> %s",
+                lr->orig_lrid, lr->id, bname(e->pred), bname(e->succ));
+              AddEdgeExtensionNode(e, lr, unit, STORE_SPILL);
+              moved = TRUE;
+            }
           }
         }
-        assert(moved);
+        else
+        {
+          debug("store for lr: %d_%d will not be moved. Inserting now",
+                 lr->orig_lrid, lr->id);
+          LiveRange_InsertStore(lr, unit);
+        }
       }
     }
     // -------------- NO LOAD STORE OPTIMIZATION ----------------
@@ -1040,8 +1082,8 @@ debug("*** MARKING STORES for LR: %d ***\n", lr->id);
       Edge* edg;
       Block* blkSucc;
       LiveUnit* luSucc;
-      Boolean internal_store = TRUE; //keep track of why store needed
-      unit->internal_store = FALSE;
+      Boolean only_internal_store = TRUE; //keep track of why store needed
+      unit->internal_store = FALSE; //reset to false, make true later
       Block_ForAllSuccs(edg, unit->block)
       {
         blkSucc = edg->succ;
@@ -1076,7 +1118,7 @@ debug("*** MARKING STORES for LR: %d ***\n", lr->id);
               if(lr->orig_lrid == info.names[j])
               {
                 unit->need_store = TRUE;
-                internal_store = FALSE;
+                only_internal_store = FALSE;
                 debug("store needed for lr: %d block(%s) "
                       "because it is live in at successor %s(%d)\n",
                       lr->id, bname(unit->block), 
@@ -1089,7 +1131,7 @@ debug("*** MARKING STORES for LR: %d ***\n", lr->id);
         }//else
       }//ForAllSuccs
       //now mark whether this store is internal to the live range only
-      if(unit->need_store && internal_store)
+      if(unit->need_store && only_internal_store)
       {
         unit->internal_store = TRUE;
       }

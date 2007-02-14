@@ -46,6 +46,7 @@ Chow_Stats chowstats = {0};
 
 /* allocation parameters */
 Boolean      PARAM_MoveLoadsAndStores;
+bool         PARAM_EnhancedCodeMotion;
 float        PARAM_LoopDepthWeight;
 unsigned int PARAM_BBMaxInsts;
 unsigned int PARAM_NumMachineRegs;
@@ -63,20 +64,6 @@ static LRID* lr_name_map;
 static MemoryLocation stack_pointer = 0;
 static LRID fp_lrid;
 static Unsigned_Int clrInitial = 0; //count of initial live ranges
-
-//controls which registers are considered temporary registers, the
-//large number is due to FRAME and JSR ops which may require a large
-//number of temporary registers (should only see this when pushed to
-//a very low number of registers in the allocation)
-static const Register tmpRegs[] =
-  {901,902,903,904,905,906,907,908,909, 910,911,912,913,914,
-    /* rkf45.i has JSRl with 22 param regs */
-   915,916,917,918,919,920,921,922,923,
-    /* efill.i has FRAME with 26 param regs */
-   924,925,926,927
-   };
-static const Unsigned_Int num_tmp_regs =
-  sizeof(tmpRegs)/sizeof(Register);
 
 /* local functions */
 static BB_Stats Compute_BBStats(Arena, Unsigned_Int);

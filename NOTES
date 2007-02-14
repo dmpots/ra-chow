@@ -823,4 +823,48 @@ spills were not getting the correct amount of stack space. I needed to
 rewrite the frame op *after* moving loads and stores.
 
 
+========================================================
+Chow's version of MoveLoadsAndStores()
+Mon Feb 12 15:43:14 CST 2007
+========================================================
+Chow says that you should only move loads when you have at least one
+predecessor that is part of your live range. Similarly, you should
+only move stores when have at least one successor that is part of your
+live range. This means that a situation like
+
+
+ ST X  (A)
+  |
+  |
+  v
+ LD X  (B)
+
+Where A,B are different live ranges will not move the loads and
+stores. This is correct (otherwise you would load X before the store
+of X). However you miss an opportunity where you can do a register to
+register copy in the different live ranges. This is what we should be
+doing.
+
+Our engineering improvment will be to find this situation where two
+live ranges are connected by a ST --> LD pair and instead insert a
+register to register copy.
+
+What we need to do:
+1) decide how to indicate which version of moving loads/stores we
+should use
+
+2) for chow style don't move loads and stores that are in live ranges
+that have no preds that are not in the live range
+
+3) moves for other loads/stores can be done as normal
+
+4) in the MoveLoadsAndStores() function in chow.c we should detect
+when we have a load/store on the same edge and insert a register copy
+instead.
+
+
+
+
+
+
 
