@@ -1188,7 +1188,10 @@ void MoveLoadsAndStores()
             {
               if(ee->lr->orig_lrid == eeT->lr->orig_lrid)
               {
-                rr_copies.push_back(make_pair(*ee, *eeT));
+                if(ee->spill_type == STORE_SPILL)
+                  rr_copies.push_back(make_pair(*ee, *eeT));
+                else
+                  rr_copies.push_back(make_pair(*eeT, *ee));
                 removals.push_back(ee);
                 removals.push_back(eeT);
               }
