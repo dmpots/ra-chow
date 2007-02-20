@@ -61,6 +61,7 @@ static void DumpChowStats(void);
 static void Output(void);
 static void DumpInitialLiveRanges();
 static void DotDumpLR(LRID lrid, const char* tag);
+static void DotDumpFinalLRs(LRID lrid);
 static void EnforceParameterConsistency();
 
 /*#### module variables ####*/
@@ -197,7 +198,7 @@ int main(Int argc, Char **argv)
   
   //run the priority algorithm
   RunChow();
-  if(DEBUG_DotDumpLR){DotDumpLR(DEBUG_DotDumpLR, "final");}
+  if(DEBUG_DotDumpLR){DotDumpFinalLRs(DEBUG_DotDumpLR);}
   RenameRegisters();
  
   //Dump(); 
@@ -442,6 +443,12 @@ void DotDumpLR(LRID lrid, const char* tag)
   char fname[32] = {0};
   sprintf(fname, "tmp_%d_%d_%s.dot", lrid, lrid, tag);
   dot_dump_lr(live_ranges[lrid], fname);
+}
+void DotDumpFinalLRs(LRID lrid)
+{
+  DotDumpLR(DEBUG_DotDumpLR, "final");
+  for(unsigned int i = 0; i < DEBUG_WatchLRIDs.size(); i++)
+    DotDumpLR(DEBUG_WatchLRIDs[i], "final");
 }
 
 //define this to avoid a compiler warning for unused functions

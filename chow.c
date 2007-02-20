@@ -58,6 +58,7 @@ unsigned int PARAM_NumReservedRegs = 2;
 
 /* allocation debugging */
 unsigned int DEBUG_DotDumpLR = 0; //use to dump a lr and its splits
+std::vector<unsigned int> DEBUG_WatchLRIDs; //lrids that were dotdumped
 
 /* locals */
 static LRID* lr_name_map;

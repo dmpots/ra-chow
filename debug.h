@@ -8,7 +8,7 @@
 
 #ifndef __DEBUG_H
 #define __DEBUG_H
-
+#include<vector>
 
 #ifdef __DEBUG
 #define debug(...) \
@@ -27,5 +27,7 @@
 #define id(b) ((b)->preorder_index)
 #define bname(b) (Label_Get_String((b)->labels->label))
 #define oname(op) ((opcode_specs[(op)->opcode]).opcode)
+
+extern std::vector<unsigned int> DEBUG_WatchLRIDs;
 
 #endif /* __DEBUG_H */

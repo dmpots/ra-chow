@@ -807,6 +807,7 @@ LRTuple LiveRange_Split(LiveRange* origlr,
     char fname[32] = {0};
     sprintf(fname, "tmp_%d_%d.dot", newlr->orig_lrid, newlr->id);
     dot_dump_lr(newlr, fname);
+    DEBUG_WatchLRIDs.push_back(newlr->id);
   }
   return ret;
 }
