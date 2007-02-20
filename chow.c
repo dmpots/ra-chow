@@ -1189,12 +1189,21 @@ void MoveLoadsAndStores()
             {
               if(ee->lr->orig_lrid == eeT->lr->orig_lrid)
               {
+                //we put this pair into the copy list.
+                //we can also remove the load now since that will get
+                //its value from a copy. we need to keep the store
+                //since its value may need to be loaded somewhere else
+                //in the live range
                 if(ee->spill_type == STORE_SPILL)
+                {
                   rr_copies.push_back(make_pair(*ee, *eeT));
+                  removals.push_back(eeT);
+                }
                 else
+                {
                   rr_copies.push_back(make_pair(*eeT, *ee));
-                removals.push_back(ee);
-                removals.push_back(eeT);
+                  removals.push_back(ee);
+                }
               }
             }
           }

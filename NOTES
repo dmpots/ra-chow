@@ -862,9 +862,36 @@ that have no preds that are not in the live range
 when we have a load/store on the same edge and insert a register copy
 instead.
 
+========================================================
+Bug in EnhancedCodeMotion
+Tue Feb 20 17:36:37 CST 2007
+========================================================
+I implemented the enhanced version of moving loads and stores as
+described above and ran into a problem. I was getting incorrect
+results on some codes. The problem was that I was deleting the load
+and store when I replaced with a copy. I needed to keep the store
+because there was a load later on that expected the value to be in
+memory and it was not there since I had deleted the store. That can
+happen if the live range looks like this
 
 
+                LABEL A:
+                  LD x
+                  .. <- x
+                  x <- ..
+                  ST x
+                    |
+                    |
+                    v
+                LABEL B:
+                  LD x
+                  .. <- x
+                  GOTO LABEL A
 
-
+Here we would see the store and load for x and then delete it and
+replace it with a copy. This is no good though because we load the
+value at the top of block A and it will not have the correct value if
+we delete the store. We can solve this by inserting the copy, deleting
+the load but keeping the store.
 
 
