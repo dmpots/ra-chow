@@ -93,7 +93,13 @@ static void InitChow();
 static UFSet* Find_Set(Variable v);
 static void ConvertLiveInNamespaceSSAToLiveRange();
 static void MoveLoadsAndStores();
-
+static void Insert_Copy(const LiveRange* lrSrc, const LiveRange* lrDest,
+                 Inst* around_inst, Register src, Register dest, 
+                 InstInsertLocation loc);
+static Inst* Inst_CreateCopy(Opcode_Names opcode,
+                             Comment_Val comment,
+                             Register src,
+                             Register dest);
 /*
  *=======================
  * RunChow()
@@ -733,7 +739,6 @@ void Insert_Load(LRID lrid, Inst* before_inst, Register dest,
  * load instruction format:
  *  iLDor  @ref align offset base => reg
  */
-static const int LD_OPSIZE = 7;
 static Inst* Inst_CreateLoad(Opcode_Names opcode,
                       Expr tag,
                       Unsigned_Int alignment, 
@@ -743,6 +748,7 @@ static Inst* Inst_CreateLoad(Opcode_Names opcode,
                       Register dest_reg)
 {
   //allocate a new instruction
+  const int LD_OPSIZE = 7;
   Inst* ld_inst = (Inst*)Inst_Allocate(chow_arena, 1);
   Operation* ld_op = (Operation*)Operation_Allocate(chow_arena, 
                                                     LD_OPSIZE);
@@ -821,7 +827,6 @@ Inst* Insert_Store(LRID lrid, Inst* around_inst, Register src,
  * store instruction format:
  *  iSSTor @ref align offset base val
  */
-static const int ST_OPSIZE = 7;
 static Inst* Inst_CreateStore(Opcode_Names opcode,
                       Expr tag,
                       Unsigned_Int alignment, 
@@ -831,6 +836,7 @@ static Inst* Inst_CreateStore(Opcode_Names opcode,
                       Register val)
 {
   //allocate a new instruction
+  const int ST_OPSIZE = 7;
   Inst* st_inst = (Inst*)Inst_Allocate(chow_arena, 1);
   Operation* st_op = (Operation*)Operation_Allocate(chow_arena, 
                                                     ST_OPSIZE);
@@ -871,6 +877,79 @@ MemoryLocation ReserveStackSpace(Unsigned_Int size)
   stack_pointer += size;
   return sp;
 }
+
+/*
+ *===================
+ * Insert_Copy()
+ *===================
+ * Inserts a copy from one live range to another, using the registers
+ * passed to the function.
+ */
+static void Insert_Copy(const LiveRange* lrSrc, const LiveRange* lrDest,
+                 Inst* around_inst, Register src, Register dest, 
+                 InstInsertLocation loc)
+{
+  //generate a comment
+  char str[64]; char lrname[32]; char lrname2[32]; 
+  LRName(lrSrc, lrname); LRName(lrDest, lrname2);
+  sprintf(str, "RR COPY for %s --> %s", lrname, lrname2);
+  Comment_Val comment = Comment_Install(str);
+
+  //get opcode and alignment for live range
+  Opcode_Names opcode = LiveRange_CopyOpcode(lrSrc);
+
+  //create a new store instruction
+  Inst* cp_inst = Inst_CreateCopy(opcode, comment, src, dest);
+
+  //insert the new instruction
+  if(loc == AFTER_INST)
+    InsertInstAfter(cp_inst, around_inst);
+  else
+    InsertInstBefore(cp_inst, around_inst);
+}
+
+/*
+ *===================
+ * Inst_CreateCopy()
+ *===================
+ * Creates a new copy instruction based on the passed paramerters
+ * store instruction format:
+ * i2i src => dest
+ */
+static Inst* Inst_CreateCopy(Opcode_Names opcode,
+                             Comment_Val comment,
+                             Register src,
+                             Register dest)
+{
+  const int CP_OPSIZE = 7;
+  //allocate a new instruction
+  Inst* cp_inst = (Inst*)Inst_Allocate(chow_arena, 1);
+  Operation* cp_op = (Operation*)Operation_Allocate(chow_arena, 
+                                                    CP_OPSIZE);
+  cp_inst->operations[0] = cp_op;
+  cp_inst->operations[1] = NULL;
+
+  //fill in struct
+  cp_op->opcode  = opcode;
+  cp_op->comment = comment;
+  cp_op->source_line_ref = Expr_Install_String("0");
+  cp_op->constants = 0;
+  cp_op->referenced = 1;
+  cp_op->defined = 2;
+  cp_op->critical = TRUE;
+
+  //fill in arguments array
+  cp_op->arguments[0] = src;
+  cp_op->arguments[1] = dest;
+  cp_op->arguments[2] = 0;
+  cp_op->arguments[3] = 0;
+  cp_op->arguments[4] = 0;
+  cp_op->arguments[5] = 0;
+  cp_op->arguments[6] = 0;
+
+  return cp_inst;
+}
+
 
 
 /*
@@ -1018,7 +1097,7 @@ printed above.\n", cRegMax,cRegUses,cRegDefs, oname(*op));
  * Moves the loads and stores to a better position so that they might
  * be executed less times.
  *
- * IMPORTANT NOTE: This function must be called the RenameRegisters
+ * IMPORTANT NOTE: This function must be called after the RenameRegisters
  * function. The reason is that we are inserting loads and stores for
  * MACHINE REGISTERS, not for SSA names. We have to do this because we
  * keep a map from <block id, lrid> --> allocated color. Since we are
@@ -1029,6 +1108,11 @@ printed above.\n", cRegMax,cRegUses,cRegDefs, oname(*op));
  ***/
 void MoveLoadsAndStores()
 {
+  using namespace std; //for list, pair
+  typedef list<MovedSpillDescription>::iterator LI;
+  typedef 
+    list<pair<MovedSpillDescription,MovedSpillDescription> >
+    CopyList ; 
   //we should already have the loads and stores moved onto the
   //appropriate edge. all that remains is to walk the graph and
   //actually insert the instructions, splitting edges as needed.
@@ -1039,24 +1123,30 @@ void MoveLoadsAndStores()
     Edge* edg;
     Block_ForAllSuccs(edg, blk)
     {
+      //if edg->edge_extension is not NULL then there is a load or
+      //store moved onto this edge and we must process it
       if(edg->edge_extension)
       {
-        //when do we need to split the block?
+        //first we look at whether we need to split this edge in order
+        //to move the loads and stores to their destinations
+        //we need to split the block if:
         //1) we are inserting a store and the successor has more than
         //one pred
         //2) we are inserting a load and the predecessor has more than
         //one successor
-        Edge_Extension* ee;
         Boolean need_split = FALSE;
-        for(ee = edg->edge_extension; ee; ee = ee->next)
+        for(LI ee = edg->edge_extension->spill_list->begin(); 
+               ee != edg->edge_extension->spill_list->end(); 
+               ee++)
         {
-          if( ee->spill_type == STORE_SPILL && 
+          MovedSpillDescription msd = (*ee);
+          if( msd.spill_type == STORE_SPILL && 
               Block_PredCount(edg->succ) > 1)
           {
             need_split = TRUE;
             break;
           }
-          else if(ee->spill_type == LOAD_SPILL &&
+          else if(msd.spill_type == LOAD_SPILL &&
                   Block_SuccCount(edg->pred) > 1)
           {
             need_split = TRUE;
@@ -1074,34 +1164,111 @@ void MoveLoadsAndStores()
           need_reorder = TRUE;
         }
 
-        //now we know where to move the ld/store lets actually do it
-        for(ee = edg->edge_extension; ee; ee = ee->next)
+        //Now if we are using the enhanced code motion algorithm we
+        //look for a store to a live range that has a load on the same
+        //edge. This will only happen when the live range is split and
+        //both parts get a register. if we find this situation then we
+        //replace the load store with a register to register copy
+        if(PARAM_EnhancedCodeMotion)
         {
+          CopyList rr_copies;
+          vector<LI> removals;
+          //search through the spill list and look for load store to
+          //same live range. if we find one then add the pair to the
+          //rr_copies list and add the load and store to the removals
+          //list. the removals list is used to remove the load/store
+          //from the original spill list since we don't want to insert
+          //those memory accesses anymore
+          for(LI ee = edg->edge_extension->spill_list->begin(); 
+               ee != edg->edge_extension->spill_list->end(); 
+               ee++)
+          {
+            LI eeT = ee; eeT++; //start with next elem of list
+            for(;eeT != edg->edge_extension->spill_list->end(); eeT++)
+            {
+              if(ee->lr->orig_lrid == eeT->lr->orig_lrid)
+              {
+                rr_copies.push_back(make_pair(*ee, *eeT));
+                removals.push_back(ee);
+                removals.push_back(eeT);
+              }
+            }
+          }
+
+          //remove all loads/store that will be turned into copies
+          for(vector<LI>::iterator rIt = removals.begin();
+              rIt != removals.end();
+              rIt++)
+          {
+            edg->edge_extension->spill_list->erase((*rIt));
+          }
+
+         
+          //if we found some load/store pairs that can be converted
+          //to copies then insert those now.
+          if(rr_copies.size() > 0)
+          {
+            debug("converting some load/store pairs to copies");
+            for(CopyList::iterator clIT = rr_copies.begin();
+                clIT != rr_copies.end(); clIT++)
+            {
+              //Insert_Copy
+              MovedSpillDescription msdSrc = clIT->first;
+              MovedSpillDescription msdDest = clIT->second;
+              assert(msdSrc.spill_type == STORE_SPILL &&
+                     msdDest.spill_type == LOAD_SPILL &&
+                     msdSrc.lr->orig_lrid == msdDest.lr->orig_lrid);
+              Register srcReg =
+                GetMachineRegAssignment(msdSrc.orig_blk, 
+                                        msdSrc.lr->orig_lrid);
+
+              Register destReg =
+                GetMachineRegAssignment(msdDest.orig_blk, 
+                                        msdDest.lr->orig_lrid);
+
+              //insert the copy just before the last inst in block
+              //where the loads are moved to. we could have also
+              //inserted them before the first instruction where the
+              //stores are being moved to, but I don't see that one is
+              //better than the other.
+              Insert_Copy(msdSrc.lr, msdDest.lr, Block_LastInst(blkLD), 
+                          srcReg, destReg, BEFORE_INST);
+            }
+          }
+        } // -- END EnhancedCodeMotion -- //
+
+
+        //now we know where to move the ld/store lets actually do it
+        for(LI ee = edg->edge_extension->spill_list->begin(); 
+               ee != edg->edge_extension->spill_list->end(); 
+               ee++)
+        {
+          MovedSpillDescription msd = (*ee);
           //use machine registers for these loads/stores 
           Register mReg =
-            GetMachineRegAssignment(ee->orig_blk, ee->lr->orig_lrid);
-          if(ee->spill_type == STORE_SPILL)
+            GetMachineRegAssignment(msd.orig_blk, msd.lr->orig_lrid);
+          if(msd.spill_type == STORE_SPILL)
           {
             debug("moving store from %s to %s for lrid: %d_%d",
-                   bname(ee->orig_blk), bname(blkST),
-                   ee->lr->orig_lrid, ee->lr->id);
-            Insert_Store(ee->lr->id, Block_FirstInst(blkST),
+                   bname(msd.orig_blk), bname(blkST),
+                   msd.lr->orig_lrid, msd.lr->id);
+            Insert_Store(msd.lr->id, Block_FirstInst(blkST),
                          mReg, REG_FP,
                          BEFORE_INST);
           }
           else
           {
             debug("moving load from %s to %s for lrid: %d_%d",
-                   bname(ee->orig_blk), bname(blkLD),
-                   ee->lr->orig_lrid, ee->lr->id);
-            Insert_Load(ee->lr->id, Block_LastInst(blkLD), 
+                   bname(msd.orig_blk), bname(blkLD),
+                   msd.lr->orig_lrid, msd.lr->id);
+            Insert_Load(msd.lr->id, Block_LastInst(blkLD), 
                         mReg, REG_FP);
           }
         }
       }
     }
-  }
-  if(need_reorder)
+  }// -- END: for all blocks -- //
+  if(need_reorder) //needed if we split an edge
   {
     Block_Order();
   }

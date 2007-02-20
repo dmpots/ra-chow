@@ -15,6 +15,7 @@ Block* SplitEdge(Block* blkPred, Block* blkSucc);
 void InsertJumpFromTo(Block* blkFrom, Block* blkTo);
 Operation* GetControlFlowOp(Block* b);
 void InsertInstAfter(Inst* newInst, Inst* afterInst);
+void InsertInstBefore(Inst* newInst, Inst* beforeInst);
 Inst* Block_LastInst(Block* blk);
 Inst* Block_FirstInst(Block* blk);
 Unsigned_Int Block_PredCount(Block* blk);

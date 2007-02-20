@@ -309,6 +309,11 @@ void InsertInstAfter(Inst* newInst, Inst* afterInst)
 {
   Block_Insert_Instruction(newInst, afterInst->next_inst);
 }
+void InsertInstBefore(Inst* newInst, Inst* beforeInst)
+{
+  Block_Insert_Instruction(newInst, beforeInst);
+}
+
 
 /*
  *========================

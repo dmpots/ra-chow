@@ -117,6 +117,7 @@ void LiveRange_MarkStores(LiveRange* lr);
 LiveUnit* AddLiveUnitOnce(LRID lrid, Block* b, VectorSet lrset, Variable orig_name);
 Opcode_Names LiveRange_LoadOpcode(LiveRange* lr);
 Opcode_Names LiveRange_StoreOpcode(LiveRange* lr);
+Opcode_Names LiveRange_CopyOpcode(const LiveRange* lr);
 Expr LiveRange_GetTag(LiveRange* lr);
 Unsigned_Int LiveRange_GetAlignment(LiveRange* lr);
 void LiveRange_InsertLoad(LiveRange* lr, LiveUnit* unit);
@@ -124,6 +125,12 @@ void LiveRange_InsertStore(LiveRange*lr, LiveUnit* unit);
 LiveRange* LiveRange_SplitFrom(LiveRange* origlr);
 MemoryLocation LiveRange_MemLocation(LiveRange* lr);
 RegisterClass LiveRange_RegisterClass(LiveRange* lr);
+inline void LRName(const LiveRange* lr, char* buf)
+{
+  sprintf(buf, "%d_%d", lr->orig_lrid, lr->id);
+}
+
+
 
 //Dumps
 void LiveRange_DumpAll(LRList*);
@@ -171,12 +178,16 @@ for (LRSet::iterator i = ((lrs)->begin()); \
 
 
 enum SpillType  {STORE_SPILL, LOAD_SPILL};
-struct edge_extension
+typedef struct moved_spill_description
 {
-  struct edge_extension* next;
   LiveRange* lr;
   SpillType spill_type;
   Block* orig_blk;
+} MovedSpillDescription;
+
+struct edge_extension
+{
+  std::list<MovedSpillDescription>* spill_list;
 };
 
 #endif

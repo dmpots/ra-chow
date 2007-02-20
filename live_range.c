@@ -615,16 +615,24 @@ static void
 AddEdgeExtensionNode(Edge* e, LiveRange* lr, LiveUnit* unit, 
                      SpillType spillType)
 {
-  Edge_Extension* ee = (Edge_Extension*) 
-    Arena_GetMemClear(lr_arena, sizeof(Edge_Extension));
-
-  //always add to the predecessor version of the edge
+  //always add the edge extension to the predecessor version of the edge
   Edge* edgPred = FindEdge(e->pred, e->succ, PRED_OWNS);
-  ee->next = edgPred->edge_extension;
-  ee->lr = lr;
-  ee->spill_type = spillType;
-  ee->orig_blk = unit->block;
-  edgPred->edge_extension = ee;
+  Edge_Extension* ee = edgPred->edge_extension;
+  if(ee == NULL)
+  {
+    //create and add the edge extension
+    ee = (Edge_Extension*) 
+      Arena_GetMemClear(lr_arena, sizeof(Edge_Extension));
+    ee->spill_list = new std::list<MovedSpillDescription>;
+    edgPred->edge_extension = ee;
+  }
+
+  //record the relavant info
+  MovedSpillDescription msd;
+  msd.lr = lr;
+  msd.spill_type = spillType;
+  msd.orig_blk = unit->block;
+  ee->spill_list->push_back(msd);
 }
 
 /*
@@ -1600,6 +1608,28 @@ Opcode_Names LiveRange_LoadOpcode(LiveRange* lr)
 
 /*
  *================================
+ * LiveRange_CopyOpcode()
+ *================================
+ *
+ ***/
+static const Opcode_Names copy_opcodes[] = 
+  {NOP,    /* NO_DEFS */
+   i2i, /* INT_DEF */ 
+   f2f, /* FLOAT_DEF */
+   d2d, /* DOUBLE_DEF */
+   c2c, /* COMPLEX_DEF */
+   q2q, /* DCOMPLEX_DEF */ 
+   NOP};   /* MULT_DEFS */
+Opcode_Names LiveRange_CopyOpcode(const LiveRange* lr)
+{
+  assert(lr->type != NO_DEFS && lr->type != MULT_DEFS);
+  return copy_opcodes[lr->type];
+}
+
+
+
+/*
+ *================================
  * LiveRange_GetAlignemnt()
  *================================
  *
@@ -1670,4 +1700,5 @@ VectorSet LiveRange_UsedColorSet(LiveRange* lr, Block* blk)
   RegisterClass rc = LiveRange_RegisterClass(lr);
   return mRcBlkId_VsUsedColor[rc][id(blk)];
 }
+
 
