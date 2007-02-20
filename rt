@@ -62,6 +62,9 @@ OptionParser.new do |opt|
   opt.on("-m", "--mac-tests", "Run tests known to work on mac os x"){
         selected_tests = MAC_TESTS
   }
+  opt.on("-a", "--all-tests", "Run all available tests"){
+        selected_tests = ALL_TESTS
+  }
 end
 begin
   opts.parse!
