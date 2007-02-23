@@ -421,6 +421,7 @@ static void DumpChowStats()
   fprintf(stderr, " Spilled LiveRange Count: %d\n", 
                                            chowstats.cSpills-1);
   fprintf(stderr, " Number of Splits: %d\n", chowstats.cSplits);
+  fprintf(stderr, " Thwarted Copies : %d\n", chowstats.cThwartedCopies);
   fprintf(stderr, "***** ALLOCATION STATISTICS *****\n");
   //note: +/- 1 colored/spill count is for frame pointer live range
 }

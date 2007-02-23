@@ -31,6 +31,7 @@ struct chow_stat
   Unsigned_Int cSpills;
   Unsigned_Int cChowStores;
   Unsigned_Int cChowLoads;
+  Unsigned_Int cThwartedCopies;
 };
 
 /* exported types */

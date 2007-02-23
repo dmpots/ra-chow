@@ -94,13 +94,32 @@ static void InitChow();
 static UFSet* Find_Set(Variable v);
 static void ConvertLiveInNamespaceSSAToLiveRange();
 static void MoveLoadsAndStores();
-static void Insert_Copy(const LiveRange* lrSrc, const LiveRange* lrDest,
-                 Inst* around_inst, Register src, Register dest, 
-                 InstInsertLocation loc);
-static Inst* Inst_CreateCopy(Opcode_Names opcode,
+
+//copy operations
+namespace {
+  struct CopyDescription
+  {
+    LiveRange* src_lr;
+    LiveRange* dest_lr;
+    Register   src_reg;
+    Register   dest_reg;
+  };
+
+  typedef std::list<CopyDescription> CDL;
+  typedef 
+    std::list<std::pair<MovedSpillDescription,MovedSpillDescription> >
+    CopyList ; 
+
+  bool OrderCopies(const CopyList&, CDL* ordered_copies);
+  Inst* Inst_CreateCopy(Opcode_Names opcode,
                              Comment_Val comment,
                              Register src,
                              Register dest);
+  void Insert_Copy(const LiveRange* lrSrc, const LiveRange* lrDest,
+                 Inst* around_inst, Register src, Register dest, 
+                 InstInsertLocation loc);
+}
+
 /*
  *=======================
  * RunChow()
@@ -886,7 +905,8 @@ MemoryLocation ReserveStackSpace(Unsigned_Int size)
  * Inserts a copy from one live range to another, using the registers
  * passed to the function.
  */
-static void Insert_Copy(const LiveRange* lrSrc, const LiveRange* lrDest,
+namespace {
+void Insert_Copy(const LiveRange* lrSrc, const LiveRange* lrDest,
                  Inst* around_inst, Register src, Register dest, 
                  InstInsertLocation loc)
 {
@@ -917,7 +937,7 @@ static void Insert_Copy(const LiveRange* lrSrc, const LiveRange* lrDest,
  * store instruction format:
  * i2i src => dest
  */
-static Inst* Inst_CreateCopy(Opcode_Names opcode,
+Inst* Inst_CreateCopy(Opcode_Names opcode,
                              Comment_Val comment,
                              Register src,
                              Register dest)
@@ -950,8 +970,7 @@ static Inst* Inst_CreateCopy(Opcode_Names opcode,
 
   return cp_inst;
 }
-
-
+}
 
 /*
  *===================
@@ -1111,9 +1130,6 @@ void MoveLoadsAndStores()
 {
   using namespace std; //for list, pair
   typedef list<MovedSpillDescription>::iterator LI;
-  typedef 
-    list<pair<MovedSpillDescription,MovedSpillDescription> >
-    CopyList ; 
   //we should already have the loads and stores moved onto the
   //appropriate edge. all that remains is to walk the graph and
   //actually insert the instructions, splitting edges as needed.
@@ -1158,7 +1174,7 @@ void MoveLoadsAndStores()
         //split edge if needed
         Block* blkLD = edg->pred;
         Block* blkST = edg->succ;
-        if(need_split)
+        if(need_split || PARAM_EnhancedCodeMotion)
         {
           Block* blkT = SplitEdge(edg->pred, edg->succ);
           blkLD = blkST = blkT;
@@ -1215,37 +1231,48 @@ void MoveLoadsAndStores()
           {
             edg->edge_extension->spill_list->erase((*rIt));
           }
-
          
           //if we found some load/store pairs that can be converted
           //to copies then insert those now.
           if(rr_copies.size() > 0)
           {
             debug("converting some load/store pairs to copies");
-            for(CopyList::iterator clIT = rr_copies.begin();
-                clIT != rr_copies.end(); clIT++)
+            //order the copies so that we don't write to a register
+            //before reading its value
+            CDL ordered_copies;
+            if(OrderCopies(rr_copies, &ordered_copies))
             {
-              //Insert_Copy
-              MovedSpillDescription msdSrc = clIT->first;
-              MovedSpillDescription msdDest = clIT->second;
-              assert(msdSrc.spill_type == STORE_SPILL &&
-                     msdDest.spill_type == LOAD_SPILL &&
-                     msdSrc.lr->orig_lrid == msdDest.lr->orig_lrid);
-              Register srcReg =
-                GetMachineRegAssignment(msdSrc.orig_blk, 
-                                        msdSrc.lr->orig_lrid);
-
-              Register destReg =
-                GetMachineRegAssignment(msdDest.orig_blk, 
-                                        msdDest.lr->orig_lrid);
-
-              //insert the copy just before the last inst in block
-              //where the loads are moved to. we could have also
-              //inserted them before the first instruction where the
-              //stores are being moved to, but I don't see that one is
-              //better than the other.
-              Insert_Copy(msdSrc.lr, msdDest.lr, Block_LastInst(blkLD), 
-                          srcReg, destReg, BEFORE_INST);
+              
+              //run through the ordered copies and insert them
+              for(CDL::iterator cdIT = ordered_copies.begin();
+                  cdIT != ordered_copies.end();
+                  cdIT++)
+              {
+                //better than the other.
+                //insert the copy in the newly created block right
+                //before the last instruction. this will ensure that the
+                //copies are sandwiched between the loads and stores in
+                //this block (when they are inserted below) which is 
+                //necessary for correct code
+                Insert_Copy(cdIT->src_lr, cdIT->dest_lr,
+                            Block_LastInst(blkLD),
+                            cdIT->src_reg, cdIT->dest_reg, BEFORE_INST);
+              }
+            }
+            //could not find a suitable order for the copies
+            //revert to inserting loads for all the variables that
+            //would be copies
+            else 
+            {
+              error("reverting to using loads instead or copies");
+              //return all the loads to the spill list for this edge
+              //so they can be inserted below
+              for(CopyList::const_iterator clIT = rr_copies.begin();
+                  clIT != rr_copies.end(); clIT++)
+              {
+                edg->edge_extension->spill_list->push_back(clIT->second);
+                chowstats.cThwartedCopies++;
+              }
             }
           }
         } // -- END EnhancedCodeMotion -- //
@@ -1287,6 +1314,79 @@ void MoveLoadsAndStores()
   }
 }
 
+namespace{
+/*
+ *=======================
+ * OrderCopies()
+ *=======================
+ * Tries to order the copies so that no value is written before it is
+ * read. Returns true if a successful order was found or false
+ * otherwise.
+*/ 
+bool OrderCopies(const CopyList& rr_copies, CDL* ordered_copies)
+{
+  //go through all the copies that we are going to insert and order
+  //them so that we do not overwrite any values before they are copied
+  //to their destination registers
+  for(CopyList::const_iterator clIT = rr_copies.begin();
+                clIT != rr_copies.end(); clIT++)
+  {
+    MovedSpillDescription msdSrc = clIT->first;
+    MovedSpillDescription msdDest = clIT->second;
+    assert(msdSrc.spill_type == STORE_SPILL &&
+            msdDest.spill_type == LOAD_SPILL &&
+            msdSrc.lr->orig_lrid == msdDest.lr->orig_lrid);
+
+    CopyDescription cd;
+    cd.src_lr = msdSrc.lr;
+    cd.src_reg = GetMachineRegAssignment(msdSrc.orig_blk, 
+                                        msdSrc.lr->orig_lrid);
+    cd.dest_lr = msdDest.lr;
+    cd.dest_reg = GetMachineRegAssignment(msdDest.orig_blk, 
+                                        msdDest.lr->orig_lrid);
+    
+
+    //insert this copy in the correct place in the ordered list
+    bool inserted = false;
+    for(CDL::iterator cdIT = ordered_copies->begin();
+        cdIT != ordered_copies->end();
+        cdIT++)
+    {
+      //check for copies of the form r1 => r2, r2 => r1
+      //it:  y  => x
+      //cd:  x  => y
+      if(cdIT->src_reg == cd.dest_reg && cdIT->dest_reg == cd.src_reg)
+      {
+        error("cyclic dependence in same register copy");
+        return false;
+      }
+
+      //do I define someone you use?
+      //it:  y  => ...
+      //cd: ... => y
+      if(cdIT->src_reg == cd.dest_reg)
+      {
+        //I must come after you, keep going
+        if(inserted){error("cyclic dependence in copies"); abort();}
+      }
+
+      //do you define someone I use?
+      //cd:  z  => ...
+      //it: ... => z
+      if(cdIT->dest_reg == cd.src_reg)
+      {
+        //I must come before you, insert here
+        if(!inserted){ordered_copies->insert(cdIT, cd); inserted=true;}
+      }
+    }
+    //if we got to the end of the ordered list without inserting then
+    //just put it at the end of the list (no dependencies)
+    if(!inserted){ordered_copies->push_back(cd);}
+  }
+
+  return true;
+}
+}
 
 /*
  *===========
