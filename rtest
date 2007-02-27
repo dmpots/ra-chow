@@ -1,0 +1,59 @@
+#!/bin/env ruby
+require 'regression_test'
+require 'optparse'
+
+#run this as a script
+if __FILE__ == $0 then
+  #parse options
+  options = {}
+  options[:logfile] = nil
+  options[:output] = nil
+  options[:testfiles] = []
+  options[:mailto] = nil
+
+  opts = 
+  OptionParser.new do |opt|
+    opt.banner = 
+      "usage: regression_test [options] -f<file> [-f<file2> ...] \n"
+      "Run regression tests for chow allocator"
+    opt.separator ""
+    #arguments passed to the chow allocator
+    opt.on("-f TEST","--file TEST", "Use tests from file") {|t|
+      options[:testfiles] << t
+    }
+    opt.on("-l=LOG_FILE", "--logfile=LOG_FILE",
+        "Set the log file for the tests") {|f|
+      options[:logfile] = f
+    }
+    opt.on("-o=OUTPUT_FILE", "--output=LOG_FILE",
+        "Set the output file for the tests") {|f|
+      options[:output] = f
+    }
+    opt.on("-m=MAIL_ADDRESS", "--mail-to=MAIL_ADDRESS",
+        "Mail the output results to address") {|m|
+      options[:mailto] = m
+    }
+  end
+  begin
+    opts.parse!
+  rescue 
+    puts opts.help
+    exit
+  end
+
+  #check for required arguments
+  if options[:testfiles].empty? then
+    $stderr.puts "must have at least one -f flag"
+    $stderr.puts opts.help
+    exit
+  end
+
+  tests = []
+  options[:testfiles].each do |f|
+    tests.concat( RegressionTest::Parser.new(f).parse)
+  end
+  RegressionTest::Runner.new(tests,options[:output],options[:logfile]).run
+end
+
+
+

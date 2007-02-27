@@ -43,6 +43,7 @@
 \.stats$
 \.gdb_history$
 ^test$
+^iloc$
 ^tmp.*$
 ^testChow$
 ^dots$

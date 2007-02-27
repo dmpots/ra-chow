@@ -2,6 +2,7 @@
 require 'fileutils'
 require 'benchmark'
 require 'optparse'
+require 'regression_test'
 
 #function to execute a shell command
 def sh(cmd)
@@ -16,10 +17,13 @@ QUICK_TESTS=["fmm", "spec/matrix300"]
 SPEC95_TESTS=["spec95X"]
 MAC_TESTS=["fmm", "spec/doduc", "spec/fpppp", "spec/matrix300", "spec95X/applu"]
 DEBUG_TESTS=["fmm/fmin"]
+#DEBUG_TESTS=["fmm/svd"]
+#DEBUG_TESTS=["spec/doduc"]
 
 #PARSE COMMAND LINE ARGUMENTS
 chow_args = "-r32 -p"
 selected_tests = QUICK_TESTS
+exit_on_failure= false
 opts = 
 OptionParser.new do |opt|
   opt.banner = "usage: rt [options]\nRun tests for the chow allocator"
@@ -30,22 +34,13 @@ OptionParser.new do |opt|
     chow_args = list.join(" ")
   end
 
-  opt.on("-t TEST","--tests TEST", [:quick, :full, :spec95,:all,:debug],
+  opt.on("-t TEST","--test TEST",
                 "Select test type (quick, full, spec95,all)") do |t|
-    case t 
-      when :quick 
-        selected_tests = QUICK_TESTS
-      when :full  
-        selected_tests = FULL_TESTS
-      when :spec95
-        selected_tests = SPEC95_TESTS
-      when :all
-        selected_tests = ALL_TESTS
-      when :debug
-        selected_tests = DEBUG_TESTS
-      else raise "bad test option"
-    end
+    selected_tests=[t]
   end
+  opt.on("-x", "--exit-on-failure", "Stop running tests on a failure") {
+    exit_on_failure = true
+  }
 #  opt.on("-l=LOG_FILE", "--logfile=LOG_FILE",
 #        "Set the log file for the server") {|f|
 #    $logfile = f
@@ -98,8 +93,18 @@ CHOW="$CHOW"
 
 #generate the strings for the tests
 tests = selected_tests.map do |t| 
+  ctest = 
   "ctest #{TEST_BASE_DIR+t} #{PRE_OPT_PASSES}"+
-        " -\"{#{CHOW} #{chow_args}}\" #{POST_OPT_PASSES}"
+        " -\"{#{CHOW} #{chow_args}}\" #{POST_OPT_PASSES} \n\n"
+
+  if exit_on_failure then
+    ctest +=
+    "if [ \"$?\" != \"0\" ]\n"+
+    "then\n"+
+    " exit #{RegressionTest::EXIT_FAILURE}\n"+
+    "fi\n"
+  end
+  ctest
 end
 
 # BEGIN SCRIPT BODY
@@ -126,6 +131,7 @@ FileUtils.chmod 0755, SCRIPT_FILE
 errors = ""
 tms = Benchmark.measure do
   errors = sh SCRIPT_FILE
+  $ctest_exit = $?.exitstatus
 end
 
 puts "================== SUMMARY ======================"
@@ -135,7 +141,14 @@ puts "ran tests: "+(selected_tests.join(" "))
 puts "CHOW ARGS: #{chow_args}"
 puts ""
 errorMsgs = errors.grep(/ERROR/)
-if errorMsgs == [] then puts "NO ERRORS DETECTED :)"
+if errorMsgs.empty? then puts "NO ERRORS DETECTED :)"
 else puts "THERE WERE SOME ERRORS :("; puts errorMsgs.join() end
 puts "================ END SUMMARY ===================="
+
+#exit codes
+if errorMsgs.empty? && ($ctest_exit == 0) then 
+  exit RegressionTest::EXIT_SUCCESS
+else
+  exit RegressionTest::EXIT_FAILURE
+end
 
