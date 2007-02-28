@@ -65,7 +65,7 @@ module RegressionTest
     end
 
     def skip_dir_entry(path)
-      path == "." || path == ".." || File.symlink?(path)
+      path =~ /^\./ || File.symlink?(path)
     end
 
     def find_leaf_directories(path)

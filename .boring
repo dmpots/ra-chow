@@ -45,6 +45,6 @@
 ^test$
 ^iloc$
 ^tmp.*$
-^testChow$
+^__testChow$
 ^dots$
 ^dotfiles$
