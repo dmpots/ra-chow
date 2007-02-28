@@ -36,7 +36,7 @@ OptionParser.new do |opt|
 
   opt.on("-t TEST","--test TEST",
                 "Select test type (quick, full, spec95,all)") do |t|
-    selected_tests=[t]
+    selected_tests=[t.sub(TEST_BASE_DIR,"")]
   end
   opt.on("-x", "--exit-on-failure", "Stop running tests on a failure") {
     exit_on_failure = true
@@ -121,7 +121,7 @@ BODY
 #puts script
 
 #write the script file
-SCRIPT_FILE = "./testChow"
+SCRIPT_FILE = "./__testChow"
 File.open(SCRIPT_FILE, "w+") do |f|
   f.puts(script)
 end

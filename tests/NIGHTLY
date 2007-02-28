@@ -1,0 +1,52 @@
+#test descriptions for chow allocator
+require 'tests/paths'
+
+#---------------------- REG=32 ---------------------------#
+expand HCT do |path|
+  #agressive basic block splittin
+  test path, :args => '-r32 -b3 -p'
+  test path, :args => '-r32 -b3 -pm'
+
+  #one more basic block length
+  test path, :args => '-r32 -b10 -pm'
+  test path, :args => '-r32 -b10 -pm'
+end
+
+#---------------------- REG=16 ---------------------------#
+#doduc and fpppp do not have enough registers to pass
+expand HCT , :active => false do |path|
+  #easiest set of options
+  test path, :args => '-r16 -b3 -p',
+       :skip => [:doduc, :fpppp, :rkf45, :wave5X]
+  test path, :args => '-r16 -b3 -pm',
+       :skip => [:doduc, :fpppp, :rkf45, :wave5X]
+
+  test path, :args => '-r16 -b10 -p',
+       :skip => [:doduc, :fpppp, :rkf45, :wave5X]
+  test path, :args => '-r16 -b10 -pm',
+       :skip => [:doduc, :fpppp, :rkf45, :wave5X]
+end
+
+#bb = 3
+test DODUC,  :args => '-r19 -b3 -p', :comment => 'lowest reg < 32'
+test FPPPP,  :args => '-r27 -b3 -p', :comment => 'lowest reg < 32'
+test RKF45,  :args => '-r24 -b3 -p', :comment => 'lowest reg < 32'
+test WAVE5X, :args => '-r25 -b3 -p', :comment => 'lowest reg < 32'
+
+test DODUC,  :args => '-r19 -b3 -pm', :comment => 'lowest reg < 32'
+test FPPPP,  :args => '-r27 -b3 -pm', :comment => 'lowest reg < 32'
+test RKF45,  :args => '-r24 -b3 -pm', :comment => 'lowest reg < 32'
+test WAVE5X, :args => '-r25 -b3 -pm', :comment => 'lowest reg < 32'
+
+#bb = 10
+test DODUC,  :args => '-r19 -b10 -p', :comment => 'lowest reg < 32'
+test FPPPP,  :args => '-r27 -b10 -p', :comment => 'lowest reg < 32'
+test RKF45,  :args => '-r24 -b10 -p', :comment => 'lowest reg < 32'
+test WAVE5X, :args => '-r25 -b10 -p', :comment => 'lowest reg < 32'
+
+test DODUC,  :args => '-r19 -b10 -pm', :comment => 'lowest reg < 32'
+test FPPPP,  :args => '-r27 -b10 -pm', :comment => 'lowest reg < 32'
+test RKF45,  :args => '-r24 -b10 -pm', :comment => 'lowest reg < 32'
+test WAVE5X, :args => '-r25 -b10 -pm', :comment => 'lowest reg < 32'
+
+

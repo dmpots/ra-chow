@@ -1,6 +1,7 @@
 #!/bin/env ruby
 require 'benchmark'
 require 'optparse'
+require 'tempfile'
 
 module RegressionTest
   EXIT_SUCCESS=0
@@ -13,9 +14,149 @@ module RegressionTest
     :XFAIL => XFAIL
   }
 
-  class Parser
-    LINE_FORMAT=/^.+\|.*\|(PASS|XFAIL)\|.*$/ 
 
+  class Syntax
+    LINE_FORMAT=/^.+\|.*\|(PASS|XFAIL)\|.*$/ 
+    MACRO_DEF=/^!.+=.+$/ 
+    def Syntax.skip?(line)
+      line =~ /^\s+$|^$|^#/
+    end
+
+  end
+
+
+  class TestDSL
+    attr_accessor :tests
+    @@test_count = 1
+
+    def initialize
+      @tests = []
+    end
+
+    def self.load(filename)
+      dsl = new
+      dsl.instance_eval(File.read(filename), filename)
+      dsl.tests
+    end
+
+    def test(path,options={})
+      options[:path] = path
+      options[:expected] ||= :PASS
+      if options[:skip] then
+        options[:skip].each do |t|
+          if path =~ /#{t.to_s}\/?$/ then
+            options[:expected] = :skip
+          end
+        end
+      end 
+
+      if not (options[:expected] == :skip) then
+        @tests << TestDescription.new(@@test_count, options)
+        @@test_count += 1
+      end
+    end
+
+    def expand(path, options={:active => true})
+      if options[:active] then
+        find_leaf_directories(path).each do |p|
+          yield p
+        end
+      end
+    end
+
+    def skip_dir_entry(path)
+      path == "." || path == ".." || File.symlink?(path)
+    end
+
+    def find_leaf_directories(path)
+      subdirs = [] #for recursion
+      Dir.foreach(path) do |ff|
+        file = File.join(path,ff)
+        if not skip_dir_entry(ff) then
+          if File.directory?(file) then subdirs << file end
+        end 
+      end
+      #if no subdirs found then this is a leaf node
+      if subdirs.empty? then [path]
+      else
+        subdirs.map do |sd| find_leaf_directories(sd) end.flatten
+      end
+    end
+  end
+
+  class PreProcessor
+    def initialize
+      @symtab = {}
+    end
+
+    def skip_dir_entry(path)
+      path == "." || path == ".." || File.symlink?(path)
+    end
+
+    def find_leaf_directories(path)
+      subdirs = [] #for recursion
+      Dir.foreach(path) do |ff|
+        file = File.join(path,ff)
+        if not skip_dir_entry(ff) then
+          if File.directory?(file) then subdirs << file end
+        end 
+      end
+      #if no subdirs found then this is a leaf node
+      if subdirs.empty? then [path]
+      else
+        subdirs.map do |sd| find_leaf_directories(sd) end.flatten
+      end
+    end
+
+    def process_expand(tf, path, line)
+      dirs = find_leaf_directories(path)
+      rest_of_line = (line.split("|")[1..-1]).join("|")
+      dirs.each do |d|
+        tf.puts(d+"|"+rest_of_line)
+      end
+    end
+
+    def preprocess(input)
+      tf = Tempfile.new("rtest")
+      input.each do |line|
+        #path|chow_args|expected_result|comment
+        if not Syntax::skip?(line) then
+          if line =~ Syntax::LINE_FORMAT then
+            path  = line.split("|")[0]
+            macro = path.scan(/\$\(.*\)/).first
+            if macro then #expand macro
+              macro.sub!("$", "")
+              macro.sub!("(", "")
+              macro.sub!(")", "")
+              #HERE: macro expand and deal with 'with' clause
+              command = macro.split
+              case command[0] 
+                when "expand" then
+                  expand_macros(command)
+                  xpath = command[1]
+                  process_expand(tf, xpath, line)
+                else
+                  raise "bad macro line: #{line}"
+                end
+            else
+              tf.puts line
+            end
+          elsif line =~ Syntax::MACRO_DEF then
+            var,val = line[1..-1].split('=')
+            @symtab[var.rstrip.lstrip] = val
+          else
+            puts "BAD LINE: "+line
+            exit EXIT_FAILURE
+          end
+        end
+      end
+      input.close
+      tf.rewind
+      tf
+    end
+  end
+
+  class Parser
     def initialize(input)
       @input = File.open(input)
     end
@@ -33,22 +174,23 @@ module RegressionTest
     end
 
     def parse()
+      preproc = PreProcessor.new.preprocess(@input)
       tds = []; tid = 1
-      @input.each do |line|
+      preproc.each do |line|
         #path|chow_args|expected_result|comment
-        if line =~ /^\s+$|^$|^#/ then
-          #blank line or comment
-        else
-          if line =~ LINE_FORMAT then
+        if not Syntax.skip?(line) then
+          if line =~ Syntax::LINE_FORMAT then
             td = parse_line(line)
             if block_given? then yield td 
             else tds << TestDescription.new(tid,td) end
             tid += 1
           else
             puts "BAD LINE: "+line
+            exit EXIT_FAILURE
           end
         end
       end
+      preproc.close
       tds
     end
   end
@@ -171,7 +313,7 @@ module RegressionTest
       puts "*********************************************************"
       puts "                      SUMMARY                            "
       puts "*********************************************************"
-      puts "Completed #{stats.count.to_i} tests"
+      puts "Ran #{stats.count.to_i} tests"
       [:pass, :fail, :xpass, :xfail].each do |r|
         if stats.send(r) > 0 then
           puts "#{r.to_s.upcase}: #{stats.send(r)}"
@@ -181,11 +323,13 @@ module RegressionTest
       puts "Start time: #{starttime}"
       puts ("tests completed in %.0f minutes %.2f seconds" % 
                   [(tms.real/60), ((tms.real) % 60)])
+      puts ""
       if not stats.failures.empty? then
         puts "---- FAILURES ----"
         stats.failures.each do |t|
           puts t.result_s
         end
+        puts ""
       end
 
       if not stats.successes.empty? then
