@@ -14,7 +14,7 @@ end
 
 #---------------------- REG=16 ---------------------------#
 #doduc and fpppp do not have enough registers to pass
-expand HCT , :active => false do |path|
+expand HCT do |path|
   #easiest set of options
   test path, :args => '-r16 -b3 -p',
        :skip => [:doduc, :fpppp, :rkf45, :wave5X]

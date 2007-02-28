@@ -56,8 +56,8 @@ module RegressionTest
       end
     end
 
-    def expand(path, options={:active => true})
-      if options[:active] then
+    def expand(path, options={})
+      unless options[:disabled] then
         find_leaf_directories(path).each do |p|
           yield p
         end
