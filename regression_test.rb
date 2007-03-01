@@ -313,15 +313,16 @@ module RegressionTest
       puts "*********************************************************"
       puts "                      SUMMARY                            "
       puts "*********************************************************"
-      puts "Ran #{stats.count.to_i} tests"
+      puts "Ran #{stats.count.to_i} tests:"
+      puts ""
       [:pass, :fail, :xpass, :xfail].each do |r|
         if stats.send(r) > 0 then
-          puts "#{r.to_s.upcase}: #{stats.send(r)}"
+          puts "  #{r.to_s.upcase}: #{stats.send(r)}"
         end
       end
       puts ""
-      puts "Start time: #{starttime}"
-      puts ("tests completed in %.0f minutes %.2f seconds" % 
+      puts "#{starttime}"
+      puts ("completed in %.0f minutes %.2f seconds" % 
                   [(tms.real/60), ((tms.real) % 60)])
       puts ""
       if not stats.failures.empty? then

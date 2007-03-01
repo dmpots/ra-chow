@@ -25,9 +25,9 @@ MAIN=chow.main.o
 # compiler to use is made above.  For what we need here, the
 # CFLAGS are the same for both cc and gcc.
 #
-#CFLAGS  =    -Wall -O3 
+CFLAGS  =    -Wall -O3 
 #CFLAGS =    -Wall -O3 -D__DEBUG 
-CFLAGS = -g -Wall     -D__DEBUG 
+#CFLAGS = -g -Wall     -D__DEBUG 
 #CFLAGS = -g -Wall
 
 

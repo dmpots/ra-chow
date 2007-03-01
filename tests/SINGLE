@@ -2,7 +2,7 @@
 require 'tests/paths'
 
 #---------------------- REG=32 ---------------------------#
-expand HCT, :disabled => true do |path|
+expand HCT do |path|
   test path, :args => '-r32 -b5 -pm'
 end
 

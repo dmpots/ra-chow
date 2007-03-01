@@ -7,7 +7,7 @@ usage(){
 
 
 #register allocators
-CHOW_ARGS="-r32 -p -b5"
+CHOW_ARGS="-r32 -p b5 -m"
 CHOW="`pwd`/chow $CHOW_ARGS"
 RA="`pwd`/ra"
 

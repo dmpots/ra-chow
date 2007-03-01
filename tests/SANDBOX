@@ -1,0 +1,9 @@
+#a file for playing around with test options
+require 'tests/paths'
+
+#---------------------- REG=32 ---------------------------#
+expand FMM do |path|
+  test path, :args => '-r32 -pm'
+end
+
+
