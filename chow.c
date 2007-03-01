@@ -1367,7 +1367,11 @@ bool OrderCopies(const CopyList& rr_copies, CDL* ordered_copies)
       if(cdIT->src_reg == cd.dest_reg)
       {
         //I must come after you, keep going
-        if(inserted){error("cyclic dependence in copies"); abort();}
+        if(inserted)
+        {
+          error("cyclic dependence in copies");
+          return false;
+        }
       }
 
       //do you define someone I use?
