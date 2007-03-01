@@ -213,8 +213,11 @@ module RegressionTest
       @expected_code
     end
 
-    def cmd
-      "rt --chow-args=\"#{@args}\" --test=\"#{@path}\" --exit-on-failure"
+    def cmd(cmd_args)
+      "rt --chow-args=\"#{@args}\"\
+          --test=\"#{@path}\" \
+          --exit-on-failure  \
+          #{cmd_args}"
     end
 
     def to_s
@@ -227,12 +230,13 @@ module RegressionTest
   end
 
   class Runner
-    def initialize(tests, output=nil, logfile=nil)
+    def initialize(tests, output=nil, logfile=nil, cmd_args="")
       @tests = tests
       @output = 
         if output then File.open(output, "w+") else $stdout end
       @logger =
         if logfile then File.open(logfile, "w+") else $stderr end
+      @cmd_args = cmd_args #passed through to ctest
     end
 
     class Stats
@@ -270,7 +274,7 @@ module RegressionTest
       tms = Benchmark.measure do
       @tests.each do |t|
         log "**** Running Test #{t.test_id} ****"
-        output = `#{t.cmd}`
+        output = `#{t.cmd(@cmd_args)}`
         status = $?.exitstatus
         log "test script exited with status: "+status.to_s
 

@@ -22,6 +22,7 @@ DEBUG_TESTS=["fmm/fmin"]
 
 #PARSE COMMAND LINE ARGUMENTS
 chow_args = "-r32 -p"
+ctest_args = ""
 selected_tests = QUICK_TESTS
 exit_on_failure= false
 opts = 
@@ -40,6 +41,9 @@ OptionParser.new do |opt|
   end
   opt.on("-x", "--exit-on-failure", "Stop running tests on a failure") {
     exit_on_failure = true
+  }
+  opt.on("-Q", "--quiet-ctest", "Run ctest in quiet mode") {
+    ctest_args += "-Q"
   }
 #  opt.on("-l=LOG_FILE", "--logfile=LOG_FILE",
 #        "Set the log file for the server") {|f|
@@ -94,7 +98,7 @@ CHOW="$CHOW"
 #generate the strings for the tests
 tests = selected_tests.map do |t| 
   ctest = 
-  "ctest #{TEST_BASE_DIR+t} #{PRE_OPT_PASSES}"+
+  "ctest #{ctest_args} #{TEST_BASE_DIR+t} #{PRE_OPT_PASSES}"+
         " -\"{#{CHOW} #{chow_args}}\" #{POST_OPT_PASSES} \n\n"
 
   if exit_on_failure then

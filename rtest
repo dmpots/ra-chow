@@ -12,6 +12,7 @@ if __FILE__ == $0 then
   options[:mailto] = nil
   options[:print] = false
   options[:dryrun] = false
+  options[:ctest_args] = ""
 
 
   opts = 
@@ -40,6 +41,10 @@ if __FILE__ == $0 then
         "Preprocess file(s) and print results") {
       options[:print] = true
     }
+    opt.on("-Q", "--quiet-ctest",
+        "Run ctest in quiet mode") {
+      options[:ctest_args] += "--quiet-ctest"
+    }
   end
   begin
     opts.parse!
@@ -67,7 +72,10 @@ if __FILE__ == $0 then
     exit RegressionTest::EXIT_SUCCESS
   end
   if not options[:dryrun] then
-    RegressionTest::Runner.new(tests,options[:output],options[:logfile]).run
+    RegressionTest::Runner.new(tests,
+                               options[:output],
+                               options[:logfile],
+                               options[:ctest_args]).run
   end
 end
 
