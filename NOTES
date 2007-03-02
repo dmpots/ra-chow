@@ -895,3 +895,47 @@ we delete the store. We can solve this by inserting the copy, deleting
 the load but keeping the store.
 
 
+========================================================
+Another Bug in EnhancedCodeMotion
+Fri Mar  2 10:05:08 CST 2007
+========================================================
+The order in which copy instructions were inserted was causing a
+problem. 
+
+There were two instances where this was causing a problem,
+either we had a directly cyclical copy
+
+(I)
+x => y
+y => x
+
+which is fairly easy to detect, or a chain of copies like
+
+(II)
+x => y
+y => z
+
+
+we also saw this cycle which is a little harder to detect
+
+(III)
+x => y
+y => z
+z => x
+
+In cases (II),(III) there is no ordering of the copies that will
+preserve the meaning of the code (that it had in terms of load
+stores). This is because we must always write at least one value
+before it is used. This could be prevented by using temporaries, but
+did not spend the time to implement it. Instead we detect this case
+and revert to just insterting loads and stores instead of inserting
+any copies. We could also improve by inserting load stores only for
+the registers involved in a cyclic copy.
+
+Case (I) can be solved by ordering the copies so that values are used
+before they get overwritten. In this case we would order y => z before
+x => y.
+
+
+
+
