@@ -53,7 +53,7 @@ void Insert_Load(LRID, Inst*, Register, Register);
 MemoryLocation ReserveStackSpace(Unsigned_Int size);
 LRID SSAName2LRID(Variable v);
 Register GetMachineRegAssignment(Block*, LRID);
-void CheckRegisterLimitFeasibility(Unsigned_Int cRegMax);
+void CheckRegisterLimitFeasibility(void);
 void LiveRange_BuildInitialSSA(void);
 void RunChow();
 void RenameRegisters();
@@ -64,6 +64,8 @@ extern Variable GBL_fp_origname;
 const Register REG_UNALLOCATED = 666;
 const Register REG_FP = 555;
 const LRID     NO_LRID = (LRID)-1;//bigger than any lrid
+
+inline int max(int a, int b) { return a > b ? a : b;}
 
 #endif
 

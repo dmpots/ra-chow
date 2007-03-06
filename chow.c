@@ -45,16 +45,17 @@ Unsigned_Int* depths; //loop nesting depth
 Chow_Stats chowstats = {0};
 
 /* allocation parameters */
-Boolean      PARAM_MoveLoadsAndStores;
+bool         PARAM_MoveLoadsAndStores;
 bool         PARAM_EnhancedCodeMotion;
 float        PARAM_LoopDepthWeight;
 unsigned int PARAM_BBMaxInsts;
 unsigned int PARAM_NumMachineRegs;
-Boolean      PARAM_EnableRegisterClasses;
+bool         PARAM_EnableRegisterClasses;
 float        PARAM_MVCost = 1.0;
 float        PARAM_LDSave = 1.0;
 float        PARAM_STRSave = 1.0;
 unsigned int PARAM_NumReservedRegs = 2;
+bool         PARAM_ForceMinimumRegisterCount;
 
 /* allocation debugging */
 unsigned int DEBUG_DotDumpLR = 0; //use to dump a lr and its splits
@@ -1064,8 +1065,11 @@ BB_Stats Compute_BBStats(Arena arena, Unsigned_Int variable_count)
  * maximum number of registers used/defined in any instruction and
  * make sure that number is fewer than the number of machine registers
  * we are given.
+ *
+ * if PARAM_ForceMinimumRegisterCount is enabled then we will modify
+ * the number of machine registers.
  ***/
-void CheckRegisterLimitFeasibility(Unsigned_Int cRegMax)
+void CheckRegisterLimitFeasibility()
 {
   Block* b;
   Inst* inst;
@@ -1073,6 +1077,7 @@ void CheckRegisterLimitFeasibility(Unsigned_Int cRegMax)
   Register* reg;
   Unsigned_Int cRegUses;
   Unsigned_Int cRegDefs;
+  Unsigned_Int cRegMax = 0;
 
   ForAllBlocks(b)
   {
@@ -1091,22 +1096,32 @@ void CheckRegisterLimitFeasibility(Unsigned_Int cRegMax)
         {
           cRegDefs++;
         }
-        if(cRegUses > cRegMax || cRegDefs > cRegMax)
-        {
-          Block_Dump(b, NULL, TRUE);
+        if(cRegUses > cRegMax ){cRegMax = cRegUses; }
+        if(cRegDefs > cRegMax) {cRegMax = cRegDefs; }
+      }
+    } 
+  }
+  if(cRegMax > PARAM_NumMachineRegs)
+  {
+    if(PARAM_ForceMinimumRegisterCount)
+    {
+      PARAM_NumMachineRegs = max(cRegMax,4); //4 is my minimum
+      fprintf(stderr, 
+      "Adjusting the number of machine registers "
+      "to permit allocation: %d\n", PARAM_NumMachineRegs);
+    }
+    else
+    {
+      //Block_Dump(b, NULL, TRUE);
           fprintf(stderr, 
 "Impossible allocation.\n\
 You asked me to allocate with %d registers, but I found an operation\n\
-with %d registers used and %d registers defined: %s. Sorry, but this\n\
-is a research compiler not a magic wand. The offending block is \n\
-printed above.\n", cRegMax,cRegUses,cRegDefs, oname(*op));
+that needs %d registers. Sorry, but this is a research compiler not \n\
+a magic wand.\n", PARAM_NumMachineRegs, cRegMax);
           exit(EXIT_FAILURE);
-        }
-      }
-    } 
-
-
+    }
   }
+
 }
 
 

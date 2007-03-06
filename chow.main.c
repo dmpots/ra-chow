@@ -31,7 +31,8 @@ typedef enum
   HELP_LOOPDEPTH,
   HELP_REGISTERCLASSES,
   HELP_LOADSTOREMOVEMENT,
-  HELP_ENHANCEDCODEMOTION
+  HELP_ENHANCEDCODEMOTION,
+  HELP_FORCEMINIMUMREGISTERCOUNT
 } Param_Help;
 
 
@@ -99,13 +100,15 @@ static Param_Details param_table[] =
   {'m', process_, I,F,FALSE,&PARAM_MoveLoadsAndStores, BOOL_PARAM, 
                                                   HELP_LOADSTOREMOVEMENT},
   {'e', process_, I,F,FALSE,&PARAM_EnhancedCodeMotion, BOOL_PARAM, 
-                                                  HELP_ENHANCEDCODEMOTION}
+                                                  HELP_ENHANCEDCODEMOTION},
+  {'f', process_, I,F,FALSE,&PARAM_ForceMinimumRegisterCount, BOOL_PARAM, 
+                                             HELP_FORCEMINIMUMREGISTERCOUNT}
 //  {'m', process_, I,1.0,B, &mMVCost, FLOAT_PARAM, HELP_MVCOST},
 //  {'l', process_, I,1.0,B, &mLDSave, FLOAT_PARAM, HELP_LDSAVE},
 //  {'s', process_, I,1.0,B,&mSTRSave, FLOAT_PARAM, HELP_STRSAVE},
 };
-#define NPARAMS (sizeof(param_table) / sizeof(param_table[0]))
-#define PARAMETER_STRING ":b:r:d:mpe"
+const unsigned int NPARAMS = (sizeof(param_table) / sizeof(param_table[0]));
+const char* PARAMETER_STRING  = ":b:r:d:mpef";
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
 /*
@@ -172,7 +175,7 @@ int main(Int argc, Char **argv)
   EnforceParameterConsistency();
 
   //make an initial check to ensure not too many registers are used
-  CheckRegisterLimitFeasibility(PARAM_NumMachineRegs);
+  CheckRegisterLimitFeasibility();
 
   //areana for all chow memory allocations
   chow_arena = Arena_Create(); 
