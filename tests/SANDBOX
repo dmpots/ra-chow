@@ -3,7 +3,7 @@ require 'tests/paths'
 
 #---------------------- REG=32 ---------------------------#
 expand HCT do |path|
-  test path, :args => '-r32 -pm'
+  test path, :args => '-r1 -b5 -pm -f'
 end
 
 
