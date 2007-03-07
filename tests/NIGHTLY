@@ -27,9 +27,13 @@ expand HCT do |path|
        :skip => [:doduc, :fpppp, :rkf45, :wave5X]
 end
 
-#bb = 3
+#----------------------- REG=1 ----------------------------#
+#stress test by allocating using the minimum number of registers
+expand HCT do |path|
+  test path, :args => '-r1 -b5 -pm -f'
+end
+
 #------------------ MINIMUM REG (>16) ---------------------#
-##['-b3 -p', '-b3 -pm', '-b10 -p', '-b10 -pm'].each do |a|
 ['-b3 -pm', '-b10 -pm'].each do |a|
   test DODUC,  :args => '-r19 '+a, :comment => 'lowest reg < 32'
   test FPPPP,  :args => '-r27 '+a, :comment => 'lowest reg < 32'
