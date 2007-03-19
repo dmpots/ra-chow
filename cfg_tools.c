@@ -400,4 +400,18 @@ Edge* FindEdge(Block* blkPred, Block* blkSucc, EdgeOwner owner)
   return NULL;
 }
 
+/*
+ *========================
+ * Block_IsLoopHeader()
+ *========================
+ * returns true if this block is a loop header
+ ***/
+bool Block_IsLoopHeader(Block* blk)
+{
+  Edge* e;
+  Block_ForAllPreds(e, blk) {if(e->back_edge) return true;}
+
+  return  false;
+}
+
 

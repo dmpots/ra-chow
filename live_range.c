@@ -36,12 +36,16 @@ Unsigned_Int liverange_count;
 
 /* local functions */
 static void Def_CollectUniqueUseNames(Variable, std::list<Variable>&);
-static Priority LiveUnit_ComputePriority(LiveUnit*);
+static Priority LiveUnit_ComputePriority(LiveRange*, LiveUnit*);
 static Boolean LiveRange_ColorsAvailable(LiveRange* lr);
 static Boolean VectorSet_Full(VectorSet vs);
 static LiveRange* LiveRange_Create(Arena, RegisterClass);
 static VectorSet LiveRange_UsedColorSet(LiveRange* lr, Block* blk);
 static void AddEdgeExtensionNode(Edge*, LiveRange*, LiveUnit*,SpillType);
+namespace {
+  bool LiveUnit_CanMoveLoad(LiveRange* lr, LiveUnit* lu);
+  int LiveUnit_LoadLoopDepth(LiveRange*  lr, LiveUnit* lu);
+}
 
 //iterate through interference list. if stmt used as a cheat for its
 //side effect 
@@ -391,8 +395,7 @@ Priority LiveRange_ComputePriority(LiveRange* lr)
   Unsigned_Int clu = 0; //count of live units
   LiveRange_ForAllUnits(lr, lu)
   {
-    pr += LiveUnit_ComputePriority(lu) * 
-          pow(PARAM_LoopDepthWeight, depths[id(lu->block)]);
+    pr += LiveUnit_ComputePriority(lr, lu);
     clu++;
   }
   return pr/clu;
@@ -404,13 +407,64 @@ Priority LiveRange_ComputePriority(LiveRange* lr)
  *=======================================
  *
  ***/
-Priority LiveUnit_ComputePriority(LiveUnit* lu)
+Priority LiveUnit_ComputePriority(LiveRange* lr, LiveUnit* lu)
 {
-  return
-    PARAM_LDSave  * lu->uses 
-  + PARAM_STRSave * lu->defs 
-  - PARAM_MVCost  * (lu->need_store + lu->need_load);
+  Priority unitPrio = 
+      PARAM_LDSave  * lu->uses 
+    + PARAM_STRSave * lu->defs 
+    - PARAM_MVCost  * lu->need_store;
+  unitPrio *= pow(PARAM_LoopDepthWeight, depths[id(lu->block)]);
+
+  //treat load loop cost separte in case we can move it up from a loop
+  int loadLoopDepth = LiveUnit_LoadLoopDepth(lr, lu);
+  unitPrio -=   (PARAM_MVCost  * lu->need_load)
+                * pow(PARAM_LoopDepthWeight, loadLoopDepth);
+  return unitPrio;
 }
+
+namespace {
+/*
+ *=======================================
+ * LiveUnit_LoadLoopDepth()
+ * computes loop depth level for inserting loads. the level could be
+ * decreased by one to account for moving a load up from a loop header
+ *=======================================
+ *
+ ***/
+int LiveUnit_LoadLoopDepth(LiveRange*  lr, LiveUnit* lu)
+{
+    int depth = depths[id(lu->block)];
+    if(Block_IsLoopHeader(lu->block) && LiveUnit_CanMoveLoad(lr, lu))
+    {
+      depth -= 1;
+    }
+    return depth;
+}
+
+/*
+ *=======================================
+ * LiveUnit_CanMoveLoad()
+ *=======================================
+ *
+ ***/
+bool LiveUnit_CanMoveLoad(LiveRange* lr, LiveUnit* lu)
+{
+  if(lu->need_load) return false;
+
+  //the load can be moved if there is at least on predecessor *in* the
+  //live range. we know there must be at least one *NOT* in the live
+  //range because the unit needs a load and this only happens when it
+  //is an entry point
+  int lrPreds = 0;
+  Edge* e;
+  Block_ForAllPreds(e, lu->block)
+  {
+    if(LiveRange_ContainsBlock(lr, e->pred)) lrPreds++;
+  }
+  return (lrPreds > 0 && PARAM_MoveLoadsAndStores);
+}
+
+}//end anonymous namespace
 
 /*
  *=======================================
@@ -523,7 +577,7 @@ void LiveRange_AssignColor(LiveRange* lr)
         Edge* e;
         int lrPreds = 0;
 
-        //count the number of predecessor not in this live range 
+        //count the number of predecessor in this live range 
         Block_ForAllPreds(e, unit->block)
         {
           if(LiveRange_ContainsBlock(lr, e->pred)) lrPreds++;
@@ -567,7 +621,7 @@ void LiveRange_AssignColor(LiveRange* lr)
         bool moved = FALSE;
         int lrSuccs = 0;
 
-        //count the number of successors not in this live range 
+        //count the number of successors in this live range 
         Block_ForAllSuccs(e, unit->block)
         {
           if(LiveRange_ContainsBlock(lr, e->succ)) lrSuccs++;
@@ -575,7 +629,7 @@ void LiveRange_AssignColor(LiveRange* lr)
 
         //we actually move the store if we are not using the standard
         //chow method, or if we are using chow method and there is at
-        //least one predecessor block that is not part of the live
+        //least one successor block that is not part of the live
         //range
         bool moveit = (PARAM_EnhancedCodeMotion || lrSuccs > 0);
 

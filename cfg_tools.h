@@ -21,5 +21,6 @@ Inst* Block_FirstInst(Block* blk);
 Unsigned_Int Block_PredCount(Block* blk);
 Unsigned_Int Block_SuccCount(Block* blk);
 Edge* FindEdge(Block* blkPred, Block* blkSucc, EdgeOwner owner);
+bool Block_IsLoopHeader(Block* blk);
 
 #endif
