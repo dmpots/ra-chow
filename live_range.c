@@ -512,6 +512,7 @@ void LiveRange_AssignColor(LiveRange* lr)
     VectorSet_Insert(vs, color);
     mBlkIdSSAName_Color[id(unit->block)][lr->orig_lrid] = color;
 
+    // ----------------  LOAD STORE OPTIMIZATION -----------------
     if(PARAM_MoveLoadsAndStores)
     {
       if(unit->need_load)
