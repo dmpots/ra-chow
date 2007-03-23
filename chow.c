@@ -1235,6 +1235,7 @@ void MoveLoadsAndStores()
                   rr_copies.push_back(make_pair(*eeT, *ee));
                   removals.push_back(ee);
                 }
+                chowstats.cInsertedCopies++;
               }
             }
           }
