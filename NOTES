@@ -937,5 +937,166 @@ before they get overwritten. In this case we would order y => z before
 x => y.
 
 
+========================================================
+Rematerialization
+Wed Mar 21 11:56:28 CDT 2007
+========================================================
+So the majority of this entry was mostly a bunch of random jibberish.
+I have kept it around in case it helps jog my memory at some point.
+The "final" solution is right below
 
+The core observation is that even if we mark part of the live range as
+rematerializable we have to keep the stores at the live range
+boundaries and if it is spilled. This is true because we don't know if
+the other live range gets split, gets a register or gets spilled. A
+simple copy between the live ranges is not enough because either one
+may be split and then the non-remat live range will be expecting the
+value in the home location so the remat live range must store it
+there. The way we handle this is to 
+
+  1) split the live ranges during live range creation
+  2) allocate as normal
+  3) if we allocate a liverange that is rematerailizable then
+      use loadI instead of load to load values
+      insert all stores as normal
+     if we spill a liverange that is rematerializable then
+      use loadI instead of load to load values
+      insert all stores as normal
+    (its the same in both cases, but the loads in case one happen at
+    the live range boundaries and in case two it is interal to the
+    live range)
+  4) after allocation is complete run a dead store elimination pass to
+  get rid of useless stores. these may happen if the remat is spilled.
+  not all of the stores will reach a use and they can be dropped.
+    
+
+--------------------------OLD JUNK-----------------------------------
+In order to implement rematerialization in Chow we need to solve a few
+problems
+
+  1) Finding the values which can be rematerialized.
+  SOL: this can be done using the standard SSC algorithm
+
+  2) Building initial live ranges. We need to be able to separate the
+  parts of the live range which are rematerializable from those which
+  can not be rematerialized.
+
+  3) Allocating the split live range without incurring performance
+  overhead. There are a few cases to consider:
+    * Both live ranges are given a register
+      - need a register to register copy, or biased coloring. r2r can
+        be done because there is no need to store... unless it reaches
+        another live range out the other side.
+    * Only rematerializable is given a register
+      - need a true store at end of allocated live range, or after its
+        first definition. Just need to make sure it is stored for
+        later use.
+    * Only non-rematerializable is given a register
+      - no store, load anywhere in the non-allocated live range
+      - the non-allocated should use loadI to load the value on the
+        edge that comes from the rematerialiazable lr
+    * Neither are given a register
+      - need to store rematerializable lr after its first def so a
+        later load will have access to it.
+      - the non-allocated should use loadI to load the value
+
+
+  options
+  1) split live ranges initially and note that liverange remat was
+  splitfrom liverange noremat
+    PROBLEMS:
+
+  2) keep the live range joined at first. note in the live range that
+  it can be split into a remat part. when splitting the live range,
+  first just split the remat part, clear the flag and then check if
+  more splitting is needed
+    PROBLEMS:
+    + how do we keep track of the part that is remat?
+    + once they are split how do handle stores/loads at the new live
+      range boundaries
+
+  3) split live ranges initially and insert a copy from remat to
+  non-remat.
+    PROBLEMS:
+    + inserting a copy means that the live ranges will interfere and
+    never be asssigned to the same register.
+
+  PLAN:
+  Split live ranges initially. Do not bother putting in the copy as
+  that is not enough guarantee that the home location will stay
+  updated. The non-remat live range my be further split and one of
+  those may require a load.
+
+  When spilling a remat live range we can load always by doing the
+  rematerialization. Stores are done normally in the remat live range.
+  Use enhanced code motion to convert LOAD/STORE pairs to copies
+
+  Once spilling has been completed look for dead stores. In fact we
+  can use dead to do this for us.
+--------------------------OLD JUNK-----------------------------------
+
+=======================================================
+Copy Coalescing in Chow
+Wed Mar 21 22:38:15 CDT 2007
+========================================================
+I can do copy coalescing in chow. Here is how:
+
+  //Walk the code 
+  for each copy operation (a <- b)
+    if  1) a.bb_list INTERSECT b.bb_list == the current block
+       AND
+        2) b.last_use == the current operation 
+    then
+    //can coalesce
+    choose a (arbitrarly) to be the coalesced live range
+    a.bb_list = a.bb_list UNION b.bb_list (vector set - O(n))
+    a.fear_list = a.fear_list UNION b.fear_list (stl set - O(n))
+    a.units = a.units UNION (b.units - unit for current block) (stl list -O(n))
+    a.unit_for_this_block.last_use = max(a.last_use, b.last_use)
+
+    //the values in the live units should be valid since we have done
+    //no splitting yet there should not be any loads/stores necessary
+    //at live range boundaries. The exception would be an uninitalized
+    //value which could cause a live range to need a load at its first
+    //use
+
+
+========================================================
+Enhanced Code Motion Observations
+Fri Mar 23 00:09:43 CDT 2007
+========================================================
+So it turns out that EnhancedCodeMotion may not be so "enhanced". The
+idea was that movement of loads and stores would always occur. Chow
+says move a load up if there is at least a predecessor in the live
+range so that you get some benefit by having a path where the load
+does not need to occur. 
+
+I changed that to say always move the load up. The intent was to
+capture situations where we have a load and store to same location. We
+would not catch the case where there is only one predecessor that
+contains a store.
+
+Now we have to leave the stores in and we can only replace the loads.
+This is necessary for corectness. Running dead can make it profitable.
+One curious thing is that enhanced code motions sometimes makes the
+execution worse. I am not sure why but I suspect it is because of the
+extra control flow (ecm always splits edges). We rely on clean to join
+edges as necessary.
+
+Turns out the enhanced is only profitable sometimes. Check out rkfs
+for an example of where it hurts.
+
+*EXPLORE MORE*
+So changeing ECM to only move the load/store onto an edge is when
+there are lrPreds (for sure profitable) or the pred count is 1 which
+is to catch the specific case we are after.
+
+        bool moveit =((PARAM_EnhancedCodeMotion 
+                        && unit->block->pred_count == 1) 
+                     || lrPreds > 0);
+
+This allowed rkfs to actually change to be profitable under ECM.
+However urand lost its profit to be equal with normal code motion. So
+obviously this has an effect and we should look at how this parameter
+effects other benchmarks.
 
