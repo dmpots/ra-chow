@@ -387,6 +387,7 @@ Boolean LiveRange_Constrained(LiveRange* lr)
  *=======================================
  *
  ***/
+Priority LiveRange_OrigComputePriority(LiveRange* lr);
 Priority LiveRange_ComputePriority(LiveRange* lr)
 {
   //return .1*(rand() % 100);
@@ -396,6 +397,26 @@ Priority LiveRange_ComputePriority(LiveRange* lr)
   LiveRange_ForAllUnits(lr, lu)
   {
     pr += LiveUnit_ComputePriority(lr, lu);
+    clu++;
+  }
+  return pr/clu;
+}
+
+//kept for prosperity in case we want to compare orig priority to the
+//priority used when moving loads and stores
+Priority LiveRange_OrigComputePriority(LiveRange* lr)
+{
+  LiveUnit* lu;
+  int clu = 0; //count of live units
+  Priority pr = 0.0;
+  LiveRange_ForAllUnits(lr, lu)
+  {
+    Priority unitPrio = 
+        PARAM_LDSave  * lu->uses 
+      + PARAM_STRSave * lu->defs 
+      - PARAM_MVCost  * lu->need_store
+      - PARAM_MVCost  * lu->need_load;
+    pr += unitPrio * pow(PARAM_LoopDepthWeight, depths[id(lu->block)]);
     clu++;
   }
   return pr/clu;
