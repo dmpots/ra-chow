@@ -21,7 +21,6 @@
 
 #include "chow.h"
 #include "chow_params.h"
-#include "live.h"
 #include "live_range.h"
 #include "union_find.h"
 #include "reach.h"
