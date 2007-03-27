@@ -15,9 +15,9 @@
 #include "live_range.h"
 #include "debug.h"
 #include "chow.h"
-#include "chow_params.h"
+#include "params.h"
 #include "util.h"
-#include "ra.h" //for computing loop nesting depth
+#include "globals.h" 
 #include "rc.h" //RegisterClass definitions 
 #include "cfg_tools.h" //control graph manipulation utilities
 #include "dot_dump.h" //control graph manipulation utilities
@@ -406,17 +406,23 @@ Priority LiveRange_ComputePriority(LiveRange* lr)
 //priority used when moving loads and stores
 Priority LiveRange_OrigComputePriority(LiveRange* lr)
 {
+  using Params::Machine::load_save_weight;
+  using Params::Machine::store_save_weight;
+  using Params::Machine::move_cost_weight;
+  using Params::Algorithm::loop_depth_weight;
+
   LiveUnit* lu;
   int clu = 0; //count of live units
   Priority pr = 0.0;
   LiveRange_ForAllUnits(lr, lu)
   {
     Priority unitPrio = 
-        PARAM_LDSave  * lu->uses 
-      + PARAM_STRSave * lu->defs 
-      - PARAM_MVCost  * lu->need_store
-      - PARAM_MVCost  * lu->need_load;
-    pr += unitPrio * pow(PARAM_LoopDepthWeight, depths[id(lu->block)]);
+        load_save_weight  * lu->uses 
+      + store_save_weight * lu->defs 
+      - move_cost_weight  * lu->need_store
+      - move_cost_weight  * lu->need_load;
+    pr += unitPrio 
+          * pow(loop_depth_weight, Globals::depths[id(lu->block)]);
     clu++;
   }
   return pr/clu;
@@ -430,16 +436,21 @@ Priority LiveRange_OrigComputePriority(LiveRange* lr)
  ***/
 Priority LiveUnit_ComputePriority(LiveRange* lr, LiveUnit* lu)
 {
+  using Params::Machine::load_save_weight;
+  using Params::Machine::store_save_weight;
+  using Params::Machine::move_cost_weight;
+  using Params::Algorithm::loop_depth_weight;
+
   Priority unitPrio = 
-      PARAM_LDSave  * lu->uses 
-    + PARAM_STRSave * lu->defs 
-    - PARAM_MVCost  * lu->need_store;
-  unitPrio *= pow(PARAM_LoopDepthWeight, depths[id(lu->block)]);
+      load_save_weight  * lu->uses 
+    + store_save_weight * lu->defs 
+    - move_cost_weight  * lu->need_store;
+  unitPrio *= pow(loop_depth_weight, Globals::depths[id(lu->block)]);
 
   //treat load loop cost separte in case we can move it up from a loop
   int loadLoopDepth = LiveUnit_LoadLoopDepth(lr, lu);
-  unitPrio -=   (PARAM_MVCost  * lu->need_load)
-                * pow(PARAM_LoopDepthWeight, loadLoopDepth);
+  unitPrio -=   (move_cost_weight * lu->need_load)
+                * pow(loop_depth_weight, loadLoopDepth);
   return unitPrio;
 }
 
@@ -482,7 +493,7 @@ bool LiveUnit_CanMoveLoad(LiveRange* lr, LiveUnit* lu)
   {
     if(LiveRange_ContainsBlock(lr, e->pred)) lrPreds++;
   }
-  return (lrPreds > 0 && PARAM_MoveLoadsAndStores);
+  return (lrPreds > 0 && Params::Algorithm::move_loads_and_stores);
 }
 
 }//end anonymous namespace
@@ -588,7 +599,7 @@ void LiveRange_AssignColor(LiveRange* lr)
     mBlkIdSSAName_Color[id(unit->block)][lr->orig_lrid] = color;
 
     // ----------------  LOAD STORE OPTIMIZATION -----------------
-    if(PARAM_MoveLoadsAndStores)
+    if(Params::Algorithm::move_loads_and_stores)
     {
       if(unit->need_load)
       {
@@ -608,7 +619,8 @@ void LiveRange_AssignColor(LiveRange* lr)
         //chow method, or if we are using chow method and there is at
         //least one predecessor block that is not part of the live
         //range
-        bool moveit = (PARAM_EnhancedCodeMotion || lrPreds > 0);
+        bool moveit = 
+          (Params::Algorithm::enhanced_code_motion || lrPreds > 0);
 
         if(moveit) 
         {
@@ -652,7 +664,8 @@ void LiveRange_AssignColor(LiveRange* lr)
         //chow method, or if we are using chow method and there is at
         //least one successor block that is not part of the live
         //range
-        bool moveit = (PARAM_EnhancedCodeMotion || lrSuccs > 0);
+        bool moveit = 
+          (Params::Algorithm::enhanced_code_motion || lrSuccs > 0);
 
         if(moveit)
         {
@@ -878,12 +891,12 @@ LRTuple LiveRange_Split(LiveRange* origlr,
   LRTuple ret;
   ret.fst = newlr; ret.snd = origlr;
 
-  if(DEBUG_DotDumpLR && DEBUG_DotDumpLR == newlr->orig_lrid)
+  if(Debug::dot_dump_lr && Debug::dot_dump_lr == newlr->orig_lrid)
   {
     char fname[32] = {0};
     sprintf(fname, "tmp_%d_%d.dot", newlr->orig_lrid, newlr->id);
     dot_dump_lr(newlr, fname);
-    DEBUG_WatchLRIDs.push_back(newlr->id);
+    Debug::dot_dumped_lrids.push_back(newlr->id);
   }
   return ret;
 }

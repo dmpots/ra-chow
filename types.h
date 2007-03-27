@@ -9,13 +9,13 @@
 #define __GUARD_TYPES_H
 #include <vector>
 
-typedef Unsigned_Int Register;
-typedef Unsigned_Int Color;
-typedef Unsigned_Int Variable;
-typedef Unsigned_Int MemoryLocation;
-typedef Unsigned_Int LRID;
-typedef Unsigned_Int LOOPVAR;
-typedef Unsigned_Int RegisterClass;
+typedef unsigned int Register;
+typedef unsigned int Color;
+typedef unsigned int Variable;
+typedef unsigned int MemoryLocation;
+typedef unsigned int LRID;
+typedef unsigned int LOOPVAR;
+typedef unsigned int RegisterClass;
 
 //simple switch to say where to insert an instruction
 enum InstInsertLocation {BEFORE_INST, AFTER_INST};

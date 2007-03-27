@@ -20,7 +20,7 @@
 #include <utility>
 
 #include "chow.h"
-#include "chow_params.h"
+#include "params.h"
 #include "live_range.h"
 #include "union_find.h"
 #include "reach.h"
@@ -40,25 +40,7 @@ Arena  chow_arena;
 BB_Stats bb_stats;
 Unsigned_Int** mBlkIdSSAName_Color;
 Variable GBL_fp_origname;
-Unsigned_Int* depths; //loop nesting depth
 Chow_Stats chowstats = {0};
-
-/* allocation parameters */
-bool         PARAM_MoveLoadsAndStores;
-bool         PARAM_EnhancedCodeMotion;
-float        PARAM_LoopDepthWeight;
-unsigned int PARAM_BBMaxInsts;
-unsigned int PARAM_NumMachineRegs;
-bool         PARAM_EnableRegisterClasses;
-float        PARAM_MVCost = 1.0;
-float        PARAM_LDSave = 1.0;
-float        PARAM_STRSave = 1.0;
-unsigned int PARAM_NumReservedRegs = 2;
-bool         PARAM_ForceMinimumRegisterCount;
-
-/* allocation debugging */
-unsigned int DEBUG_DotDumpLR = 0; //use to dump a lr and its splits
-std::vector<unsigned int> DEBUG_WatchLRIDs; //lrids that were dotdumped
 
 /* locals */
 static LRID* lr_name_map;
@@ -234,7 +216,7 @@ void InitChow()
   GBL_fp_origname = Frame_GetRegFP(frame_op);
 
   //clear out edge extensions if needed
-  if(PARAM_MoveLoadsAndStores)
+  if(Params::Algorithm::move_loads_and_stores)
   {
     Block* b;
     Edge* e;
@@ -306,7 +288,7 @@ void LiveRange_BuildInitialSSA()
   //create a mapping from ssa names to live range ids
   CreateLiveRangeNameMap(uf_arena);
   ConvertLiveInNamespaceSSAToLiveRange();
-  if(PARAM_EnableRegisterClasses) //classes are by type
+  if(Params::Machine::enable_register_classes)
   {
     RegisterClass_CreateLiveRangeTypeMap(uf_arena,
                                        clrInitial,
@@ -599,7 +581,7 @@ void RenameRegisters()
 
   //if we are to optimize positions of loads and stores, do so after
   //assigning registers
-  if(PARAM_MoveLoadsAndStores)
+  if(Params::Algorithm::move_loads_and_stores)
   {
     debug("moving loads and stores to \"optimal\" position");
     MoveLoadsAndStores();
@@ -1065,7 +1047,7 @@ BB_Stats Compute_BBStats(Arena arena, Unsigned_Int variable_count)
  * make sure that number is fewer than the number of machine registers
  * we are given.
  *
- * if PARAM_ForceMinimumRegisterCount is enabled then we will modify
+ * if ForceMinimumRegisterCount is enabled then we will modify
  * the number of machine registers.
  ***/
 void CheckRegisterLimitFeasibility()
@@ -1074,9 +1056,9 @@ void CheckRegisterLimitFeasibility()
   Inst* inst;
   Operation** op;
   Register* reg;
-  Unsigned_Int cRegUses;
-  Unsigned_Int cRegDefs;
-  Unsigned_Int cRegMax = 0;
+  int cRegUses;
+  int cRegDefs;
+  int cRegMax = 0;
 
   ForAllBlocks(b)
   {
@@ -1100,14 +1082,14 @@ void CheckRegisterLimitFeasibility()
       }
     } 
   }
-  if(cRegMax > PARAM_NumMachineRegs)
+  if(cRegMax > Params::Machine::num_registers)
   {
-    if(PARAM_ForceMinimumRegisterCount)
+    if(Params::Program::force_minimum_register_count)
     {
-      PARAM_NumMachineRegs = max(cRegMax,4); //4 is my minimum
+      Params::Machine::num_registers = max(cRegMax,4); //4 is my minimum
       fprintf(stderr, 
       "Adjusting the number of machine registers "
-      "to permit allocation: %d\n", PARAM_NumMachineRegs);
+      "to permit allocation: %d\n", Params::Machine::num_registers);
     }
     else
     {
@@ -1116,7 +1098,7 @@ void CheckRegisterLimitFeasibility()
 "Impossible allocation.\n\
 You asked me to allocate with %d registers, but I found an operation\n\
 that needs %d registers. Sorry, but this is a research compiler not \n\
-a magic wand.\n", PARAM_NumMachineRegs, cRegMax);
+a magic wand.\n", Params::Machine::num_registers, cRegMax);
           exit(EXIT_FAILURE);
     }
   }
@@ -1188,7 +1170,7 @@ void MoveLoadsAndStores()
         //split edge if needed
         Block* blkLD = edg->pred;
         Block* blkST = edg->succ;
-        if(need_split || PARAM_EnhancedCodeMotion)
+        if(need_split || Params::Algorithm::enhanced_code_motion)
         {
           Block* blkT = SplitEdge(edg->pred, edg->succ);
           blkLD = blkST = blkT;
@@ -1200,7 +1182,7 @@ void MoveLoadsAndStores()
         //edge. This will only happen when the live range is split and
         //both parts get a register. if we find this situation then we
         //replace the load store with a register to register copy
-        if(PARAM_EnhancedCodeMotion)
+        if(Params::Algorithm::enhanced_code_motion)
         {
           CopyList rr_copies;
           vector<LI> removals;

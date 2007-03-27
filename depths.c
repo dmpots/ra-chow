@@ -1,4 +1,5 @@
-#include "ra.h"
+#include "globals.h"
+#include "depths.h"
 static Arena depth_arena;
 static DJ_GRAPH_INFO *DJ_graph_info;
 static Unsigned_Int max_level = 0;

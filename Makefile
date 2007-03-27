@@ -13,9 +13,13 @@ SRCFILES=union_find.c\
          cfg_tools.c\
          dot_dump.c\
 
-OBJS=${SRCFILES:.c=.o}
-MAIN=chow.main.o
+CPPSRCFILES=globals.cc\
+         params.cc\
+         debug.cc\
 
+OBJS=${SRCFILES:.c=.o}
+OBJS+=${CPPSRCFILES:.cc=.o}
+MAIN=chow.main.o
 
 #use different load flags depending on which compiler we use
 #LDFLAGS = -pg
@@ -25,10 +29,10 @@ MAIN=chow.main.o
 # compiler to use is made above.  For what we need here, the
 # CFLAGS are the same for both cc and gcc.
 #
-CFLAGS  =    -Wall -O3 
+#CFLAGS  =    -Wall -O3 
 #CFLAGS =    -Wall -O3 -D__DEBUG 
 #CFLAGS = -g -Wall     -D__DEBUG 
-#CFLAGS = -g -Wall
+CFLAGS = -g -Wall
 
 
 #
@@ -115,11 +119,15 @@ $(SSA_DUMP): ssa_dump.o
 	@ $(CC) $(CFLAGS) $(INCLUDES) -o $(<:c=o) -c $< 
 	@ echo " -- make $@ (Done)"
 
+.cc.o: 
+	@ $(CC) $(CFLAGS) $(INCLUDES) -o $(<:cc=o) -c $< 
+	@ echo " -- make $@ (Done)"
+
 clean:
-	@ rm -f $(OBJS) $(MAIN)
 	@ rm -f *.o
 	@ rm -f $(ALL)
 	@ echo " -- make clean (Done)"
+#	@ rm -f $(OBJS) $(MAIN)
 
 sync:
 	@rsync -uv -essh --progress --exclude-from=.rsync-excludes \

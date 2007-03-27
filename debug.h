@@ -9,6 +9,7 @@
 #ifndef __DEBUG_H
 #define __DEBUG_H
 #include<vector>
+#include "types.h"
 
 #ifdef __DEBUG
 #define debug(...) \
@@ -28,6 +29,9 @@
 #define bname(b) (Label_Get_String((b)->labels->label))
 #define oname(op) ((opcode_specs[(op)->opcode]).opcode)
 
-extern std::vector<unsigned int> DEBUG_WatchLRIDs;
+namespace Debug {
+  extern std::vector<LRID> dot_dumped_lrids;
+  extern LRID dot_dump_lr;
+}
 
 #endif /* __DEBUG_H */

@@ -2,10 +2,11 @@
 /*-----------------------MODULE INCLUDES-----------------------*/
 #include <Shared.h>
 #include "chow.h"
-#include "chow_params.h"
+#include "params.h"
 #include "cleave.h"
 #include "debug.h"
-#include "ra.h" //for computing loop nesting depth
+#include "depths.h" //for computing loop nesting depth
+#include "globals.h" 
 #include "rc.h" //RegisterClass definitions 
 #include "dot_dump.h"
 
@@ -87,25 +88,29 @@ static const Boolean B = FALSE;
  * to allow for different types of parameters.
  *
  */
+using Params::Machine::num_registers;
+using Params::Machine::enable_register_classes;
+using Params::Algorithm::bb_max_insts;
+using Params::Algorithm::loop_depth_weight;
+using Params::Algorithm::move_loads_and_stores;
+using Params::Algorithm::enhanced_code_motion;
+using Params::Program::force_minimum_register_count;
 static Param_Details param_table[] = 
 {
-  {'b', process_, 0,F,B, &PARAM_BBMaxInsts, INT_PARAM,
+  {'b', process_, 0,F,B, &bb_max_insts, INT_PARAM,
                                                   HELP_BBMAXINSTS},
-  {'r', process_, 32,F,B, &PARAM_NumMachineRegs, INT_PARAM,
+  {'r', process_, 32,F,B, &num_registers, INT_PARAM,
                                                   HELP_NUMREGISTERS},
-  {'d', process_, 0,10.0,B,&PARAM_LoopDepthWeight, FLOAT_PARAM, 
+  {'d', process_, 0,10.0,B,&loop_depth_weight, FLOAT_PARAM, 
                                                   HELP_LOOPDEPTH},
-  {'p', process_, I,F,FALSE,&PARAM_EnableRegisterClasses, BOOL_PARAM, 
+  {'p', process_, I,F,FALSE,&enable_register_classes, BOOL_PARAM, 
                                                   HELP_REGISTERCLASSES},
-  {'m', process_, I,F,FALSE,&PARAM_MoveLoadsAndStores, BOOL_PARAM, 
+  {'m', process_, I,F,FALSE,&move_loads_and_stores, BOOL_PARAM, 
                                                   HELP_LOADSTOREMOVEMENT},
-  {'e', process_, I,F,FALSE,&PARAM_EnhancedCodeMotion, BOOL_PARAM, 
-                                                  HELP_ENHANCEDCODEMOTION},
-  {'f', process_, I,F,FALSE,&PARAM_ForceMinimumRegisterCount, BOOL_PARAM, 
-                                             HELP_FORCEMINIMUMREGISTERCOUNT}
-//  {'m', process_, I,1.0,B, &mMVCost, FLOAT_PARAM, HELP_MVCOST},
-//  {'l', process_, I,1.0,B, &mLDSave, FLOAT_PARAM, HELP_LDSAVE},
-//  {'s', process_, I,1.0,B,&mSTRSave, FLOAT_PARAM, HELP_STRSAVE},
+  {'e', process_, I,F,FALSE,&enhanced_code_motion, BOOL_PARAM, 
+                                                 HELP_ENHANCEDCODEMOTION},
+  {'f', process_, I,F,FALSE,&force_minimum_register_count, BOOL_PARAM, 
+                                           HELP_FORCEMINIMUMREGISTERCOUNT}
 };
 const unsigned int NPARAMS = (sizeof(param_table) / sizeof(param_table[0]));
 const char* PARAMETER_STRING  = ":b:r:d:mpef";
@@ -181,27 +186,26 @@ int main(Int argc, Char **argv)
   chow_arena = Arena_Create(); 
 
   //split basic blocks to desired size
-  InitCleaver(chow_arena, PARAM_BBMaxInsts);
+  InitCleaver(chow_arena, Params::Algorithm::bb_max_insts);
   CleaveBlocks();
   
   //initialize the register class data structures 
   InitRegisterClasses(chow_arena, 
-                      PARAM_NumMachineRegs,
-                      PARAM_EnableRegisterClasses,
-                      PARAM_NumReservedRegs);
+                      Params::Machine::num_registers,
+                      Params::Machine::enable_register_classes,
+                      Params::Algorithm::num_reserved_registers);
 
   //compute initial live ranges
   LiveRange_BuildInitialSSA();
-  //DotDumpLR(DEBUG_DotDumpLR);
   //DumpInitialLiveRanges();
-  if(DEBUG_DotDumpLR){DotDumpLR(DEBUG_DotDumpLR, "initial");}
+  if(Debug::dot_dump_lr){DotDumpLR(Debug::dot_dump_lr, "initial");}
 
   //compute loop nesting depth needed for computing priorities
-  find_nesting_depths(chow_arena);
+  find_nesting_depths(chow_arena); Globals::depths = depths;
   
   //run the priority algorithm
   RunChow();
-  if(DEBUG_DotDumpLR){DotDumpFinalLRs(DEBUG_DotDumpLR);}
+  if(Debug::dot_dump_lr){DotDumpFinalLRs(Debug::dot_dump_lr);}
   RenameRegisters();
  
   //Dump(); 
@@ -312,7 +316,8 @@ int process_(Param_Details* param, char* arg)
  ***/
 void EnforceParameterConsistency()
 {
-  if(PARAM_EnhancedCodeMotion) PARAM_MoveLoadsAndStores = true;
+  if(Params::Algorithm::enhanced_code_motion) 
+      Params::Algorithm::move_loads_and_stores = true;
 }
 
 /*
@@ -451,9 +456,9 @@ void DotDumpLR(LRID lrid, const char* tag)
 }
 void DotDumpFinalLRs(LRID lrid)
 {
-  DotDumpLR(DEBUG_DotDumpLR, "final");
-  for(unsigned int i = 0; i < DEBUG_WatchLRIDs.size(); i++)
-    DotDumpLR(DEBUG_WatchLRIDs[i], "final");
+  DotDumpLR(Debug::dot_dump_lr, "final");
+  for(unsigned int i = 0; i < Debug::dot_dumped_lrids.size(); i++)
+    DotDumpLR(Debug::dot_dumped_lrids[i], "final");
 }
 
 //define this to avoid a compiler warning for unused functions
