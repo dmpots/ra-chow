@@ -37,7 +37,7 @@ typedef unsigned int LOOPVAR;
 
 /* globals */
 LRList Chow::live_ranges;
-LRList live_ranges = Chow::live_ranges; //FIXME: HACK
+//LRList live_ranges = Chow::live_ranges; //FIXME: HACK
 Arena  chow_arena;
 BB_Stats bb_stats;
 Unsigned_Int** mBlkIdSSAName_Color;
@@ -114,27 +114,30 @@ namespace {
  ***/
 void RunChow()
 {
+  using Chow::live_ranges;
+
   LiveRange* lr;
   LRSet constr_lrs;
   LRSet unconstr_lrs;
 
-
   //allocate any memory needed by the chow allocator
   InitChow();
 
-      
   //separate unconstrained live ranges
-  LRList_ForAllCandidates(&live_ranges, lr)
+  for(LRList::size_type i = 0; i < live_ranges.size(); i++)
   {
-    //lr = live_ranges[i];
+    lr = live_ranges[i];
+    //only look at candidates
+    if(! lr->is_candidate) continue;
+
     if(LiveRange_Constrained(lr))
     {
-      LRSet_Add(&constr_lrs, lr);
+      constr_lrs.insert(lr);
       debug("Constrained LR:    %d", lr->id);
     }
     else
     {
-      LRSet_Add(&unconstr_lrs, lr);
+      unconstr_lrs.insert(lr);
       debug("UN-Constrained LR: %d", lr->id);
     }
   }
@@ -158,11 +161,13 @@ void RunChow()
 
   //assign registers to unconstrained live ranges
   debug("assigning unconstrained live ranges colors");
-  //while(!LRList_Empty(unconstr_lrs))
   //some may no longe be candidates now
-  LRSet_ForAllCandidates(&unconstr_lrs, lr)
+  for(LRSet::iterator i = 
+      unconstr_lrs.begin(); i != unconstr_lrs.end(); i++)
   {
-    //lr = LRList_Pop(&unconstr_lrs);
+    lr = *i;
+    if(!lr->is_candidate) continue;
+
     debug("choose color for unconstrained LR: %d", lr->id);
     LiveRange_AssignColor(lr);
     debug("LR: %d is given color:%d", lr->id, lr->color);
@@ -208,8 +213,7 @@ void InitChow()
   //frame pointer
   Operation* frame_op = get_frame_operation();
   fp_lrid = SSAName2LRID(frame_op->arguments[frame_op->referenced]);
-  LiveRange_MarkNonCandidateAndDelete(live_ranges[fp_lrid]);
-  //LRList_Remove(&live_ranges, live_ranges[fp_lrid]);
+  LiveRange_MarkNonCandidateAndDelete(Chow::live_ranges[fp_lrid]);
 
 
   //initialize the stack pointer so that we have a correct value when
@@ -248,6 +252,8 @@ void InitChow()
  */
 void LiveRange_BuildInitialSSA()
 {
+  using Chow::live_ranges;
+
   //build ssa
   Unsigned_Int ssa_options = 0;
   ssa_options |= SSA_PRUNED;
@@ -397,9 +403,10 @@ void LiveRange_BuildInitialSSA()
 
 
   //compute where the loads and stores need to go in the live range
-  LRList_ForAll(&live_ranges, lr)
-    LiveRange_MarkLoadsAndStores(lr);
-  LiveRange_DDumpAll(&live_ranges);
+  for(LRList::size_type i = 0; i < live_ranges.size(); i++)
+    LiveRange_MarkLoadsAndStores(live_ranges[i]);
+
+  Debug::LiveRange_DDumpAll(&live_ranges);
 }
 
 //make sure that if we have already added a live unit for this lrid
@@ -412,7 +419,7 @@ Block* b)
 {
   if(VectorSet_Member(set,lrid))
   {
-    LiveUnit* unit = LiveRange_LiveUnitForBlock(live_ranges[lrid],b);
+    LiveUnit* unit = LiveRange_LiveUnitForBlock(Chow::live_ranges[lrid],b);
     //debug("already present: %d, orig_name: %d new_orig: %d  block: %s (%d)", 
    //                       lrid, unit->orig_name, v, bname(b), id(b));
     assert(unit->orig_name == v);
@@ -699,7 +706,7 @@ Register GetMachineRegAssignment(Block* b, LRID lrid)
   if(color == NO_COLOR)
     return REG_UNALLOCATED;
 
-  RegisterClass rc = LiveRange_RegisterClass(live_ranges[lrid]);
+  RegisterClass rc = LiveRange_RegisterClass(Chow::live_ranges[lrid]);
   return RegisterClass_MachineRegForColor(rc, color);
 }
 /*
@@ -712,7 +719,7 @@ Register GetMachineRegAssignment(Block* b, LRID lrid)
 void Insert_Load(LRID lrid, Inst* before_inst, Register dest, 
                                                Register base)
 {
-  LiveRange* lr = live_ranges[lrid];
+  LiveRange* lr = Chow::live_ranges[lrid];
   Expr tag = LiveRange_GetTag(lr);
 
   Opcode_Names opcode = LiveRange_LoadOpcode(lr);
@@ -793,7 +800,7 @@ static Inst* Inst_CreateLoad(Opcode_Names opcode,
 Inst* Insert_Store(LRID lrid, Inst* around_inst, Register src,
                    Register base, InstInsertLocation loc)
 {
-  LiveRange* lr = live_ranges[lrid];
+  LiveRange* lr = Chow::live_ranges[lrid];
   Expr tag = LiveRange_GetTag(lr);
 
   MemoryLocation offset = LiveRange_MemLocation(lr);

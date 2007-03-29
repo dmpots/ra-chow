@@ -79,6 +79,7 @@ namespace {
   Boolean LiveRange_InterferesWith(LiveRange* lr1, LiveRange* lr2);
   Priority LiveRange_OrigComputePriority(LiveRange* lr);
   Priority LiveRange_ComputePriority(LiveRange* lr);
+  void UpdateConstrainedLists(LRSet* , LRSet* , LRSet* ); 
 }
 
 
@@ -116,6 +117,15 @@ Chain_ForAllUses(_runner, v)\
 
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
+
+LiveRange::iterator LiveRange::begin() 
+{
+  return units->begin();
+}
+LiveRange::iterator LiveRange::end() 
+{
+  return units->end();
+}
 
 
 /*
@@ -192,10 +202,10 @@ void LiveRange_AllocLiveRanges(Arena arena,
 void LiveRange_AddInterference(LiveRange* lr1, LiveRange* lr2)
 {
   //lr2 --interfer--> lr1
-  LRSet_Add(lr1->fear_list, lr2);
+  lr1->fear_list->insert(lr2);
 
   //lr1 --interfer--> lr2
-  LRSet_Add(lr2->fear_list, lr1);
+  lr2->fear_list->insert(lr1);
 }
 
 /*
@@ -407,9 +417,9 @@ void LiveRange_SplitNeighbors(LiveRange* lr,
   //our neighbors are the live ranges we interfere with
   LiveRange* intf_lr;
   LRTuple lr_tup;
-  while(!LRList_Empty(worklist))
+  while(!worklist.empty())
   {
-    intf_lr = LRList_Pop(&worklist);
+    intf_lr = worklist.back(); worklist.pop_back();
     //only check allocation candidates, may not be a candidate if it
     //has already been assigned a color
     if(!(intf_lr->is_candidate)) continue;
@@ -434,11 +444,11 @@ void LiveRange_SplitNeighbors(LiveRange* lr,
         //interferes with the live range we assigned a color to then 
         //add it to the work list because it may need to be split more
         if(LiveRange_InterferesWith(lr_tup.snd, lr))
-          LRList_Add(&worklist, lr_tup.snd);
+          worklist.push_back(lr_tup.snd)
 
         debug("split complete for LR: %d", intf_lr->id);
-        LiveRange_DDump(lr_tup.fst);
-        LiveRange_DDump(lr_tup.snd);
+        Debug::LiveRange_DDump(lr_tup.fst);
+        Debug::LiveRange_DDump(lr_tup.snd);
       }
     }
   }
@@ -656,8 +666,12 @@ LiveRange* ComputePriorityAndChooseTop(LRSet* lrs)
   LiveRange* top_lr = NULL;
   LiveRange* lr = NULL;
   
-  LRSet_ForAllCandidates(lrs, lr)
+  //look at all candidates
+  for(LRSet::iterator i = lrs->begin(); i != lrs->end(); i++)
   {
+    lr = *i;
+    if(!lr->is_candidate) continue;
+
     //priority has never been computed
     if(lr->priority == UNDEFINED_PRIORITY)
     {
@@ -688,275 +702,10 @@ LiveRange* ComputePriorityAndChooseTop(LRSet* lrs)
   if(top_lr != NULL)
   {
     debug("top priority is %.3f LR: %d", top_prio, top_lr->id);
-    LRSet_Remove(lrs, top_lr);
+    lrs->erase(top_lr);
   }
   return top_lr;
 }
-
-
-/* FIXME: MOVE THESE */
-/*
- *==============
- * LRList_Add()
- *==============
- *
- ***/
-void LRList_Add(LRList* lrs, LiveRange* lr)
-{
-  lrs->push_back(lr);
-}
-
-/*
- *==============
- * LRList_Empty()
- *==============
- *
- ***/
-Boolean LRList_Empty(LRList lrs)
-{
-  return lrs.empty();
-}
-
-
-/*
- *==============
- * LRList_Size()
- *==============
- *
- ***/
-Unsigned_Int LRList_Size(LRList* lrs)
-{
-  return lrs->size();
-}
-
-/*
- *==============
- * LRList_Pop()
- *==============
- *
- ***/
-LiveRange* LRList_Pop(LRList* lrs)
-{
-  LiveRange* lr = lrs->back();
-  lrs->pop_back();
-  return lr;
-}
-
-
-/*
- *================================
- * LRSet_UpdateConstrainedLists()
- *================================
- * Makes sure that the live ranges are in the constrained lists if
- * they are constrained. This is used to update the lists after a live
- * range split for the live ranges that interfere with both the old
- * and the new live range.
- *
- ***/
-void LRSet_UpdateConstrainedLists(LRSet* for_lrs, 
-                                   LRSet* constr_lrs,
-                                   LRSet* unconstr_lrs)
-{
-  LiveRange* lr;
-  LRSet_ForAllCandidates(for_lrs, lr)
-  {
-      if(LiveRange_Constrained(lr))
-      {
-        debug("ensuring LR: %d is in constr", lr->id);
-        LRSet_Remove(unconstr_lrs, lr);
-        LRSet_Add(constr_lrs, lr);
-      }
-  }
-}
-
-
-/*
- *================================
- * LRList_Remove()
- *================================
- *
- ***/
-void LRList_Remove(LRList* lrs, LiveRange* lr)
-{
-  LRList::iterator elem;
-  elem = find(lrs->begin(), lrs->end(), lr);
-  if(elem != lrs->end())
-  {
-    lrs->erase(elem);
-  }
-}
-
-
-/*
- *================================
- * LRList_AddUnique()
- *================================
- *
- ***/
-void LRList_AddUnique(LRList* lrs, LiveRange* lr)
-{
-  LRList::iterator elem;
-  elem = find(lrs->begin(), lrs->end(), lr);
-  if(elem == lrs->end())
-  {
-    LRList_Add(lrs, lr);
-  }
-}
-
-
-/*
- *=============================
- * LRSet_Add()
- *=============================
- *
- ***/
-void LRSet_Add(LRSet* lrs, LiveRange* lr)
-{
-  lrs->insert(lr);
-}
-
-/*
- *=============================
- * LRSet_Remove()
- *=============================
- *
- ***/
-void LRSet_Remove(LRSet* lrs, LiveRange* lr)
-{
-  lrs->erase(lr);
-}
-
-/* <---- FIXME: END MOVE THESE */
-
-/* FIXME: MOVE THESE (debug) */
-/*
- *======================
- * LiveRange_DDumpAll()
- *======================
- *
- ***/
-void LiveRange_DDumpAll(LRList* lrs)
-{
-#ifdef __DEBUG
-  LiveRange_DumpAll(lrs);
-#endif
-}
-
-/*
- *======================
- * LiveRange_DumpAll()
- *======================
- *
- ***/
-void LiveRange_DumpAll(LRList* lrs)
-{
-  LiveRange* lr = NULL;
-  LRList_ForAll(lrs, lr)
-  {
-    LiveRange_Dump(lr);
-  }
-}
-
-
-/*
- *======================
- * LiveRange_DDump()
- *======================
- *
- ***/
-void LiveRange_DDump(LiveRange* lr)
-{
-#ifdef __DEBUG
-  LiveRange_Dump(lr);
-#endif
-}
-
-/*
- *======================
- * LiveRange_Dump()
- *======================
- *
- ***/
-static char* type_str[] = 
-  {"NO-TYPE",    /* NO_DEFS */
-   "INTEGER", /* INT_DEF */ 
-   "FLOAT", /* FLOAT_DEF */
-   "DOUBLE", /* DOUBLE_DEF */
-   "COMPLEX", /* COMPLEX_DEF */
-   "DCOMPLEX", /* DCOMPLEX_DEF */ 
-   "MULT-TYPE"};   /* MULT_DEFS */
-void LiveRange_Dump(LiveRange* lr)
-{
-
-  fprintf(stderr,"************ BEGIN LIVE RANGE DUMP **************\n");
-  fprintf(stderr,"LR: %d\n",lr->id);
-  fprintf(stderr,"type: %s\n",type_str[lr->type]);
-  fprintf(stderr,"color: %d\n", lr->color);
-  fprintf(stderr,"orig_lrid: %d\n", lr->orig_lrid);
-  fprintf(stderr,"candidate?: %c\n", lr->is_candidate ? 'T' : 'F');
-  fprintf(stderr,"forbidden colors: \n");
-    VectorSet_Dump(lr->forbidden);
-  fprintf(stderr, "BB LIST:\n");
-    Unsigned_Int b;
-    VectorSet_ForAll(b, lr->bb_list)
-    {
-      fprintf(stderr, "  %d\n", (b));
-    }
-
-  fprintf(stderr, "Live Unit LIST:\n");
-    LiveUnit* unit;
-    LiveRange_ForAllUnits(lr, unit)
-    {
-      LiveUnit_Dump(*i);
-    }
-
-  fprintf(stderr, "Interference List:\n");
-    LiveRange* intf_lr;
-    LiveRange_ForAllFears(lr,intf_lr)
-    {
-      fprintf(stderr, "  %d\n", (intf_lr)->id);
-    }
-
-
-  fprintf(stderr,"************* END LIVE RANGE DUMP ***************\n"); 
-}
-
-
-/*
- *======================
- * LiveUnit_DDump()
- *======================
- *
- ***/
-void LiveUnit_DDump(LiveUnit* unit)
-{
-#ifdef __DEBUG
-  LiveUnit_Dump(unit);
-#endif
-}
-
-/*
- *======================
- * LiveUnit_Dump()
- *======================
- *
- ***/
-void LiveUnit_Dump(LiveUnit* unit)
-{
-  fprintf(stderr,"LR Unit: %s (%d)\n",bname(unit->block),
-                                      id(unit->block));
-  fprintf(stderr,"  Need Load: %c\n",unit->need_load ? 'Y' : 'N');
-  fprintf(stderr,"  Need Store: %c\n",unit->need_store ? 'Y' : 'N');
-  fprintf(stderr,"  Uses: %d\n",unit->uses);
-  fprintf(stderr,"  Defs: %d\n",unit->defs);
-  fprintf(stderr,"  Start With Def: %c\n",unit->start_with_def?'Y':'N');
-  fprintf(stderr,"  SSA    Name: %d\n",unit->orig_name);
-  fprintf(stderr,"  Source Name: %d\n",SSA_name_map[unit->orig_name]);
-}
-
-/* <---- FIXME: END MOVE THESE (debug) */
-
-
 
 
 /*------------------INTERNAL MODULE FUNCTIONS--------------------*/
@@ -1091,10 +840,10 @@ Boolean LiveRange_InterferesWith(LiveRange* lr1, LiveRange* lr2)
 void LiveRange_RemoveInterference(LiveRange* lr1, LiveRange* lr2)
 {
     //remove lr2 from lr1
-    LRSet_Remove(lr1->fear_list, lr2);
+    lr1->fear_list->erase(lr2);
 
     //remove lr1 from lr2
-    LRSet_Remove(lr2->fear_list, lr1);
+    lr2->fear_list->erase(lr1);
 }
 
 
@@ -1343,7 +1092,7 @@ LRTuple LiveRange_Split(LiveRange* origlr,
 
   debug("adding block: %s to  lr'", bname(startunit->block));
   LiveRange_TransferLiveUnit(newlr, origlr, startunit);
-  LRList_Add(&Chow::live_ranges, newlr);
+  Chow::live_ranges.push_back(newlr);
   debug("ADDED LR: %d, size: %d", newlr->id, (int)Chow::live_ranges.size());
 
   //keep a queue of successors that we may add to the new live range
@@ -1446,22 +1195,22 @@ void LiveRange_UpdateAfterSplit(LiveRange* newlr,
   set_intersection(newlr->fear_list->begin(), newlr->fear_list->end(),
                 origlr->fear_list->begin(), origlr->fear_list->end(),
                 inserter(updates,updates.begin()));
-  LRSet_UpdateConstrainedLists(&updates,constr_lrs,unconstr_lrs);
+  UpdateConstrainedLists(&updates,constr_lrs,unconstr_lrs);
   //also, need to update the new and original live range positions
   //updates.insert(newlr);
   //updates.insert(origlr);
   if(LiveRange_Constrained(newlr))
   {
-    LRSet_Add(constr_lrs, newlr);
+    constr_lrs->insert(newlr);
   }
   else
   {
-    LRSet_Add(unconstr_lrs, newlr);
+    unconstr_lrs->insert(newlr);
   }
   if(!LiveRange_Constrained(origlr))
   {
-    LRSet_Remove(constr_lrs, origlr);
-    LRSet_Add(unconstr_lrs, origlr);
+    constr_lrs->erase(origlr);
+    unconstr_lrs->insert(origlr);
   }
 
   //the need_load and need_store flags actually depend on the
@@ -1822,6 +1571,36 @@ VectorSet LiveRange_UsedColorSet(LiveRange* lr, Block* blk)
 {
   RegisterClass rc = LiveRange_RegisterClass(lr);
   return mRcBlkId_VsUsedColor[rc][id(blk)];
+}
+
+
+/*
+ *================================
+ * UpdateConstrainedLists()
+ *================================
+ * Makes sure that the live ranges are in the constrained lists if
+ * they are constrained. This is used to update the lists after a live
+ * range split for the live ranges that interfere with both the old
+ * and the new live range.
+ *
+ ***/
+void UpdateConstrainedLists(LRSet* for_lrs, 
+                                   LRSet* constr_lrs,
+                                   LRSet* unconstr_lrs)
+{
+  LiveRange* lr;
+  for(LRSet::iterator i = for_lrs->begin(); i != for_lrs->end(); i++)
+  {
+    lr = *i;
+    if(!lr->is_candidate) continue;
+
+    if(LiveRange_Constrained(lr))
+    {
+      debug("ensuring LR: %d is in constr", lr->id);
+      unconstr_lrs->erase(lr);
+      constr_lrs->insert(lr);
+    }
+  }
 }
 
 }//end anonymous namespace

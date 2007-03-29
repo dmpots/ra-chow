@@ -1,10 +1,12 @@
 #ifndef __GUARD_LIVE_RANGE_H
 #define __GUARD_LIVE_RANGE_H
 
+#include <Shared.h>
 #include <set>
 #include <list>
 #include <vector>
 #include "types.h"
+
 
 
 /* forward definition of a comparison object used by the std::set
@@ -34,6 +36,10 @@ struct LiveRange
   Def_Type type;
   RegisterClass rc;
   Expr tag;
+
+  typedef std::list<LiveUnit*>::iterator iterator;
+  LiveRange::iterator begin();
+  LiveRange::iterator end();
 };
 
 /* compares two live ranges for set container based in lrid */
@@ -46,9 +52,6 @@ struct LRcmp
 };
 
 
-/* convienient typedefs for live range containers */
-typedef std::vector<LiveRange*> LRList;
-typedef std::set<LiveRange*, LRcmp> LRSet;
 
 /*---------------------LIVE RANGE FUNCTIONS-------------------------*/
 void LiveRange_AllocLiveRanges(Arena, LRList&, Unsigned_Int);
@@ -93,51 +96,7 @@ struct edge_extension
 };
 
 
-
 /************************** FIXME *******************************/
-//FIXME: put this in a LRContainers file or something
-//LRList
-//HERE <-- moving these in live_range.c
-Boolean LRList_Empty(LRList lrs);
-void LRList_Add(LRList* lrs, LiveRange* lr);
-LiveRange* LRList_Pop(LRList* lrs);
-Unsigned_Int LRList_Size(LRList* lrs);
-void LRList_Remove(LRList* lrs, LiveRange* lr);
-void LRList_AddUnique(LRList* lrs, LiveRange* lr);
-
-//LRSet
-void LRSet_Add(LRSet* lrs, LiveRange* lr);
-void LRSet_Remove(LRSet* lrs, LiveRange* lr);
-void LRSet_UpdateConstrainedLists(LRSet* , LRSet* , LRSet* ); 
-
-
-#define LRList_ForAll(lrs, lr) \
-for (LRList::iterator i = ((lrs)->begin()); \
-     i != ((lrs)->end());\
-     i++) \
-   if(((lr) = *i) || TRUE) 
-
-#define LRList_ForAllCandidates(lrs, lr) \
-for (LRList::iterator i = ((lrs)->begin()); \
-     i != ((lrs)->end());\
-     i++) \
-   if(((lr) = *i) && lr->is_candidate) 
-
-#define LRSet_ForAllCandidates(lrs, lr) \
-for (LRSet::iterator i = ((lrs)->begin()); \
-     i != ((lrs)->end());\
-     i++) \
-   if(((lr) = *i) && lr->is_candidate) 
-
-
-
-//FIXME: put this in debug
-void LiveRange_DumpAll(LRList*);
-void LiveRange_DDumpAll(LRList* lrs);
-void LiveRange_Dump(LiveRange* lr);
-void LiveRange_DDump(LiveRange* lr);
-void LiveUnit_Dump(LiveUnit* );
-void LiveUnit_DDump(LiveUnit* unit);
 
 /* FIXME: put this somewhere good */
 /* constants */

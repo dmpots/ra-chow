@@ -29,9 +29,19 @@
 #define bname(b) (Label_Get_String((b)->labels->label))
 #define oname(op) ((opcode_specs[(op)->opcode]).opcode)
 
+//forward defs
+struct LiveUnit;
+struct LiveRange;
 namespace Debug {
   extern std::vector<LRID> dot_dumped_lrids;
   extern LRID dot_dump_lr;
+
+  void LiveRange_DumpAll(LRList*);
+  void LiveRange_DDumpAll(LRList* lrs);
+  void LiveRange_Dump(LiveRange* lr);
+  void LiveRange_DDump(LiveRange* lr);
+  void LiveUnit_Dump(LiveUnit* );
+  void LiveUnit_DDump(LiveUnit* unit);
 }
 
 #endif /* __DEBUG_H */
