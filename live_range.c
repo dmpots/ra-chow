@@ -19,6 +19,7 @@
 #include "rc.h" //RegisterClass definitions 
 #include "cfg_tools.h" //control graph manipulation utilities
 #include "dot_dump.h" //control graph manipulation utilities
+#include "spill.h"
 
 /*------------------MODULE LOCAL DEFINITIONS-------------------*/
 
@@ -27,7 +28,39 @@ unsigned int Chow::liverange_count;
 
 namespace {
 /* local constants */
-  const Expr TAG_UNASSIGNED = (Expr) -1;
+  const Opcode_Names load_opcodes[] =  /* load */
+    {NOP,    /* NO_DEFS */
+    iSLDor, /* INT_DEF */ 
+    fSLDor, /* FLOAT_DEF */
+    dSLDor, /* DOUBLE_DEF */
+    cSLDor, /* COMPLEX_DEF */
+    qSLDor, /* DCOMPLEX_DEF */ 
+    NOP};   /* MULT_DEFS */
+  const Opcode_Names store_opcodes[] = /* store */
+    {NOP,    /* NO_DEFS */
+    iSSTor, /* INT_DEF */ 
+    fSSTor, /* FLOAT_DEF */
+    dSSTor, /* DOUBLE_DEF */
+    cSSTor, /* COMPLEX_DEF */
+    qSSTor, /* DCOMPLEX_DEF */ 
+    NOP};   /* MULT_DEFS */
+  const Opcode_Names copy_opcodes[] = /* copy */
+    {NOP,    /* NO_DEFS */
+    i2i, /* INT_DEF */ 
+    f2f, /* FLOAT_DEF */
+    d2d, /* DOUBLE_DEF */
+    c2c, /* COMPLEX_DEF */
+    q2q, /* DCOMPLEX_DEF */ 
+    NOP};   /* MULT_DEFS */
+  const unsigned int alignment_size[] = 
+  {0, /* NO_DEFS */
+   sizeof(Int), /* INT_DEF */ 
+   sizeof(float), /* FLOAT_DEF */
+   sizeof(Double), /* DOUBLE_DEF */
+   2*sizeof(Double), /* COMPLEX_DEF */ //TODO:figire sizeof(Complex)
+   4*sizeof(Double),/* DCOMPLEX_DEF */ 
+   0};/* MULT_DEFS */
+
 
 /* local variables */
   Arena lr_arena;
@@ -37,6 +70,7 @@ namespace {
   VectorSet tmpbbset;
   VectorSet no_bbs;
   MemoryLocation* lr_mem_map;
+
 
 /* local types */
   /* hold pairs of live range */
@@ -83,7 +117,7 @@ namespace {
 }
 
 
-
+//FIXME: get rid of control flow macros
 //iterate through interference list. if stmt used as a cheat for its
 //side effect 
 #define LiveRange_ForAllFears(lr, f_lr) \
@@ -118,11 +152,24 @@ Chain_ForAllUses(_runner, v)\
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
 
-LiveRange::iterator LiveRange::begin() 
+/*
+ *============================
+ * LiveRange::begin()
+ *============================
+ * returns an iterator to the beginning of the live unit sequence
+ ***/
+LiveRange::iterator LiveRange::begin() const
 {
   return units->begin();
 }
-LiveRange::iterator LiveRange::end() 
+
+/*
+ *============================
+ * LiveRange::end()
+ *============================
+ * returns an iterator to the end of the live unit sequence
+ */
+LiveRange::iterator LiveRange::end() const
 {
   return units->end();
 }
@@ -178,13 +225,6 @@ void LiveRange_AllocLiveRanges(Arena arena,
   VectorSet_Clear(no_bbs);
 
 
-  //allocate a mapping from live range to a memory location. this is
-  //used for spilling
-  lr_mem_map = (MemoryLocation*) Arena_GetMemClear(arena, 
-       sizeof(MemoryLocation) * Chow::liverange_count);
-  for(i = 0; i < Chow::liverange_count; i++)
-    lr_mem_map[i] = MEM_UNASSIGNED;
-
   unsigned int seed = time(NULL);
   //seed = 1154486980;
   srand(seed);
@@ -199,80 +239,78 @@ void LiveRange_AllocLiveRanges(Arena arena,
  *=============================
  *
  ***/
-void LiveRange_AddInterference(LiveRange* lr1, LiveRange* lr2)
+void LiveRange::AddInterference(LiveRange* lr2)
 {
   //lr2 --interfer--> lr1
-  lr1->fear_list->insert(lr2);
+  fear_list->insert(lr2);
 
   //lr1 --interfer--> lr2
-  lr2->fear_list->insert(lr1);
+  lr2->fear_list->insert(this);
 }
 
 /*
- *=========================
- * LiveRange_Constrained()
- *=========================
+ *============================
+ * LiveRange::IsConstrained()
+ *============================
  *
  ***/
-bool LiveRange_Constrained(LiveRange* lr)
+bool LiveRange::IsConstrained() const
 {
   return 
-    (lr->fear_list->size() >=
-     RegisterClass_NumMachineReg(LiveRange_RegisterClass(lr)));
+    (fear_list->size() >= RegisterClass_NumMachineReg(rc));
 }
 
 /*
  *=======================================
- * LiveRange_MarkNonCandidateAndDelete()
+ * LiveRange::MarkNonCandidateAndDelete()
  *=======================================
  * mark the live range so that we know it is not a candidate for a
  * register and delete it from the interference graph.
  *
  ***/
-void LiveRange_MarkNonCandidateAndDelete(LiveRange* lr)
+void LiveRange::MarkNonCandidateAndDelete()
 {
   LiveRange* intf_lr;
-  lr->color = NO_COLOR;
-  lr->is_candidate = FALSE;
+  color = NO_COLOR;
+  is_candidate = FALSE;
   chowstats.cSpills++;
 
-  debug("deleting LR: %d from interference graph", lr->id);
-  LiveRange_ForAllFearsCopy(lr, intf_lr)
+  debug("deleting LR: %d from interference graph", this->id);
+  LiveRange_ForAllFearsCopy(this, intf_lr)
   {
-    LiveRange_RemoveInterference(intf_lr, lr);
+    LiveRange_RemoveInterference(intf_lr, this);
   }
 
   //clear the bb_list so that this live range will no longer interfere
   //with any other live ranges
-  VectorSet_Clear(lr->bb_list);
+  VectorSet_Clear(bb_list);
 }
 
 /*
  *=======================================
- * LiveRange_AssignColor()
+ * LiveRange::AssignColor()
  *=======================================
  * assign an available color to a live range
  *
  ***/
-void LiveRange_AssignColor(LiveRange* lr)
+void LiveRange::AssignColor()
 {
   //TODO: pick a better color, i.e. one that is used by neighbors
   //neighbors
   //for now just pick the first available color
-  VectorSet vsT =
-    RegisterClass_TmpVectorSet(LiveRange_RegisterClass(lr));
-  VectorSet_Complement(vsT, lr->forbidden);
-  Color color = VectorSet_ChooseMember(vsT);
-  assert(color < RegisterClass_NumMachineReg(LiveRange_RegisterClass(lr)));
-  lr->color = color;
-  lr->is_candidate = FALSE; //no longer need a color
+  VectorSet vsT = RegisterClass_TmpVectorSet(rc);
+  VectorSet_Complement(vsT, forbidden);
+  Color chosen_color = VectorSet_ChooseMember(vsT);
+  color = chosen_color;
+  assert(color < RegisterClass_NumMachineReg(rc));
+  is_candidate = FALSE; //no longer need a color
   chowstats.clrColored++;
-  debug("assigning color: %d to lr: %d", color, lr->id);
+  debug("assigning color: %d to lr: %d", color, this->id);
 
   //update the interfering live ranges forbidden set
   LiveRange* intf_lr;
   LiveUnit* unit;
-  LiveRange_ForAllFears(lr, intf_lr)
+  LiveRange_ForAllFears(this, intf_lr)
   {
     VectorSet_Insert(intf_lr->forbidden, color);
     debug("adding color: %d to forbid list for LR: %d", color,
@@ -280,12 +318,12 @@ void LiveRange_AssignColor(LiveRange* lr)
   }
 
   //update the basic block taken set and add loads and stores
-  LiveRange_ForAllUnits(lr, unit)
+  LiveRange_ForAllUnits(this, unit)
   {
-    VectorSet vs = LiveRange_UsedColorSet(lr, unit->block);
+    VectorSet vs = LiveRange_UsedColorSet(this, unit->block);
     assert(!VectorSet_Member(vs, color));
     VectorSet_Insert(vs, color);
-    mBlkIdSSAName_Color[id(unit->block)][lr->orig_lrid] = color;
+    mBlkIdSSAName_Color[id(unit->block)][orig_lrid] = color;
 
     // ----------------  LOAD STORE OPTIMIZATION -----------------
     if(Params::Algorithm::move_loads_and_stores)
@@ -301,7 +339,7 @@ void LiveRange_AssignColor(LiveRange* lr)
         //count the number of predecessor in this live range 
         Block_ForAllPreds(e, unit->block)
         {
-          if(LiveRange_ContainsBlock(lr, e->pred)) lrPreds++;
+          if(this->ContainsBlock(e->pred)) lrPreds++;
         }
 
         //we actually move the load if we are using the non-standard
@@ -315,21 +353,21 @@ void LiveRange_AssignColor(LiveRange* lr)
         {
           Block_ForAllPreds(e, unit->block)
           {
-            if(!LiveRange_ContainsBlock(lr, e->pred))
+            if(!this->ContainsBlock(e->pred))
             {
               debug("moving load for lr: %d_%d to edge %s --> %s",
-                lr->orig_lrid, lr->id, bname(e->pred), bname(e->succ));
+                orig_lrid, this->id, bname(e->pred), bname(e->succ));
 
               //add this spill to list of spills on this edge
-              AddEdgeExtensionNode(e, lr, unit, LOAD_SPILL);
+              AddEdgeExtensionNode(e, this, unit, LOAD_SPILL);
             }
           }
         }
         else
         {
           debug("load for lr: %d_%d will not be moved. Inserting now",
-                 lr->orig_lrid, lr->id);
-          LiveRange_InsertLoad(lr, unit);
+                 orig_lrid, this->id);
+          LiveRange_InsertLoad(this, unit);
         }
       }
       //insert a store unless the store is only internal in which case
@@ -346,7 +384,7 @@ void LiveRange_AssignColor(LiveRange* lr)
         //count the number of successors in this live range 
         Block_ForAllSuccs(e, unit->block)
         {
-          if(LiveRange_ContainsBlock(lr, e->succ)) lrSuccs++;
+          if(this->ContainsBlock(e->succ)) lrSuccs++;
         }
 
         //we actually move the store if we are not using the standard
@@ -360,12 +398,12 @@ void LiveRange_AssignColor(LiveRange* lr)
         {
           Block_ForAllSuccs(e, unit->block)
           {
-            if(!LiveRange_ContainsBlock(lr, e->succ))
+            if(!this->ContainsBlock(e->succ))
             {
               //add this spill to list of spills on this edge
               debug("moving store for lr: %d_%d to edge %s --> %s",
-                lr->orig_lrid, lr->id, bname(e->pred), bname(e->succ));
-              AddEdgeExtensionNode(e, lr, unit, STORE_SPILL);
+                orig_lrid, this->id, bname(e->pred), bname(e->succ));
+              AddEdgeExtensionNode(e, this, unit, STORE_SPILL);
               moved = TRUE;
             }
           }
@@ -373,8 +411,8 @@ void LiveRange_AssignColor(LiveRange* lr)
         else
         {
           debug("store for lr: %d_%d will not be moved. Inserting now",
-                 lr->orig_lrid, lr->id);
-          LiveRange_InsertStore(lr, unit);
+                 orig_lrid, this->id);
+          LiveRange_InsertStore(this, unit);
         }
       }
     }
@@ -382,9 +420,9 @@ void LiveRange_AssignColor(LiveRange* lr)
     else
     {
       if(unit->need_load)
-        LiveRange_InsertLoad(lr, unit);
+        LiveRange_InsertLoad(this, unit);
       if(unit->need_store)
-        LiveRange_InsertStore(lr, unit);
+        LiveRange_InsertStore(this, unit);
     }
   }
 }
@@ -434,7 +472,7 @@ void LiveRange_SplitNeighbors(LiveRange* lr,
         //need to update the constrained lists at this point because
         //deleting this live range should have no effect on whether
         //the live ranges it interferes with are constrained or not
-        LiveRange_MarkNonCandidateAndDelete(intf_lr);
+        intf_lr->MarkNonCandidateAndDelete();
       }
       else //try to split
       {
@@ -457,15 +495,19 @@ void LiveRange_SplitNeighbors(LiveRange* lr,
 
 /*
  *=============================
- * LiveRange_LiveUnitForBlock()
+ * LiveRange::LiveUnitForBlock()
  *=============================
  *
+ * Returns the LiveUnit associated with the given block. If no such
+ * unit exists NULL is returned.
  ***/
-LiveUnit* LiveRange_LiveUnitForBlock(LiveRange* lr, Block* b)
+//LiveUnit* LiveRange::operator[](Block* b)
+LiveUnit* LiveRange::LiveUnitForBlock(Block* b) const
 {
   LiveUnit* unit;
-  LiveRange_ForAllUnits(lr, unit)
+  for(iterator i = begin(); i != end(); i++)
   {
+    unit = *i;
     if(id(unit->block) == id(b))
     {
       return unit;
@@ -477,26 +519,26 @@ LiveUnit* LiveRange_LiveUnitForBlock(LiveRange* lr, Block* b)
 
 /*
  *=================================
- * LiveRange_ContainsBlock
+ * LiveRange::ContainsBlock
  *=================================
  * return true if the live range contains this block
  */
-Boolean LiveRange_ContainsBlock(LiveRange* lr, Block* b)
+bool LiveRange::ContainsBlock(Block* blk) const
 {
-  return VectorSet_Member(lr->bb_list, id(b));
+  return VectorSet_Member(bb_list, id(blk));
 }
 
 /*
  *=================================
- * LiveRange_MarkLoadsAndStores
+ * LiveRange::MarkLoadsAndStores
  *=================================
  * Calculates where to place the needed loads and stores in a live
  * range.
  */ 
-void LiveRange_MarkLoadsAndStores(LiveRange* lr)
+void LiveRange::MarkLoadsAndStores()
 {
-  LiveRange_MarkLoads(lr);
-  LiveRange_MarkStores(lr);
+  LiveRange_MarkLoads(this);
+  LiveRange_MarkStores(this);
 }
 
 /*
@@ -527,131 +569,53 @@ LiveUnit* AddLiveUnitOnce(LRID lrid,
  
 /*
  *================================
- * LiveRange_LoadOpcode()
+ * LiveRange::LoadOpcode()
  *================================
  *
  ***/
-static const Opcode_Names load_opcodes[] = 
-  {NOP,    /* NO_DEFS */
-   iSLDor, /* INT_DEF */ 
-   fSLDor, /* FLOAT_DEF */
-   dSLDor, /* DOUBLE_DEF */
-   cSLDor, /* COMPLEX_DEF */
-   qSLDor, /* DCOMPLEX_DEF */ 
-   NOP};   /* MULT_DEFS */
-Opcode_Names LiveRange_LoadOpcode(LiveRange* lr)
+Opcode_Names LiveRange::LoadOpcode() const
 {
-  assert(lr->type != NO_DEFS && lr->type != MULT_DEFS);
-  return load_opcodes[lr->type];
+  assert(type != NO_DEFS && type != MULT_DEFS);
+  return load_opcodes[type];
 }
 
 /*
  *================================
- * LiveRange_StoreOpcode()
+ * LiveRange::StoreOpcode()
  *================================
  *
  ***/
-static const Opcode_Names store_opcodes[] = 
-  {NOP,    /* NO_DEFS */
-   iSSTor, /* INT_DEF */ 
-   fSSTor, /* FLOAT_DEF */
-   dSSTor, /* DOUBLE_DEF */
-   cSSTor, /* COMPLEX_DEF */
-   qSSTor, /* DCOMPLEX_DEF */ 
-   NOP};   /* MULT_DEFS */
-Opcode_Names LiveRange_StoreOpcode(LiveRange* lr)
+Opcode_Names LiveRange::StoreOpcode() const
 {
-  assert(lr->type != NO_DEFS && lr->type != MULT_DEFS);
-  return store_opcodes[lr->type];
+  assert(type != NO_DEFS && type != MULT_DEFS);
+  return store_opcodes[type];
 }
 
 
 /*
  *================================
- * LiveRange_CopyOpcode()
+ * LiveRange::CopyOpcode()
  *================================
  *
  ***/
-static const Opcode_Names copy_opcodes[] = 
-  {NOP,    /* NO_DEFS */
-   i2i, /* INT_DEF */ 
-   f2f, /* FLOAT_DEF */
-   d2d, /* DOUBLE_DEF */
-   c2c, /* COMPLEX_DEF */
-   q2q, /* DCOMPLEX_DEF */ 
-   NOP};   /* MULT_DEFS */
-Opcode_Names LiveRange_CopyOpcode(const LiveRange* lr)
+Opcode_Names LiveRange::CopyOpcode() const
 {
-  assert(lr->type != NO_DEFS && lr->type != MULT_DEFS);
-  return copy_opcodes[lr->type];
+  assert(type != NO_DEFS && type != MULT_DEFS);
+  return copy_opcodes[type];
 }
 
 
 
 /*
  *================================
- * LiveRange_GetAlignemnt()
+ * LiveRange::Alignemnt()
  *================================
  *
  ***/
-static const Unsigned_Int alignment_size[] = 
-  {0, /* NO_DEFS */
-   sizeof(Int), /* INT_DEF */ 
-   sizeof(float), /* FLOAT_DEF */
-   sizeof(Double), /* DOUBLE_DEF */
-   2*sizeof(Double), /* COMPLEX_DEF */ //TODO:figire sizeof(Complex)
-   4*sizeof(Double),/* DCOMPLEX_DEF */ 
-   0};/* MULT_DEFS */
-Unsigned_Int LiveRange_GetAlignment(LiveRange* lr)
+unsigned int LiveRange::Alignment() const
 {
-  assert(lr->type != NO_DEFS && lr->type != MULT_DEFS);
-  return alignment_size[lr->type];
-}
-
-/*
- *================================
- * LiveRange_GetTag()
- *================================
- *
- ***/
-Expr LiveRange_GetTag(LiveRange* lr)
-{
-  if(lr->tag == TAG_UNASSIGNED)
-  {
-    char str[32];
-    sprintf(str, "@SPILL_%d(%d)", lr->orig_lrid, 
-                                  LiveRange_MemLocation(lr));
-    lr->tag = Expr_Install_String(str);
-  }
-
-  return lr->tag;
-}
-
-/*
- *========================
- * LiveRange_MemLocation()
- *========================
- * Returns the memory location to be used by the live range
- */
-MemoryLocation LiveRange_MemLocation(LiveRange* lr)
-{
-  if(lr_mem_map[lr->orig_lrid] == MEM_UNASSIGNED)
-  {
-    lr_mem_map[lr->orig_lrid] = 
-      ReserveStackSpace(LiveRange_GetAlignment(lr));
-  }
-
-  return lr_mem_map[lr->orig_lrid];
-}
-
-/*
- *==========================
- * LiveRange_RegisterClass()
- *==========================
- */
-RegisterClass LiveRange_RegisterClass(LiveRange* lr)
-{
-  return lr->rc;
+  assert(type != NO_DEFS && type != MULT_DEFS);
+  return alignment_size[type];
 }
 
 /*
@@ -686,7 +650,7 @@ LiveRange* ComputePriorityAndChooseTop(LRSet* lrs)
       //can compute it again.
       if(lr->priority < 0.0 || LiveRange_UnColorable(lr))
       {
-        LiveRange_MarkNonCandidateAndDelete(lr);
+        lr->MarkNonCandidateAndDelete();
         continue;
       }
     }
@@ -730,8 +694,10 @@ LiveRange* LiveRange_Create(Arena arena, RegisterClass rc)
   lr->forbidden = VectorSet_Create(arena, RegisterClass_NumMachineReg(rc));
   lr->is_candidate  = TRUE;
   lr->type = NO_DEFS;
-  lr->tag = TAG_UNASSIGNED;
   lr->rc  = rc;
+
+  //for memory operations
+
 
   return lr;
 }
@@ -784,7 +750,7 @@ LiveUnit* LiveRange_AddLiveUnit(LiveRange* lr, LiveUnit* unit)
 void LiveRange_RemoveLiveUnitBlock(LiveRange* lr, Block* b)
 {
   LiveUnit* remove_unit = NULL;
-  remove_unit = LiveRange_LiveUnitForBlock(lr, b);
+  remove_unit = lr->LiveUnitForBlock(b);
 
   if(remove_unit != NULL)
   {
@@ -822,7 +788,7 @@ void LiveRange_RemoveLiveUnit(LiveRange* lr, LiveUnit* unit)
  ***/
 Boolean LiveRange_InterferesWith(LiveRange* lr1, LiveRange* lr2)
 {
-  if(LiveRange_RegisterClass(lr1) != LiveRange_RegisterClass(lr2))
+  if(lr1->rc != lr2->rc)
   {
     return FALSE;
   }
@@ -957,7 +923,7 @@ bool LiveUnit_CanMoveLoad(LiveRange* lr, LiveUnit* lu)
   Edge* e;
   Block_ForAllPreds(e, lu->block)
   {
-    if(LiveRange_ContainsBlock(lr, e->pred)) lrPreds++;
+    if(lr->ContainsBlock(e->pred)) lrPreds++;
   }
   return (lrPreds > 0 && Params::Algorithm::move_loads_and_stores);
 }
@@ -1034,7 +1000,7 @@ void LiveRange_InsertLoad(LiveRange* lr, LiveUnit* unit)
   debug("INSERTING LOAD: lrid: %d, block: %s, to: %d",
         lr->id, bname(unit->block), unit->orig_name);
   Insert_Load(lr->id, Block_FirstInst(b), unit->orig_name,
-              GBL_fp_origname);
+              Spill::frame.ssa_name);
 }
 
 /*
@@ -1053,7 +1019,7 @@ void LiveRange_InsertStore(LiveRange*lr, LiveUnit* unit)
         lr->id, bname(unit->block), unit->orig_name);
   (void)
    Insert_Store(lr->id, Block_LastInst(b), unit->orig_name,
-                 GBL_fp_origname, BEFORE_INST);
+                 Spill::frame.ssa_name, BEFORE_INST);
 }
 
 
@@ -1141,13 +1107,11 @@ LRTuple LiveRange_Split(LiveRange* origlr,
  */
 LiveRange* LiveRange_SplitFrom(LiveRange* origlr)
 {
-  LiveRange* newlr = 
-    LiveRange_Create(lr_arena, LiveRange_RegisterClass(origlr));
+  LiveRange* newlr = LiveRange_Create(lr_arena, origlr->rc);
   newlr->orig_lrid = origlr->orig_lrid;
   newlr->id = LiveRange_NextId;
   newlr->is_candidate = TRUE;
   newlr->type = origlr->type;
-  newlr->tag = origlr->tag;
 
   //some sanity checks
   assert(origlr->color == NO_COLOR);
@@ -1178,7 +1142,8 @@ void LiveRange_UpdateAfterSplit(LiveRange* newlr,
     //update newlr interference
     if(LiveRange_InterferesWith(newlr, fearlr))
     {
-      LiveRange_AddInterference(newlr, fearlr);
+      //LiveRange_AddInterference(newlr, fearlr);
+      newlr->AddInterference(fearlr);
     }
 
     //update origlr interference
@@ -1199,7 +1164,7 @@ void LiveRange_UpdateAfterSplit(LiveRange* newlr,
   //also, need to update the new and original live range positions
   //updates.insert(newlr);
   //updates.insert(origlr);
-  if(LiveRange_Constrained(newlr))
+  if(newlr->IsConstrained())
   {
     constr_lrs->insert(newlr);
   }
@@ -1207,7 +1172,7 @@ void LiveRange_UpdateAfterSplit(LiveRange* newlr,
   {
     unconstr_lrs->insert(newlr);
   }
-  if(!LiveRange_Constrained(origlr))
+  if(!origlr->IsConstrained())
   {
     constr_lrs->erase(origlr);
     unconstr_lrs->insert(origlr);
@@ -1215,8 +1180,8 @@ void LiveRange_UpdateAfterSplit(LiveRange* newlr,
 
   //the need_load and need_store flags actually depend on the
   //boundries of the live range so we must recompute them
-  LiveRange_MarkLoadsAndStores(newlr);
-  LiveRange_MarkLoadsAndStores(origlr);
+  newlr->MarkLoadsAndStores();
+  origlr->MarkLoadsAndStores();
 
 
   //removing live units means we need to update the forbidden list
@@ -1330,13 +1295,13 @@ LiveUnit* LiveRange_IncludeInSplit(LiveRange* newlr,
   //forbidden set
   VectorSet vsUsed = LiveRange_UsedColorSet(origlr, b);
   VectorSet vsT =
-    RegisterClass_TmpVectorSet(LiveRange_RegisterClass(origlr));
+    RegisterClass_TmpVectorSet(origlr->rc);
   VectorSet_Union(vsT,
                   newlr->forbidden, 
                   vsUsed);
   if(!VectorSet_Full(vsT))
   {
-    unit = LiveRange_LiveUnitForBlock(origlr,b);
+    unit = origlr->LiveUnitForBlock(b);
   }
   return unit;
 }
@@ -1402,11 +1367,11 @@ debug("*** MARKING STORES for LR: %d ***\n", lr->id);
       Block_ForAllSuccs(edg, unit->block)
       {
         blkSucc = edg->succ;
-        if(LiveRange_ContainsBlock(lr,blkSucc))
+        if(lr->ContainsBlock(blkSucc))
         { 
           //debug("checking lr: %d successor block %s(%d)",
           //      lr->id, bname(blkSucc), id(blkSucc));
-          luSucc = LiveRange_LiveUnitForBlock(lr, blkSucc);
+          luSucc = lr->LiveUnitForBlock(blkSucc);
 
           //a direct successor in our live range needs a load
           if(luSucc->need_load) 
@@ -1529,7 +1494,7 @@ Boolean LiveRange_EntryPoint(LiveRange* lr, LiveUnit* unit)
   Block_ForAllPreds(e, unit->block)
   {
     pred = e->pred;
-    if(!LiveRange_ContainsBlock(lr, pred))
+    if(!lr->ContainsBlock(pred))
     {
       debug("LR: %d is entry at block %s(%d) from block %s(%d)",
             lr->id, bname(unit->block), id(unit->block),
@@ -1569,7 +1534,7 @@ Boolean VectorSet_Full(VectorSet vs)
  ***/
 VectorSet LiveRange_UsedColorSet(LiveRange* lr, Block* blk)
 {
-  RegisterClass rc = LiveRange_RegisterClass(lr);
+  RegisterClass rc = lr->rc;
   return mRcBlkId_VsUsedColor[rc][id(blk)];
 }
 
@@ -1594,7 +1559,7 @@ void UpdateConstrainedLists(LRSet* for_lrs,
     lr = *i;
     if(!lr->is_candidate) continue;
 
-    if(LiveRange_Constrained(lr))
+    if(lr->IsConstrained())
     {
       debug("ensuring LR: %d is in constr", lr->id);
       unconstr_lrs->erase(lr);

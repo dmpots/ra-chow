@@ -35,11 +35,24 @@ struct LiveRange
   Boolean is_candidate; /* is possible to store this in a register */
   Def_Type type;
   RegisterClass rc;
-  Expr tag;
 
-  typedef std::list<LiveUnit*>::iterator iterator;
-  LiveRange::iterator begin();
-  LiveRange::iterator end();
+  /* methods */
+  void AddInterference(LiveRange* other);
+  bool IsConstrained() const;
+  void MarkNonCandidateAndDelete();
+  void AssignColor();
+  LiveUnit* LiveUnitForBlock(Block* b) const;
+  bool ContainsBlock(Block* b) const;
+  void MarkLoadsAndStores();
+  Opcode_Names LoadOpcode() const;
+  Opcode_Names StoreOpcode() const;
+  Opcode_Names CopyOpcode() const;
+  unsigned int Alignment() const;
+
+  /* iterator for live units in this live range */
+  typedef std::list<LiveUnit*>::const_iterator iterator;
+  iterator begin() const;
+  iterator end() const;
 };
 
 /* compares two live ranges for set container based in lrid */
@@ -54,23 +67,10 @@ struct LRcmp
 
 
 /*---------------------LIVE RANGE FUNCTIONS-------------------------*/
+//FIXME: review to see if these should be elsewhere (chow.c perhaps?)
 void LiveRange_AllocLiveRanges(Arena, LRList&, Unsigned_Int);
-void LiveRange_AddInterference(LiveRange*, LiveRange*);
-bool LiveRange_Constrained(LiveRange*);
-void LiveRange_MarkNonCandidateAndDelete(LiveRange* lr);
-void LiveRange_AssignColor(LiveRange* lr);
 void LiveRange_SplitNeighbors(LiveRange* lr, LRSet* , LRSet*);
-LiveUnit* LiveRange_LiveUnitForBlock(LiveRange* lr, Block* b);
-Boolean LiveRange_ContainsBlock(LiveRange* lr, Block* b);
-void LiveRange_MarkLoadsAndStores(LiveRange* lr);
 LiveUnit* AddLiveUnitOnce(LRID lrid, Block* b, VectorSet lrset, Variable orig_name);
-Opcode_Names LiveRange_LoadOpcode(LiveRange* lr);
-Opcode_Names LiveRange_StoreOpcode(LiveRange* lr);
-Opcode_Names LiveRange_CopyOpcode(const LiveRange* lr);
-Expr LiveRange_GetTag(LiveRange* lr);
-Unsigned_Int LiveRange_GetAlignment(LiveRange* lr);
-MemoryLocation LiveRange_MemLocation(LiveRange* lr);
-RegisterClass LiveRange_RegisterClass(LiveRange* lr);
 LiveRange* ComputePriorityAndChooseTop(LRSet* lrs);
 
 inline void LRName(const LiveRange* lr, char* buf)
@@ -94,15 +94,6 @@ struct edge_extension
 {
   std::list<MovedSpillDescription>* spill_list;
 };
-
-
-/************************** FIXME *******************************/
-
-/* FIXME: put this somewhere good */
-/* constants */
-const MemoryLocation MEM_UNASSIGNED = (MemoryLocation) -1;
-
-
 
 #endif
 

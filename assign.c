@@ -13,6 +13,7 @@
 #include "rc.h"
 #include "assign.h"
 #include "types.h"
+#include "spill.h"
 
 static Register bullshitReg = 1000;
 
@@ -183,12 +184,12 @@ void ensure_reg_assignment(Register* reg,
     {
       if(purpose == FOR_USE)
       {
-        Insert_Load(lrid, *updatedInst, tmpReg, REG_FP);
+        Insert_Load(lrid, *updatedInst, tmpReg, Spill::REG_FP);
       }
       else //FOR_DEF
       {
         *updatedInst = 
-          Insert_Store(lrid, *updatedInst, tmpReg, REG_FP, AFTER_INST);
+          Insert_Store(lrid, *updatedInst, tmpReg, Spill::REG_FP, AFTER_INST);
       }
     }
     *reg = tmpReg;
@@ -201,7 +202,7 @@ void ensure_reg_assignment(Register* reg,
     //load if needed
     if(has_been_evicted(lrid, *reg))
     {
-      Insert_Load(lrid, *updatedInst, *reg, REG_FP);
+      Insert_Load(lrid, *updatedInst, *reg, Spill::REG_FP);
     }
   }
 }
@@ -492,7 +493,7 @@ void reset_free_tmp_regs(Inst* last_inst)
     for(evIT = evicted->begin(); evIT != evicted->end(); evIT++)
     {
       LRID evictedLRID = (*evIT).first;
-      Insert_Load(evictedLRID, last_inst, (*evIT).second, REG_FP);
+      Insert_Load(evictedLRID, last_inst, (*evIT).second, Spill::REG_FP);
     }
 
     //2) remove all evicted registers from evicted list

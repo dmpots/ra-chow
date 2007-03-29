@@ -17,6 +17,7 @@ CPPSRCFILES=globals.cc\
          params.cc\
          debug.cc\
          live_unit.cc\
+         spill.cc\
 
 OBJS=${SRCFILES:.c=.o}
 OBJS+=${CPPSRCFILES:.cc=.o}

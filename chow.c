@@ -29,6 +29,7 @@
 #include "rc.h" //RegisterClass definitions 
 #include "assign.h" //Handles some aspects of register assignment
 #include "cfg_tools.h" 
+#include "spill.h" 
 
 
 /* types */
@@ -41,13 +42,10 @@ LRList Chow::live_ranges;
 Arena  chow_arena;
 BB_Stats bb_stats;
 Unsigned_Int** mBlkIdSSAName_Color;
-Variable GBL_fp_origname;
 Chow_Stats chowstats = {0};
 
 /* locals */
 static LRID* lr_name_map;
-static MemoryLocation stack_pointer = 0;
-static LRID fp_lrid;
 static Unsigned_Int clrInitial = 0; //count of initial live ranges
 
 /* local functions */
@@ -55,11 +53,6 @@ static BB_Stats Compute_BBStats(Arena, Unsigned_Int);
 static void CreateLiveRangeNameMap(Arena);
 static void assert_same_orig_name(LRID,Variable,VectorSet,Block* b);
 static void AllocChowMemory();
-static Operation* get_frame_operation();
-static MemoryLocation Frame_GetStackSize(Operation* frame_op);
-static void Frame_SetStackSize(Operation* frame_op, MemoryLocation sp);
-static void Frame_SetRegFP(Operation* frame_op);
-static Variable Frame_GetRegFP(Operation* frame_op);
 static Inst* Inst_CreateLoad(Opcode_Names opcode,
                              Expr tag, 
                              Unsigned_Int alignment, 
@@ -128,9 +121,9 @@ void RunChow()
   {
     lr = live_ranges[i];
     //only look at candidates
-    if(! lr->is_candidate) continue;
+    if(!lr->is_candidate) continue;
 
-    if(LiveRange_Constrained(lr))
+    if(lr->IsConstrained())
     {
       constr_lrs.insert(lr);
       debug("Constrained LR:    %d", lr->id);
@@ -154,7 +147,7 @@ void RunChow()
       debug("No more constrained lrs can be assigned");
       break;
     }
-    LiveRange_AssignColor(lr);
+    lr->AssignColor();
     debug("LR: %d is top priority, given color: %d", lr->id, lr->color);
     LiveRange_SplitNeighbors(lr, &constr_lrs, &unconstr_lrs);
   }
@@ -169,7 +162,7 @@ void RunChow()
     if(!lr->is_candidate) continue;
 
     debug("choose color for unconstrained LR: %d", lr->id);
-    LiveRange_AssignColor(lr);
+    lr->AssignColor();
     debug("LR: %d is given color:%d", lr->id, lr->color);
   }
 
@@ -206,20 +199,13 @@ void InitChow()
 {
   AllocChowMemory();
 
-
   //the register that holds the frame pointer is not a candidate for
   //allocation since it resides in a special reserved register. remove
   //this from the interference graph and remember which lrid holds the
   //frame pointer
-  Operation* frame_op = get_frame_operation();
-  fp_lrid = SSAName2LRID(frame_op->arguments[frame_op->referenced]);
-  LiveRange_MarkNonCandidateAndDelete(Chow::live_ranges[fp_lrid]);
-
-
-  //initialize the stack pointer so that we have a correct value when
-  //we need to insert loads and stores
-  stack_pointer = Frame_GetStackSize(frame_op);
-  GBL_fp_origname = Frame_GetRegFP(frame_op);
+  Spill::Init();
+  Spill::frame.lrid = SSAName2LRID(Spill::frame.ssa_name);
+  Chow::live_ranges[Spill::frame.lrid]->MarkNonCandidateAndDelete();
 
   //clear out edge extensions if needed
   if(Params::Algorithm::move_loads_and_stores)
@@ -392,10 +378,10 @@ void LiveRange_BuildInitialSSA()
         if(v == i) continue; //skip yourself
         //add interference if in the same class
         LiveRange* lrT = live_ranges[i];
-        if(LiveRange_RegisterClass(lr) == LiveRange_RegisterClass(lrT))
+        if(lr->rc == lrT->rc)
         {
           //debug("%d conflicts with %d", v, i);
-          LiveRange_AddInterference(lr, lrT);
+          lr->AddInterference(lrT);
         }
       }
     }
@@ -404,7 +390,7 @@ void LiveRange_BuildInitialSSA()
 
   //compute where the loads and stores need to go in the live range
   for(LRList::size_type i = 0; i < live_ranges.size(); i++)
-    LiveRange_MarkLoadsAndStores(live_ranges[i]);
+    live_ranges[i]->MarkLoadsAndStores();
 
   Debug::LiveRange_DDumpAll(&live_ranges);
 }
@@ -419,7 +405,7 @@ Block* b)
 {
   if(VectorSet_Member(set,lrid))
   {
-    LiveUnit* unit = LiveRange_LiveUnitForBlock(Chow::live_ranges[lrid],b);
+    LiveUnit* unit =  Chow::live_ranges[lrid]->LiveUnitForBlock(b);
     //debug("already present: %d, orig_name: %d new_orig: %d  block: %s (%d)", 
    //                       lrid, unit->orig_name, v, bname(b), id(b));
     assert(unit->orig_name == v);
@@ -515,7 +501,7 @@ void RenameRegisters()
   debug("allocation complete. renaming registers...");
 
   //stack pointer is the initial size of the stack frame
-  debug("STACK: %d", stack_pointer);
+  debug("STACK: %d", Spill::frame.stack_pointer);
 
   Block* b;
   Inst* inst;
@@ -598,95 +584,9 @@ void RenameRegisters()
 
   //finally rewrite the frame statement to have the first register be
   //the frame pointer and to adjust the stack size
-  Operation* frame_op = get_frame_operation();
-  assert(frame_op->opcode == FRAME);
-  Frame_SetStackSize(frame_op, stack_pointer);
-  Frame_SetRegFP(frame_op);
+  Spill::RewriteFrameOp();
 }
 
-
-
-/*
- *============================
- * Frame_GetStackSize()
- *=============================
- * Gets the stack size on the frame operation
- **/
-MemoryLocation Frame_GetStackSize(Operation* frame_op)
-{
-  return Expr_Get_Integer((frame_op)->arguments[0]);
-}
-
-/*
- *============================
- * Frame_SetStackSize()
- *=============================
- * Sets the stack size on the frame operation
- **/
-void Frame_SetStackSize(Operation* frame_op, MemoryLocation sp)
-{
-  frame_op->arguments[0] = Expr_Install_Int(sp);
-}
-
-/*
- *============================
- * Frame_SetRegFP()
- *=============================
- * Sets the frame pointer register to use the global constant
- **/
-void Frame_SetRegFP(Operation* frame_op)
-{
-  frame_op->arguments[(frame_op)->referenced] = REG_FP;
-}
-
-/*
- *============================
- * Frame_GetRegFP()
- *=============================
- * Sets the frame pointer register to use the global constant
- **/
-Variable Frame_GetRegFP(Operation* frame_op)
-{
-  return frame_op->arguments[(frame_op)->referenced];
-}
-
-
-/*
- *==========================
- * get_frame_operation()
- *==========================
- * Gets the operation corresponding to the FRAME statement in the iloc
- * code
- **/
-Operation* get_frame_operation()
-{
-  //cache the frame operation so we only have to do the lookup once
-  static Operation* frame_op = NULL;
-  if(frame_op) return frame_op;
-
-  Block* b;
-  Inst* inst;
-  Operation** op;
-  ForAllBlocks(b)
-  {
-    Block_ForAllInsts(inst, b)
-    {
-
-      Inst_ForAllOperations(op, inst)
-      {
-        //grab some info from the frame instruction
-        if((*op)->opcode == FRAME)
-        {
-          frame_op = *op;
-          return frame_op;
-        }
-      }
-    }
-  }
-
-  assert(FALSE); //should not get here
-  return NULL;
-}
 
 /*
  *==========================
@@ -697,8 +597,8 @@ Operation* get_frame_operation()
 Register GetMachineRegAssignment(Block* b, LRID lrid)
 {
 
-  if(lrid == fp_lrid)
-    return REG_FP;
+  if(lrid == Spill::frame.lrid)
+    return Spill::REG_FP;
 
    /* return REG_UNALLOCATED; spill everything */
 
@@ -706,7 +606,7 @@ Register GetMachineRegAssignment(Block* b, LRID lrid)
   if(color == NO_COLOR)
     return REG_UNALLOCATED;
 
-  RegisterClass rc = LiveRange_RegisterClass(Chow::live_ranges[lrid]);
+  RegisterClass rc = Chow::live_ranges[lrid]->rc;
   return RegisterClass_MachineRegForColor(rc, color);
 }
 /*
@@ -716,15 +616,16 @@ Register GetMachineRegAssignment(Block* b, LRID lrid)
  * Inserts a load instruction for the given live range before the
  * passed instruction.
  */
+//FIXME: move this to spill.cc
 void Insert_Load(LRID lrid, Inst* before_inst, Register dest, 
                                                Register base)
 {
   LiveRange* lr = Chow::live_ranges[lrid];
-  Expr tag = LiveRange_GetTag(lr);
+  Expr tag = Spill::SpillTag(lr);
 
-  Opcode_Names opcode = LiveRange_LoadOpcode(lr);
-  Unsigned_Int alignment = LiveRange_GetAlignment(lr);
-  Unsigned_Int offset = LiveRange_MemLocation(lr);
+  Opcode_Names opcode = lr->LoadOpcode();
+  Unsigned_Int alignment = lr->Alignment();
+  Unsigned_Int offset = Spill::SpillLocation(lr);
   //assert(offset != MEM_UNASSIGNED); //can happen with use b4 def
   debug("Inserting load for LR: %d, to reg: %d, from offset: %d,"
          "base: %d", lrid, dest, offset, base);
@@ -801,10 +702,9 @@ Inst* Insert_Store(LRID lrid, Inst* around_inst, Register src,
                    Register base, InstInsertLocation loc)
 {
   LiveRange* lr = Chow::live_ranges[lrid];
-  Expr tag = LiveRange_GetTag(lr);
+  Expr tag = Spill::SpillTag(lr);
 
-  MemoryLocation offset = LiveRange_MemLocation(lr);
-  assert(offset != MEM_UNASSIGNED);
+  MemoryLocation offset = Spill::SpillLocation(lr);
   debug("Inserting store for LR: %d, from reg: %d to offset: %d",
          lrid, src, offset);
 
@@ -814,8 +714,8 @@ Inst* Insert_Store(LRID lrid, Inst* around_inst, Register src,
   Comment_Val comment = Comment_Install(str);
 
   //get opcode and alignment for live range
-  Opcode_Names opcode = LiveRange_StoreOpcode(lr);
-  Unsigned_Int alignment = LiveRange_GetAlignment(lr);
+  Opcode_Names opcode = lr->StoreOpcode();
+  Unsigned_Int alignment = lr->Alignment();
 
   //create a new store instruction
   Inst* st_inst = 
@@ -876,20 +776,6 @@ static Inst* Inst_CreateStore(Opcode_Names opcode,
 }
 
 /*
- *=====================
- * ReserveStackSpace()
- *=====================
- * Reserves space on the call stack and returns a pointer to the
- * beginning offset of the reserved space
- **/
-MemoryLocation ReserveStackSpace(Unsigned_Int size)
-{
-  MemoryLocation sp = stack_pointer;
-  stack_pointer += size;
-  return sp;
-}
-
-/*
  *===================
  * Insert_Copy()
  *===================
@@ -908,7 +794,7 @@ void Insert_Copy(const LiveRange* lrSrc, const LiveRange* lrDest,
   Comment_Val comment = Comment_Install(str);
 
   //get opcode and alignment for live range
-  Opcode_Names opcode = LiveRange_CopyOpcode(lrSrc);
+  Opcode_Names opcode = lrSrc->CopyOpcode();
 
   //create a new store instruction
   Inst* cp_inst = Inst_CreateCopy(opcode, comment, src, dest);
@@ -1299,7 +1185,7 @@ void MoveLoadsAndStores()
                    bname(msd.orig_blk), bname(blkST),
                    msd.lr->orig_lrid, msd.lr->id);
             Insert_Store(msd.lr->id, Block_FirstInst(blkST),
-                         mReg, REG_FP,
+                         mReg, Spill::REG_FP,
                          BEFORE_INST);
           }
           else
@@ -1308,7 +1194,7 @@ void MoveLoadsAndStores()
                    bname(msd.orig_blk), bname(blkLD),
                    msd.lr->orig_lrid, msd.lr->id);
             Insert_Load(msd.lr->id, Block_LastInst(blkLD), 
-                        mReg, REG_FP);
+                        mReg, Spill::REG_FP);
           }
         }
       }

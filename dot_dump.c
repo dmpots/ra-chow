@@ -106,9 +106,9 @@ void name(Block* b, LiveRange* lr, char* buf)
   char bufTD[100] = {'\0'};
 
   name(b, bufT);
-  if(LiveRange_ContainsBlock(lr,b))
+  if(lr->ContainsBlock(b))
   {
-    LiveUnit* lu = LiveRange_LiveUnitForBlock(lr, b);
+    LiveUnit* lu = lr->LiveUnitForBlock(b);
     if(lu->start_with_def && lu->defs > 0)
     {
       sprintf(bufTD, "\\n(def %d_%d)", lr->id, lr->orig_lrid);
@@ -129,9 +129,9 @@ void name(Block* b, LiveRange* lr, char* buf)
 
 void color(Block* b, LiveRange* lr, char* buf)
 {
-  if(LiveRange_ContainsBlock(lr,b))
+  if(lr->ContainsBlock(b))
   {
-    LiveUnit* lu = LiveRange_LiveUnitForBlock(lr, b);
+    LiveUnit* lu = lr->LiveUnitForBlock(b);
     if(lu->uses > 0 && lu->defs > 0)
       sprintf(buf, "[style=filled, fillcolor=yellow]");
     else if(lu->uses > 0)
