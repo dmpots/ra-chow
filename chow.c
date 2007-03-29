@@ -22,6 +22,7 @@
 #include "chow.h"
 #include "params.h"
 #include "live_range.h"
+#include "live_unit.h"
 #include "union_find.h"
 #include "reach.h"
 #include "debug.h"
@@ -35,7 +36,8 @@
 typedef unsigned int LOOPVAR;
 
 /* globals */
-LRList live_ranges;
+LRList Chow::live_ranges;
+LRList live_ranges = Chow::live_ranges; //FIXME: HACK
 Arena  chow_arena;
 BB_Stats bb_stats;
 Unsigned_Int** mBlkIdSSAName_Color;
@@ -181,9 +183,9 @@ void AllocChowMemory()
   {
     mBlkIdSSAName_Color[i] = (Unsigned_Int*)
       Arena_GetMemClear(chow_arena, 
-                        sizeof(Unsigned_Int) * liverange_count );
+                        sizeof(Unsigned_Int) * Chow::liverange_count );
       LOOPVAR j;
-      for(j = 0; j < liverange_count; j++)
+      for(j = 0; j < Chow::liverange_count; j++)
         mBlkIdSSAName_Color[i][j] = NO_COLOR;
   }
 

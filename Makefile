@@ -4,8 +4,8 @@
 #my macros
 CC=g++
 SRCFILES=union_find.c\
-         chow.c\
          live_range.c\
+         chow.c\
          cleave.c\
          depths.c\
          rc.c\
@@ -16,6 +16,7 @@ SRCFILES=union_find.c\
 CPPSRCFILES=globals.cc\
          params.cc\
          debug.cc\
+         live_unit.cc\
 
 OBJS=${SRCFILES:.c=.o}
 OBJS+=${CPPSRCFILES:.cc=.o}
@@ -119,8 +120,8 @@ $(SSA_DUMP): ssa_dump.o
 	@ $(CC) $(CFLAGS) $(INCLUDES) -o $(<:c=o) -c $< 
 	@ echo " -- make $@ (Done)"
 
-.cc.o: 
-	@ $(CC) $(CFLAGS) $(INCLUDES) -o $(<:cc=o) -c $< 
+%.o : %.cc
+	@ $(CC) $(CFLAGS) $(INCLUDES) -o $@ -c $<
 	@ echo " -- make $@ (Done)"
 
 clean:

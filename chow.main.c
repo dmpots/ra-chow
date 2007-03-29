@@ -452,7 +452,7 @@ void DotDumpLR(LRID lrid, const char* tag)
 {
   char fname[32] = {0};
   sprintf(fname, "tmp_%d_%d_%s.dot", lrid, lrid, tag);
-  dot_dump_lr(live_ranges[lrid], fname);
+  dot_dump_lr(Chow::live_ranges[lrid], fname);
 }
 void DotDumpFinalLRs(LRID lrid)
 {

@@ -1,8 +1,5 @@
-/*====================================================================
- * 
- *====================================================================
- ********************************************************************/
 
+/*-----------------------MODULE INCLUDES-----------------------*/
 #include <Shared.h>
 #include <SSA.h> 
 #include <assert.h>
@@ -13,6 +10,7 @@
 #include <math.h>
 
 #include "live_range.h"
+#include "live_unit.h"
 #include "debug.h"
 #include "chow.h"
 #include "params.h"
@@ -22,30 +20,68 @@
 #include "cfg_tools.h" //control graph manipulation utilities
 #include "dot_dump.h" //control graph manipulation utilities
 
-/* local variables */
-static Arena lr_arena;
-static const float UNDEFINED_PRIORITY = 666;
-static const float MIN_PRIORITY = -3.4e38;
-static VectorSet** mRcBlkId_VsUsedColor;
-static VectorSet tmpbbset;
-static VectorSet no_bbs;
-static MemoryLocation* lr_mem_map;
+/*------------------MODULE LOCAL DEFINITIONS-------------------*/
 
 /* globals */
-Unsigned_Int liverange_count;
+unsigned int Chow::liverange_count;
+
+namespace {
+/* local constants */
+  const Expr TAG_UNASSIGNED = (Expr) -1;
+
+/* local variables */
+  Arena lr_arena;
+  const float UNDEFINED_PRIORITY = 666;
+  const float MIN_PRIORITY = -3.4e38;
+  VectorSet** mRcBlkId_VsUsedColor;
+  VectorSet tmpbbset;
+  VectorSet no_bbs;
+  MemoryLocation* lr_mem_map;
+
+/* local types */
+  /* hold pairs of live range */
+  struct LRTuple
+  {
+    LiveRange* fst;
+    LiveRange* snd;
+  };
 
 /* local functions */
-static void Def_CollectUniqueUseNames(Variable, std::list<Variable>&);
-static Priority LiveUnit_ComputePriority(LiveRange*, LiveUnit*);
-static Boolean LiveRange_ColorsAvailable(LiveRange* lr);
-static Boolean VectorSet_Full(VectorSet vs);
-static LiveRange* LiveRange_Create(Arena, RegisterClass);
-static VectorSet LiveRange_UsedColorSet(LiveRange* lr, Block* blk);
-static void AddEdgeExtensionNode(Edge*, LiveRange*, LiveUnit*,SpillType);
-namespace {
+  void Def_CollectUniqueUseNames(Variable, std::list<Variable>&);
+  Priority LiveUnit_ComputePriority(LiveRange*, LiveUnit*);
+  Boolean LiveRange_ColorsAvailable(LiveRange* lr);
+  Boolean VectorSet_Full(VectorSet vs);
+  LiveRange* LiveRange_Create(Arena, RegisterClass);
+  VectorSet LiveRange_UsedColorSet(LiveRange* lr, Block* blk);
+  void AddEdgeExtensionNode(Edge*, LiveRange*, LiveUnit*,SpillType);
+
   bool LiveUnit_CanMoveLoad(LiveRange* lr, LiveUnit* lu);
   int LiveUnit_LoadLoopDepth(LiveRange*  lr, LiveUnit* lu);
+
+  LiveUnit* LiveRange_AddLiveUnit(LiveRange*, LiveUnit*);
+  LiveUnit* LiveRange_AddLiveUnitBlock(LiveRange*, Block*);
+  void LiveRange_RemoveLiveUnit(LiveRange* , LiveUnit* );
+  void LiveRange_RemoveLiveUnitBlock(LiveRange* lr, Block* b);
+  void LiveRange_TransferLiveUnit(LiveRange*, LiveRange*, LiveUnit*);
+  Boolean LiveRange_UnColorable(LiveRange* lr);
+  void LiveRange_RemoveInterference(LiveRange* from, LiveRange* with);
+  LRTuple LiveRange_Split(LiveRange* lr, LRSet* , LRSet* );
+  LiveUnit* LiveRange_ChooseSplitPoint(LiveRange*);
+  LiveUnit* LiveRange_IncludeInSplit(LiveRange*, LiveRange*, Block*);
+  void LiveRange_AddBlock(LiveRange* lr, Block* b);
+  void LiveRange_UpdateAfterSplit(LiveRange*,LiveRange*,LRSet*,LRSet*);
+  Boolean LiveRange_EntryPoint(LiveRange* lr, LiveUnit* unit);
+  void LiveRange_MarkLoads(LiveRange* lr);
+  void LiveRange_MarkStores(LiveRange* lr);
+  void LiveRange_InsertLoad(LiveRange* lr, LiveUnit* unit);
+  void LiveRange_InsertStore(LiveRange*lr, LiveUnit* unit);
+  LiveRange* LiveRange_SplitFrom(LiveRange* origlr);
+  Boolean LiveRange_InterferesWith(LiveRange* lr1, LiveRange* lr2);
+  Priority LiveRange_OrigComputePriority(LiveRange* lr);
+  Priority LiveRange_ComputePriority(LiveRange* lr);
 }
+
+
 
 //iterate through interference list. if stmt used as a cheat for its
 //side effect 
@@ -69,7 +105,7 @@ for(std::list<LiveUnit*>::iterator i = (lr)->units->begin(); \
     i++) \
    if(((unit) = *i) || TRUE) 
 
-#define LiveRange_NextId (liverange_count++);
+#define LiveRange_NextId (Chow::liverange_count++);
 
 /* Def_ForAllUseBlocks(Variable v, Block* b) */
 #define Def_ForAllUseBlocks(v, b)\
@@ -78,6 +114,8 @@ Chain_ForAllUses(_runner, v)\
   if(((b = _runner->block)) || TRUE)
 
 
+
+/*--------------------BEGIN IMPLEMENTATION---------------------*/
 
 
 /*
@@ -93,10 +131,10 @@ void LiveRange_AllocLiveRanges(Arena arena,
 {
   LOOPVAR i;
   lr_arena = arena;
-  liverange_count = num_lrs;
+  Chow::liverange_count = num_lrs;
 
-  lrs.resize(liverange_count, NULL); //allocate space
-  for(i = 0; i < liverange_count; i++) //allocate each live range
+  lrs.resize(Chow::liverange_count, NULL); //allocate space
+  for(i = 0; i < Chow::liverange_count; i++) //allocate each live range
   {
     lrs[i] = LiveRange_Create(arena,
                               RegisterClass_InitialRegisterClassForLRID(i));
@@ -133,8 +171,8 @@ void LiveRange_AllocLiveRanges(Arena arena,
   //allocate a mapping from live range to a memory location. this is
   //used for spilling
   lr_mem_map = (MemoryLocation*) Arena_GetMemClear(arena, 
-       sizeof(MemoryLocation) * liverange_count);
-  for(i = 0; i < liverange_count; i++)
+       sizeof(MemoryLocation) * Chow::liverange_count);
+  for(i = 0; i < Chow::liverange_count; i++)
     lr_mem_map[i] = MEM_UNASSIGNED;
 
   unsigned int seed = time(NULL);
@@ -144,172 +182,6 @@ void LiveRange_AllocLiveRanges(Arena arena,
   //srand(74499979);
   //srand(44979);
 }
-
-/*
- *============================
- * LiveRange_Create()
- *============================
- * Allocates and initializes a live range 
- ***/
-LiveRange* LiveRange_Create(Arena arena, RegisterClass rc)
-{
-  LiveRange* lr;
-  lr = (LiveRange*)Arena_GetMemClear(arena, sizeof(LiveRange));
-  lr->orig_lrid = (LRID)-1;
-  lr->id = 0;
-  lr->priority = UNDEFINED_PRIORITY;
-  lr->color = NO_COLOR;
-  lr->bb_list = VectorSet_Create(arena, block_count+1);
-  lr->fear_list = new std::set<LiveRange*, LRcmp>;
-  lr->units = new std::list<LiveUnit*>;
-  lr->forbidden = VectorSet_Create(arena, RegisterClass_NumMachineReg(rc));
-  lr->is_candidate  = TRUE;
-  lr->type = NO_DEFS;
-  lr->tag = TAG_UNASSIGNED;
-  lr->rc  = rc;
-
-  return lr;
-}
-
-/*
- *=============================
- * AddLiveUnitOnce()
- *=============================
- *
- * adds the block to the live range, but only once depending on the
- * contents of the *lrset*
- ***/
-LiveUnit* AddLiveUnitOnce(LRID lrid, 
-                          Block* b, 
-                          VectorSet lrset, 
-                          Variable orig_name)
-{
-  //debug("ADDING: %d BLOCK: %s (%d)", lrid, bname(b), id(b));
-  LiveUnit* new_unit = NULL;
-  if(!VectorSet_Member(lrset, lrid))
-  {
-    LiveRange* lr = live_ranges[lrid];
-    VectorSet_Insert(lrset, lrid);
-    new_unit = LiveRange_AddLiveUnitBlock(lr, b);
-    new_unit->orig_name = orig_name;
-  }
-
-  return new_unit;
-} 
- 
-
-/*
- *=============================
- * LiveRange_AddLiveUnitBlock()
- *=============================
- *
- ***/
-LiveUnit* LiveRange_AddLiveUnitBlock(LiveRange* lr, Block* b)
-{
-  LiveUnit* unit = LiveUnit_Alloc(lr_arena);
-
-  //assign initial values
-  unit->block = b;
-  BB_Stat stat = bb_stats[id(b)][lr->id];
-  unit->uses = stat.uses;
-  unit->defs = stat.defs;
-  unit->start_with_def = stat.start_with_def;
-  unit->internal_store = FALSE;
-  
-  LiveRange_AddLiveUnit(lr, unit);
-  return unit;
-}
-
-/*
- *=============================
- * LiveRange_AddLiveUnit()
- *=============================
- *
- ***/
-LiveUnit* LiveRange_AddLiveUnit(LiveRange* lr, LiveUnit* unit)
-{
-  LiveRange_AddBlock(lr, unit->block);
-
-  lr->units->push_back(unit);
-  return unit;
-}
-
-/*
- *=============================
- * LiveRange_LiveUnitForBlock()
- *=============================
- *
- ***/
-LiveUnit* LiveRange_LiveUnitForBlock(LiveRange* lr, Block* b)
-{
-  LiveUnit* unit;
-  LiveRange_ForAllUnits(lr, unit)
-  {
-    if(id(unit->block) == id(b))
-    {
-      return unit;
-    }
-  }
-
-  return NULL;
-}
-
-
-/*
- *=============================
- * LiveRange_RemoveLiveUnitBlock()
- *=============================
- *
- ***/
-void LiveRange_RemoveLiveUnitBlock(LiveRange* lr, Block* b)
-{
-  LiveUnit* remove_unit = NULL;
-  remove_unit = LiveRange_LiveUnitForBlock(lr, b);
-
-  if(remove_unit != NULL)
-  {
-    LiveRange_RemoveLiveUnit(lr, remove_unit);
-  }
-}
-
-/*
- *=============================
- * LiveRange_RemoveLiveUnitBlock()
- *=============================
- *
- ***/
-void LiveRange_RemoveLiveUnit(LiveRange* lr, LiveUnit* unit)
-{
-  //remove from the basic block set
-  VectorSet_Delete(lr->bb_list, id(unit->block));
-
-  std::list<LiveUnit*>::iterator elem;
-  elem = find(lr->units->begin(), lr->units->end(), unit);
-  if(elem != lr->units->end())
-  {
-    lr->units->erase(elem);
-  }
-}
-
-
-/*
- *=============================
- * LiveRange_InterferesWith()
- *=============================
- *
- * Used to determine if two live ranges interfere
- * true - if the live ranges interfere
- ***/
-Boolean LiveRange_InterferesWith(LiveRange* lr1, LiveRange* lr2)
-{
-  if(LiveRange_RegisterClass(lr1) != LiveRange_RegisterClass(lr2))
-  {
-    return FALSE;
-  }
-  VectorSet_Intersect(tmpbbset, lr1->bb_list, lr2->bb_list);
-  return (!VectorSet_Equal(no_bbs, tmpbbset));
-}
-
 
 /*
  *=============================
@@ -327,208 +199,16 @@ void LiveRange_AddInterference(LiveRange* lr1, LiveRange* lr2)
 }
 
 /*
- *=============================
- * LRSet_Add()
- *=============================
- *
- ***/
-void LRSet_Add(LRSet* lrs, LiveRange* lr)
-{
-  lrs->insert(lr);
-}
-
-
-/*
- *=============================
- * LiveRange_RemoveInterference()
- *=============================
- *
- ***/
-void LiveRange_RemoveInterference(LiveRange* lr1, LiveRange* lr2)
-{
-    //remove lr2 from lr1
-    LRSet_Remove(lr1->fear_list, lr2);
-
-    //remove lr1 from lr2
-    LRSet_Remove(lr2->fear_list, lr1);
-}
-
-/*
- *=============================
- * LRSet_Remove()
- *=============================
- *
- ***/
-void LRSet_Remove(LRSet* lrs, LiveRange* lr)
-{
-  lrs->erase(lr);
-}
-
-
-
-
-/*
  *=========================
  * LiveRange_Constrained()
  *=========================
  *
  ***/
-Boolean LiveRange_Constrained(LiveRange* lr)
+bool LiveRange_Constrained(LiveRange* lr)
 {
   return 
     (lr->fear_list->size() >=
      RegisterClass_NumMachineReg(LiveRange_RegisterClass(lr)));
-}
-
-
-/*
- *=======================================
- * LiveRange_ComputePriority()
- *=======================================
- *
- ***/
-Priority LiveRange_OrigComputePriority(LiveRange* lr);
-Priority LiveRange_ComputePriority(LiveRange* lr)
-{
-  //return .1*(rand() % 100);
-  LiveUnit* lu;
-  Priority pr = 0.0;
-  Unsigned_Int clu = 0; //count of live units
-  LiveRange_ForAllUnits(lr, lu)
-  {
-    pr += LiveUnit_ComputePriority(lr, lu);
-    clu++;
-  }
-  return pr/clu;
-}
-
-//kept for prosperity in case we want to compare orig priority to the
-//priority used when moving loads and stores
-Priority LiveRange_OrigComputePriority(LiveRange* lr)
-{
-  using Params::Machine::load_save_weight;
-  using Params::Machine::store_save_weight;
-  using Params::Machine::move_cost_weight;
-  using Params::Algorithm::loop_depth_weight;
-
-  LiveUnit* lu;
-  int clu = 0; //count of live units
-  Priority pr = 0.0;
-  LiveRange_ForAllUnits(lr, lu)
-  {
-    Priority unitPrio = 
-        load_save_weight  * lu->uses 
-      + store_save_weight * lu->defs 
-      - move_cost_weight  * lu->need_store
-      - move_cost_weight  * lu->need_load;
-    pr += unitPrio 
-          * pow(loop_depth_weight, Globals::depths[id(lu->block)]);
-    clu++;
-  }
-  return pr/clu;
-}
-
-/*
- *=======================================
- * LiveUnit_ComputePriority()
- *=======================================
- *
- ***/
-Priority LiveUnit_ComputePriority(LiveRange* lr, LiveUnit* lu)
-{
-  using Params::Machine::load_save_weight;
-  using Params::Machine::store_save_weight;
-  using Params::Machine::move_cost_weight;
-  using Params::Algorithm::loop_depth_weight;
-
-  Priority unitPrio = 
-      load_save_weight  * lu->uses 
-    + store_save_weight * lu->defs 
-    - move_cost_weight  * lu->need_store;
-  unitPrio *= pow(loop_depth_weight, Globals::depths[id(lu->block)]);
-
-  //treat load loop cost separte in case we can move it up from a loop
-  int loadLoopDepth = LiveUnit_LoadLoopDepth(lr, lu);
-  unitPrio -=   (move_cost_weight * lu->need_load)
-                * pow(loop_depth_weight, loadLoopDepth);
-  return unitPrio;
-}
-
-namespace {
-/*
- *=======================================
- * LiveUnit_LoadLoopDepth()
- * computes loop depth level for inserting loads. the level could be
- * decreased by one to account for moving a load up from a loop header
- *=======================================
- *
- ***/
-int LiveUnit_LoadLoopDepth(LiveRange*  lr, LiveUnit* lu)
-{
-    int depth = depths[id(lu->block)];
-    if(Block_IsLoopHeader(lu->block) && LiveUnit_CanMoveLoad(lr, lu))
-    {
-      depth -= 1;
-    }
-    return depth;
-}
-
-/*
- *=======================================
- * LiveUnit_CanMoveLoad()
- *=======================================
- *
- ***/
-bool LiveUnit_CanMoveLoad(LiveRange* lr, LiveUnit* lu)
-{
-  if(lu->need_load) return false;
-
-  //the load can be moved if there is at least on predecessor *in* the
-  //live range. we know there must be at least one *NOT* in the live
-  //range because the unit needs a load and this only happens when it
-  //is an entry point
-  int lrPreds = 0;
-  Edge* e;
-  Block_ForAllPreds(e, lu->block)
-  {
-    if(LiveRange_ContainsBlock(lr, e->pred)) lrPreds++;
-  }
-  return (lrPreds > 0 && Params::Algorithm::move_loads_and_stores);
-}
-
-}//end anonymous namespace
-
-/*
- *=======================================
- * LiveRange_UnColorable()
- *=======================================
- * returns true if the live range is uncolorable
- *
- ***/
-Boolean LiveRange_UnColorable(LiveRange* lr)
-{
-  //a live range is uncolorable when all registers have been used
-  //throughout the entire length of the live range (i.e. each live
-  //unit has no available registers). we need to have a mapping of
-  //basic blocks to used registers for that block in order to see
-  //which registers are available.
-  
-  LiveUnit* unit;
-  LiveRange_ForAllUnits(lr, unit)
-  {
-    //must have a free register where we have a def or a use
-    if(unit->defs > 0 || unit->uses > 0)
-    {
-      VectorSet vsUsedColors = LiveRange_UsedColorSet(lr, unit->block);
-      if(!VectorSet_Full(vsUsedColors))
-      {
-        return false;
-      }
-    }
-  }
-
-  debug("LR: %d is UNCOLORABLE", lr->id);
-  return true;
 }
 
 /*
@@ -556,7 +236,6 @@ void LiveRange_MarkNonCandidateAndDelete(LiveRange* lr)
   //with any other live ranges
   VectorSet_Clear(lr->bb_list);
 }
-
 
 /*
  *=======================================
@@ -700,67 +379,6 @@ void LiveRange_AssignColor(LiveRange* lr)
   }
 }
 
-static void 
-AddEdgeExtensionNode(Edge* e, LiveRange* lr, LiveUnit* unit, 
-                     SpillType spillType)
-{
-  //always add the edge extension to the predecessor version of the edge
-  Edge* edgPred = FindEdge(e->pred, e->succ, PRED_OWNS);
-  Edge_Extension* ee = edgPred->edge_extension;
-  if(ee == NULL)
-  {
-    //create and add the edge extension
-    ee = (Edge_Extension*) 
-      Arena_GetMemClear(lr_arena, sizeof(Edge_Extension));
-    ee->spill_list = new std::list<MovedSpillDescription>;
-    edgPred->edge_extension = ee;
-  }
-
-  //record the relavant info
-  MovedSpillDescription msd;
-  msd.lr = lr;
-  msd.spill_type = spillType;
-  msd.orig_blk = unit->block;
-  ee->spill_list->push_back(msd);
-}
-
-/*
- *============================
- * LiveRange_InsertLoad()
- *============================
- * Inserts a load for the live range in the given live unit. The load
- * is inserted for the original name since the rewriting process will
- * take care of changing the name to the allocated register.
- */
-void LiveRange_InsertLoad(LiveRange* lr, LiveUnit* unit)
-{
-  Block* b = unit->block;
-  debug("INSERTING LOAD: lrid: %d, block: %s, to: %d",
-        lr->id, bname(unit->block), unit->orig_name);
-  Insert_Load(lr->id, Block_FirstInst(b), unit->orig_name,
-              GBL_fp_origname);
-}
-
-/*
- *============================
- * LiveRange_InsertStore()
- *============================
- * Inserts a store for the live range in the given live unit. The 
- * store is inserted for the original name since the rewriting 
- * process will take care of changing the name to the allocated
- * register.
- */
-void LiveRange_InsertStore(LiveRange*lr, LiveUnit* unit)
-{
-  Block* b = unit->block;
-  debug("INSERTING STORE: lrid: %d, block: %s, to: %d",
-        lr->id, bname(unit->block), unit->orig_name);
-  (void)
-   Insert_Store(lr->id, Block_LastInst(b), unit->orig_name,
-                 GBL_fp_origname, BEFORE_INST);
-}
-
-
 /*
  *============================
  * LiveRange_SplitNeighbors()
@@ -828,6 +446,869 @@ void LiveRange_SplitNeighbors(LiveRange* lr,
 } 
 
 /*
+ *=============================
+ * LiveRange_LiveUnitForBlock()
+ *=============================
+ *
+ ***/
+LiveUnit* LiveRange_LiveUnitForBlock(LiveRange* lr, Block* b)
+{
+  LiveUnit* unit;
+  LiveRange_ForAllUnits(lr, unit)
+  {
+    if(id(unit->block) == id(b))
+    {
+      return unit;
+    }
+  }
+
+  return NULL;
+}
+
+/*
+ *=================================
+ * LiveRange_ContainsBlock
+ *=================================
+ * return true if the live range contains this block
+ */
+Boolean LiveRange_ContainsBlock(LiveRange* lr, Block* b)
+{
+  return VectorSet_Member(lr->bb_list, id(b));
+}
+
+/*
+ *=================================
+ * LiveRange_MarkLoadsAndStores
+ *=================================
+ * Calculates where to place the needed loads and stores in a live
+ * range.
+ */ 
+void LiveRange_MarkLoadsAndStores(LiveRange* lr)
+{
+  LiveRange_MarkLoads(lr);
+  LiveRange_MarkStores(lr);
+}
+
+/*
+ *=============================
+ * AddLiveUnitOnce()
+ *=============================
+ *
+ * adds the block to the live range, but only once depending on the
+ * contents of the *lrset*
+ ***/
+LiveUnit* AddLiveUnitOnce(LRID lrid, 
+                          Block* b, 
+                          VectorSet lrset, 
+                          Variable orig_name)
+{
+  //debug("ADDING: %d BLOCK: %s (%d)", lrid, bname(b), id(b));
+  LiveUnit* new_unit = NULL;
+  if(!VectorSet_Member(lrset, lrid))
+  {
+    LiveRange* lr = Chow::live_ranges[lrid];
+    VectorSet_Insert(lrset, lrid);
+    new_unit = LiveRange_AddLiveUnitBlock(lr, b);
+    new_unit->orig_name = orig_name;
+  }
+
+  return new_unit;
+} 
+ 
+/*
+ *================================
+ * LiveRange_LoadOpcode()
+ *================================
+ *
+ ***/
+static const Opcode_Names load_opcodes[] = 
+  {NOP,    /* NO_DEFS */
+   iSLDor, /* INT_DEF */ 
+   fSLDor, /* FLOAT_DEF */
+   dSLDor, /* DOUBLE_DEF */
+   cSLDor, /* COMPLEX_DEF */
+   qSLDor, /* DCOMPLEX_DEF */ 
+   NOP};   /* MULT_DEFS */
+Opcode_Names LiveRange_LoadOpcode(LiveRange* lr)
+{
+  assert(lr->type != NO_DEFS && lr->type != MULT_DEFS);
+  return load_opcodes[lr->type];
+}
+
+/*
+ *================================
+ * LiveRange_StoreOpcode()
+ *================================
+ *
+ ***/
+static const Opcode_Names store_opcodes[] = 
+  {NOP,    /* NO_DEFS */
+   iSSTor, /* INT_DEF */ 
+   fSSTor, /* FLOAT_DEF */
+   dSSTor, /* DOUBLE_DEF */
+   cSSTor, /* COMPLEX_DEF */
+   qSSTor, /* DCOMPLEX_DEF */ 
+   NOP};   /* MULT_DEFS */
+Opcode_Names LiveRange_StoreOpcode(LiveRange* lr)
+{
+  assert(lr->type != NO_DEFS && lr->type != MULT_DEFS);
+  return store_opcodes[lr->type];
+}
+
+
+/*
+ *================================
+ * LiveRange_CopyOpcode()
+ *================================
+ *
+ ***/
+static const Opcode_Names copy_opcodes[] = 
+  {NOP,    /* NO_DEFS */
+   i2i, /* INT_DEF */ 
+   f2f, /* FLOAT_DEF */
+   d2d, /* DOUBLE_DEF */
+   c2c, /* COMPLEX_DEF */
+   q2q, /* DCOMPLEX_DEF */ 
+   NOP};   /* MULT_DEFS */
+Opcode_Names LiveRange_CopyOpcode(const LiveRange* lr)
+{
+  assert(lr->type != NO_DEFS && lr->type != MULT_DEFS);
+  return copy_opcodes[lr->type];
+}
+
+
+
+/*
+ *================================
+ * LiveRange_GetAlignemnt()
+ *================================
+ *
+ ***/
+static const Unsigned_Int alignment_size[] = 
+  {0, /* NO_DEFS */
+   sizeof(Int), /* INT_DEF */ 
+   sizeof(float), /* FLOAT_DEF */
+   sizeof(Double), /* DOUBLE_DEF */
+   2*sizeof(Double), /* COMPLEX_DEF */ //TODO:figire sizeof(Complex)
+   4*sizeof(Double),/* DCOMPLEX_DEF */ 
+   0};/* MULT_DEFS */
+Unsigned_Int LiveRange_GetAlignment(LiveRange* lr)
+{
+  assert(lr->type != NO_DEFS && lr->type != MULT_DEFS);
+  return alignment_size[lr->type];
+}
+
+/*
+ *================================
+ * LiveRange_GetTag()
+ *================================
+ *
+ ***/
+Expr LiveRange_GetTag(LiveRange* lr)
+{
+  if(lr->tag == TAG_UNASSIGNED)
+  {
+    char str[32];
+    sprintf(str, "@SPILL_%d(%d)", lr->orig_lrid, 
+                                  LiveRange_MemLocation(lr));
+    lr->tag = Expr_Install_String(str);
+  }
+
+  return lr->tag;
+}
+
+/*
+ *========================
+ * LiveRange_MemLocation()
+ *========================
+ * Returns the memory location to be used by the live range
+ */
+MemoryLocation LiveRange_MemLocation(LiveRange* lr)
+{
+  if(lr_mem_map[lr->orig_lrid] == MEM_UNASSIGNED)
+  {
+    lr_mem_map[lr->orig_lrid] = 
+      ReserveStackSpace(LiveRange_GetAlignment(lr));
+  }
+
+  return lr_mem_map[lr->orig_lrid];
+}
+
+/*
+ *==========================
+ * LiveRange_RegisterClass()
+ *==========================
+ */
+RegisterClass LiveRange_RegisterClass(LiveRange* lr)
+{
+  return lr->rc;
+}
+
+/*
+ *=======================================
+ * ComputePriorityAndChooseTop()
+ *=======================================
+ *
+ ***/
+LiveRange* ComputePriorityAndChooseTop(LRSet* lrs)
+{
+  float top_prio = MIN_PRIORITY;
+  LiveRange* top_lr = NULL;
+  LiveRange* lr = NULL;
+  
+  LRSet_ForAllCandidates(lrs, lr)
+  {
+    //priority has never been computed
+    if(lr->priority == UNDEFINED_PRIORITY)
+    {
+      //compute priority
+      lr->priority = LiveRange_ComputePriority(lr);
+      debug("priority for LR: %d is %.3f", lr->id, lr->priority);
+
+      //check to see if this live range is a non-candidate for
+      //allocation. I think we need to only check this the first time
+      //we compute the priority function. if the priority changes due
+      //to a live range split it should be reset to undefined so we
+      //can compute it again.
+      if(lr->priority < 0.0 || LiveRange_UnColorable(lr))
+      {
+        LiveRange_MarkNonCandidateAndDelete(lr);
+        continue;
+      }
+    }
+
+    //see if this live range has a greater priority
+    if(lr->priority > top_prio)
+    {
+      top_prio = lr->priority;
+      top_lr = lr;
+    }
+  }
+
+  if(top_lr != NULL)
+  {
+    debug("top priority is %.3f LR: %d", top_prio, top_lr->id);
+    LRSet_Remove(lrs, top_lr);
+  }
+  return top_lr;
+}
+
+
+/* FIXME: MOVE THESE */
+/*
+ *==============
+ * LRList_Add()
+ *==============
+ *
+ ***/
+void LRList_Add(LRList* lrs, LiveRange* lr)
+{
+  lrs->push_back(lr);
+}
+
+/*
+ *==============
+ * LRList_Empty()
+ *==============
+ *
+ ***/
+Boolean LRList_Empty(LRList lrs)
+{
+  return lrs.empty();
+}
+
+
+/*
+ *==============
+ * LRList_Size()
+ *==============
+ *
+ ***/
+Unsigned_Int LRList_Size(LRList* lrs)
+{
+  return lrs->size();
+}
+
+/*
+ *==============
+ * LRList_Pop()
+ *==============
+ *
+ ***/
+LiveRange* LRList_Pop(LRList* lrs)
+{
+  LiveRange* lr = lrs->back();
+  lrs->pop_back();
+  return lr;
+}
+
+
+/*
+ *================================
+ * LRSet_UpdateConstrainedLists()
+ *================================
+ * Makes sure that the live ranges are in the constrained lists if
+ * they are constrained. This is used to update the lists after a live
+ * range split for the live ranges that interfere with both the old
+ * and the new live range.
+ *
+ ***/
+void LRSet_UpdateConstrainedLists(LRSet* for_lrs, 
+                                   LRSet* constr_lrs,
+                                   LRSet* unconstr_lrs)
+{
+  LiveRange* lr;
+  LRSet_ForAllCandidates(for_lrs, lr)
+  {
+      if(LiveRange_Constrained(lr))
+      {
+        debug("ensuring LR: %d is in constr", lr->id);
+        LRSet_Remove(unconstr_lrs, lr);
+        LRSet_Add(constr_lrs, lr);
+      }
+  }
+}
+
+
+/*
+ *================================
+ * LRList_Remove()
+ *================================
+ *
+ ***/
+void LRList_Remove(LRList* lrs, LiveRange* lr)
+{
+  LRList::iterator elem;
+  elem = find(lrs->begin(), lrs->end(), lr);
+  if(elem != lrs->end())
+  {
+    lrs->erase(elem);
+  }
+}
+
+
+/*
+ *================================
+ * LRList_AddUnique()
+ *================================
+ *
+ ***/
+void LRList_AddUnique(LRList* lrs, LiveRange* lr)
+{
+  LRList::iterator elem;
+  elem = find(lrs->begin(), lrs->end(), lr);
+  if(elem == lrs->end())
+  {
+    LRList_Add(lrs, lr);
+  }
+}
+
+
+/*
+ *=============================
+ * LRSet_Add()
+ *=============================
+ *
+ ***/
+void LRSet_Add(LRSet* lrs, LiveRange* lr)
+{
+  lrs->insert(lr);
+}
+
+/*
+ *=============================
+ * LRSet_Remove()
+ *=============================
+ *
+ ***/
+void LRSet_Remove(LRSet* lrs, LiveRange* lr)
+{
+  lrs->erase(lr);
+}
+
+/* <---- FIXME: END MOVE THESE */
+
+/* FIXME: MOVE THESE (debug) */
+/*
+ *======================
+ * LiveRange_DDumpAll()
+ *======================
+ *
+ ***/
+void LiveRange_DDumpAll(LRList* lrs)
+{
+#ifdef __DEBUG
+  LiveRange_DumpAll(lrs);
+#endif
+}
+
+/*
+ *======================
+ * LiveRange_DumpAll()
+ *======================
+ *
+ ***/
+void LiveRange_DumpAll(LRList* lrs)
+{
+  LiveRange* lr = NULL;
+  LRList_ForAll(lrs, lr)
+  {
+    LiveRange_Dump(lr);
+  }
+}
+
+
+/*
+ *======================
+ * LiveRange_DDump()
+ *======================
+ *
+ ***/
+void LiveRange_DDump(LiveRange* lr)
+{
+#ifdef __DEBUG
+  LiveRange_Dump(lr);
+#endif
+}
+
+/*
+ *======================
+ * LiveRange_Dump()
+ *======================
+ *
+ ***/
+static char* type_str[] = 
+  {"NO-TYPE",    /* NO_DEFS */
+   "INTEGER", /* INT_DEF */ 
+   "FLOAT", /* FLOAT_DEF */
+   "DOUBLE", /* DOUBLE_DEF */
+   "COMPLEX", /* COMPLEX_DEF */
+   "DCOMPLEX", /* DCOMPLEX_DEF */ 
+   "MULT-TYPE"};   /* MULT_DEFS */
+void LiveRange_Dump(LiveRange* lr)
+{
+
+  fprintf(stderr,"************ BEGIN LIVE RANGE DUMP **************\n");
+  fprintf(stderr,"LR: %d\n",lr->id);
+  fprintf(stderr,"type: %s\n",type_str[lr->type]);
+  fprintf(stderr,"color: %d\n", lr->color);
+  fprintf(stderr,"orig_lrid: %d\n", lr->orig_lrid);
+  fprintf(stderr,"candidate?: %c\n", lr->is_candidate ? 'T' : 'F');
+  fprintf(stderr,"forbidden colors: \n");
+    VectorSet_Dump(lr->forbidden);
+  fprintf(stderr, "BB LIST:\n");
+    Unsigned_Int b;
+    VectorSet_ForAll(b, lr->bb_list)
+    {
+      fprintf(stderr, "  %d\n", (b));
+    }
+
+  fprintf(stderr, "Live Unit LIST:\n");
+    LiveUnit* unit;
+    LiveRange_ForAllUnits(lr, unit)
+    {
+      LiveUnit_Dump(*i);
+    }
+
+  fprintf(stderr, "Interference List:\n");
+    LiveRange* intf_lr;
+    LiveRange_ForAllFears(lr,intf_lr)
+    {
+      fprintf(stderr, "  %d\n", (intf_lr)->id);
+    }
+
+
+  fprintf(stderr,"************* END LIVE RANGE DUMP ***************\n"); 
+}
+
+
+/*
+ *======================
+ * LiveUnit_DDump()
+ *======================
+ *
+ ***/
+void LiveUnit_DDump(LiveUnit* unit)
+{
+#ifdef __DEBUG
+  LiveUnit_Dump(unit);
+#endif
+}
+
+/*
+ *======================
+ * LiveUnit_Dump()
+ *======================
+ *
+ ***/
+void LiveUnit_Dump(LiveUnit* unit)
+{
+  fprintf(stderr,"LR Unit: %s (%d)\n",bname(unit->block),
+                                      id(unit->block));
+  fprintf(stderr,"  Need Load: %c\n",unit->need_load ? 'Y' : 'N');
+  fprintf(stderr,"  Need Store: %c\n",unit->need_store ? 'Y' : 'N');
+  fprintf(stderr,"  Uses: %d\n",unit->uses);
+  fprintf(stderr,"  Defs: %d\n",unit->defs);
+  fprintf(stderr,"  Start With Def: %c\n",unit->start_with_def?'Y':'N');
+  fprintf(stderr,"  SSA    Name: %d\n",unit->orig_name);
+  fprintf(stderr,"  Source Name: %d\n",SSA_name_map[unit->orig_name]);
+}
+
+/* <---- FIXME: END MOVE THESE (debug) */
+
+
+
+
+/*------------------INTERNAL MODULE FUNCTIONS--------------------*/
+namespace {
+/*
+ *============================
+ * LiveRange_Create()
+ *============================
+ * Allocates and initializes a live range 
+ ***/
+LiveRange* LiveRange_Create(Arena arena, RegisterClass rc)
+{
+  LiveRange* lr;
+  lr = (LiveRange*)Arena_GetMemClear(arena, sizeof(LiveRange));
+  lr->orig_lrid = (LRID)-1;
+  lr->id = 0;
+  lr->priority = UNDEFINED_PRIORITY;
+  lr->color = NO_COLOR;
+  lr->bb_list = VectorSet_Create(arena, block_count+1);
+  lr->fear_list = new std::set<LiveRange*, LRcmp>;
+  lr->units = new std::list<LiveUnit*>;
+  lr->forbidden = VectorSet_Create(arena, RegisterClass_NumMachineReg(rc));
+  lr->is_candidate  = TRUE;
+  lr->type = NO_DEFS;
+  lr->tag = TAG_UNASSIGNED;
+  lr->rc  = rc;
+
+  return lr;
+}
+
+
+
+/*
+ *=============================
+ * LiveRange_AddLiveUnitBlock()
+ *=============================
+ *
+ ***/
+LiveUnit* LiveRange_AddLiveUnitBlock(LiveRange* lr, Block* b)
+{
+  LiveUnit* unit = LiveUnit_Alloc(lr_arena);
+
+  //assign initial values
+  unit->block = b;
+  BB_Stat stat = bb_stats[id(b)][lr->id];
+  unit->uses = stat.uses;
+  unit->defs = stat.defs;
+  unit->start_with_def = stat.start_with_def;
+  unit->internal_store = FALSE;
+  
+  LiveRange_AddLiveUnit(lr, unit);
+  return unit;
+}
+
+/*
+ *=============================
+ * LiveRange_AddLiveUnit()
+ *=============================
+ *
+ ***/
+LiveUnit* LiveRange_AddLiveUnit(LiveRange* lr, LiveUnit* unit)
+{
+  LiveRange_AddBlock(lr, unit->block);
+
+  lr->units->push_back(unit);
+  return unit;
+}
+
+
+/*
+ *=============================
+ * LiveRange_RemoveLiveUnitBlock()
+ *=============================
+ *
+ ***/
+void LiveRange_RemoveLiveUnitBlock(LiveRange* lr, Block* b)
+{
+  LiveUnit* remove_unit = NULL;
+  remove_unit = LiveRange_LiveUnitForBlock(lr, b);
+
+  if(remove_unit != NULL)
+  {
+    LiveRange_RemoveLiveUnit(lr, remove_unit);
+  }
+}
+
+/*
+ *=============================
+ * LiveRange_RemoveLiveUnitBlock()
+ *=============================
+ *
+ ***/
+void LiveRange_RemoveLiveUnit(LiveRange* lr, LiveUnit* unit)
+{
+  //remove from the basic block set
+  VectorSet_Delete(lr->bb_list, id(unit->block));
+
+  std::list<LiveUnit*>::iterator elem;
+  elem = find(lr->units->begin(), lr->units->end(), unit);
+  if(elem != lr->units->end())
+  {
+    lr->units->erase(elem);
+  }
+}
+
+
+/*
+ *=============================
+ * LiveRange_InterferesWith()
+ *=============================
+ *
+ * Used to determine if two live ranges interfere
+ * true - if the live ranges interfere
+ ***/
+Boolean LiveRange_InterferesWith(LiveRange* lr1, LiveRange* lr2)
+{
+  if(LiveRange_RegisterClass(lr1) != LiveRange_RegisterClass(lr2))
+  {
+    return FALSE;
+  }
+  VectorSet_Intersect(tmpbbset, lr1->bb_list, lr2->bb_list);
+  return (!VectorSet_Equal(no_bbs, tmpbbset));
+}
+
+
+/*
+ *=============================
+ * LiveRange_RemoveInterference()
+ *=============================
+ *
+ ***/
+void LiveRange_RemoveInterference(LiveRange* lr1, LiveRange* lr2)
+{
+    //remove lr2 from lr1
+    LRSet_Remove(lr1->fear_list, lr2);
+
+    //remove lr1 from lr2
+    LRSet_Remove(lr2->fear_list, lr1);
+}
+
+
+
+/*
+ *=======================================
+ * LiveRange_ComputePriority()
+ *=======================================
+ *
+ ***/
+Priority LiveRange_OrigComputePriority(LiveRange* lr);
+Priority LiveRange_ComputePriority(LiveRange* lr)
+{
+  //return .1*(rand() % 100);
+  LiveUnit* lu;
+  Priority pr = 0.0;
+  Unsigned_Int clu = 0; //count of live units
+  LiveRange_ForAllUnits(lr, lu)
+  {
+    pr += LiveUnit_ComputePriority(lr, lu);
+    clu++;
+  }
+  return pr/clu;
+}
+
+//kept for prosperity in case we want to compare orig priority to the
+//priority used when moving loads and stores
+Priority LiveRange_OrigComputePriority(LiveRange* lr)
+{
+  using Params::Machine::load_save_weight;
+  using Params::Machine::store_save_weight;
+  using Params::Machine::move_cost_weight;
+  using Params::Algorithm::loop_depth_weight;
+
+  LiveUnit* lu;
+  int clu = 0; //count of live units
+  Priority pr = 0.0;
+  LiveRange_ForAllUnits(lr, lu)
+  {
+    Priority unitPrio = 
+        load_save_weight  * lu->uses 
+      + store_save_weight * lu->defs 
+      - move_cost_weight  * lu->need_store
+      - move_cost_weight  * lu->need_load;
+    pr += unitPrio 
+          * pow(loop_depth_weight, Globals::depths[id(lu->block)]);
+    clu++;
+  }
+  return pr/clu;
+}
+
+/*
+ *=======================================
+ * LiveUnit_ComputePriority()
+ *=======================================
+ *
+ ***/
+Priority LiveUnit_ComputePriority(LiveRange* lr, LiveUnit* lu)
+{
+  using Params::Machine::load_save_weight;
+  using Params::Machine::store_save_weight;
+  using Params::Machine::move_cost_weight;
+  using Params::Algorithm::loop_depth_weight;
+
+  Priority unitPrio = 
+      load_save_weight  * lu->uses 
+    + store_save_weight * lu->defs 
+    - move_cost_weight  * lu->need_store;
+  unitPrio *= pow(loop_depth_weight, Globals::depths[id(lu->block)]);
+
+  //treat load loop cost separte in case we can move it up from a loop
+  int loadLoopDepth = LiveUnit_LoadLoopDepth(lr, lu);
+  unitPrio -=   (move_cost_weight * lu->need_load)
+                * pow(loop_depth_weight, loadLoopDepth);
+  return unitPrio;
+}
+
+/*
+ *=======================================
+ * LiveUnit_LoadLoopDepth()
+ * computes loop depth level for inserting loads. the level could be
+ * decreased by one to account for moving a load up from a loop header
+ *=======================================
+ *
+ ***/
+int LiveUnit_LoadLoopDepth(LiveRange*  lr, LiveUnit* lu)
+{
+    int depth = depths[id(lu->block)];
+    if(Block_IsLoopHeader(lu->block) && LiveUnit_CanMoveLoad(lr, lu))
+    {
+      depth -= 1;
+    }
+    return depth;
+}
+
+/*
+ *=======================================
+ * LiveUnit_CanMoveLoad()
+ *=======================================
+ *
+ ***/
+bool LiveUnit_CanMoveLoad(LiveRange* lr, LiveUnit* lu)
+{
+  if(lu->need_load) return false;
+
+  //the load can be moved if there is at least on predecessor *in* the
+  //live range. we know there must be at least one *NOT* in the live
+  //range because the unit needs a load and this only happens when it
+  //is an entry point
+  int lrPreds = 0;
+  Edge* e;
+  Block_ForAllPreds(e, lu->block)
+  {
+    if(LiveRange_ContainsBlock(lr, e->pred)) lrPreds++;
+  }
+  return (lrPreds > 0 && Params::Algorithm::move_loads_and_stores);
+}
+
+
+/*
+ *=======================================
+ * LiveRange_UnColorable()
+ *=======================================
+ * returns true if the live range is uncolorable
+ *
+ ***/
+Boolean LiveRange_UnColorable(LiveRange* lr)
+{
+  //a live range is uncolorable when all registers have been used
+  //throughout the entire length of the live range (i.e. each live
+  //unit has no available registers). we need to have a mapping of
+  //basic blocks to used registers for that block in order to see
+  //which registers are available.
+  
+  LiveUnit* unit;
+  LiveRange_ForAllUnits(lr, unit)
+  {
+    //must have a free register where we have a def or a use
+    if(unit->defs > 0 || unit->uses > 0)
+    {
+      VectorSet vsUsedColors = LiveRange_UsedColorSet(lr, unit->block);
+      if(!VectorSet_Full(vsUsedColors))
+      {
+        return false;
+      }
+    }
+  }
+
+  debug("LR: %d is UNCOLORABLE", lr->id);
+  return true;
+}
+
+
+void AddEdgeExtensionNode(Edge* e, LiveRange* lr, LiveUnit* unit, 
+                          SpillType spillType)
+{
+  //always add the edge extension to the predecessor version of the edge
+  Edge* edgPred = FindEdge(e->pred, e->succ, PRED_OWNS);
+  Edge_Extension* ee = edgPred->edge_extension;
+  if(ee == NULL)
+  {
+    //create and add the edge extension
+    ee = (Edge_Extension*) 
+      Arena_GetMemClear(lr_arena, sizeof(Edge_Extension));
+    ee->spill_list = new std::list<MovedSpillDescription>;
+    edgPred->edge_extension = ee;
+  }
+
+  //record the relavant info
+  MovedSpillDescription msd;
+  msd.lr = lr;
+  msd.spill_type = spillType;
+  msd.orig_blk = unit->block;
+  ee->spill_list->push_back(msd);
+}
+
+/*
+ *============================
+ * LiveRange_InsertLoad()
+ *============================
+ * Inserts a load for the live range in the given live unit. The load
+ * is inserted for the original name since the rewriting process will
+ * take care of changing the name to the allocated register.
+ */
+void LiveRange_InsertLoad(LiveRange* lr, LiveUnit* unit)
+{
+  Block* b = unit->block;
+  debug("INSERTING LOAD: lrid: %d, block: %s, to: %d",
+        lr->id, bname(unit->block), unit->orig_name);
+  Insert_Load(lr->id, Block_FirstInst(b), unit->orig_name,
+              GBL_fp_origname);
+}
+
+/*
+ *============================
+ * LiveRange_InsertStore()
+ *============================
+ * Inserts a store for the live range in the given live unit. The 
+ * store is inserted for the original name since the rewriting 
+ * process will take care of changing the name to the allocated
+ * register.
+ */
+void LiveRange_InsertStore(LiveRange*lr, LiveUnit* unit)
+{
+  Block* b = unit->block;
+  debug("INSERTING STORE: lrid: %d, block: %s, to: %d",
+        lr->id, bname(unit->block), unit->orig_name);
+  (void)
+   Insert_Store(lr->id, Block_LastInst(b), unit->orig_name,
+                 GBL_fp_origname, BEFORE_INST);
+}
+
+
+/*
  *============================
  * LiveRange_Split()
  *============================
@@ -862,8 +1343,8 @@ LRTuple LiveRange_Split(LiveRange* origlr,
 
   debug("adding block: %s to  lr'", bname(startunit->block));
   LiveRange_TransferLiveUnit(newlr, origlr, startunit);
-  LRList_Add(&live_ranges, newlr);
-  debug("ADDED LR: %d, size: %d", newlr->id, (int)live_ranges.size());
+  LRList_Add(&Chow::live_ranges, newlr);
+  debug("ADDED LR: %d, size: %d", newlr->id, (int)Chow::live_ranges.size());
 
   //keep a queue of successors that we may add to the new live range
   std::list<Block*> succ_list;
@@ -1114,19 +1595,6 @@ LiveUnit* LiveRange_IncludeInSplit(LiveRange* newlr,
 
 /*
  *=================================
- * LiveRange_MarkLoadsAndStores
- *=================================
- * Calculates where to place the needed loads and stores in a live
- * range.
- */ 
-void LiveRange_MarkLoadsAndStores(LiveRange* lr)
-{
-  LiveRange_MarkLoads(lr);
-  LiveRange_MarkStores(lr);
-}
-
-/*
- *=================================
  * LiveRange_MarkLoads
  *=================================
  * Calculates where to place the needed loads
@@ -1325,17 +1793,6 @@ Boolean LiveRange_EntryPoint(LiveRange* lr, LiveUnit* unit)
 }
 
 
-/*
- *=================================
- * LiveRange_ContainsBlock
- *=================================
- * return true if the live range contains this block
- */
-Boolean LiveRange_ContainsBlock(LiveRange* lr, Block* b)
-{
-  return VectorSet_Member(lr->bb_list, id(b));
-}
-
 
 /*
  *============================
@@ -1356,439 +1813,17 @@ Boolean VectorSet_Full(VectorSet vs)
 
 
 /*
- *======================
- * LiveUnit_Alloc()
- *======================
+ *=============================
+ * LiveRange_UsedColorSet()
+ *=============================
  *
  ***/
-LiveUnit* LiveUnit_Alloc(Arena a)
-{
-  LiveUnit* unit =  (LiveUnit*)Arena_GetMemClear(a, sizeof(LiveUnit));
-  unit->need_load = FALSE;
-  unit->need_store = FALSE;
-  unit->block = 0;
-  return unit;
-}
-
-
-/*
- *======================
- * LiveRange_DDumpAll()
- *======================
- *
- ***/
-void LiveRange_DDumpAll(LRList* lrs)
-{
-#ifdef __DEBUG
-  LiveRange_DumpAll(lrs);
-#endif
-}
-
-/*
- *======================
- * LiveRange_DumpAll()
- *======================
- *
- ***/
-void LiveRange_DumpAll(LRList* lrs)
-{
-  LiveRange* lr = NULL;
-  LRList_ForAll(lrs, lr)
-  {
-    LiveRange_Dump(lr);
-  }
-}
-
-
-/*
- *======================
- * LiveRange_DDump()
- *======================
- *
- ***/
-void LiveRange_DDump(LiveRange* lr)
-{
-#ifdef __DEBUG
-  LiveRange_Dump(lr);
-#endif
-}
-
-/*
- *======================
- * LiveRange_Dump()
- *======================
- *
- ***/
-static char* type_str[] = 
-  {"NO-TYPE",    /* NO_DEFS */
-   "INTEGER", /* INT_DEF */ 
-   "FLOAT", /* FLOAT_DEF */
-   "DOUBLE", /* DOUBLE_DEF */
-   "COMPLEX", /* COMPLEX_DEF */
-   "DCOMPLEX", /* DCOMPLEX_DEF */ 
-   "MULT-TYPE"};   /* MULT_DEFS */
-void LiveRange_Dump(LiveRange* lr)
-{
-
-  fprintf(stderr,"************ BEGIN LIVE RANGE DUMP **************\n");
-  fprintf(stderr,"LR: %d\n",lr->id);
-  fprintf(stderr,"type: %s\n",type_str[lr->type]);
-  fprintf(stderr,"color: %d\n", lr->color);
-  fprintf(stderr,"orig_lrid: %d\n", lr->orig_lrid);
-  fprintf(stderr,"candidate?: %c\n", lr->is_candidate ? 'T' : 'F');
-  fprintf(stderr,"forbidden colors: \n");
-    VectorSet_Dump(lr->forbidden);
-  fprintf(stderr, "BB LIST:\n");
-    Unsigned_Int b;
-    VectorSet_ForAll(b, lr->bb_list)
-    {
-      fprintf(stderr, "  %d\n", (b));
-    }
-
-  fprintf(stderr, "Live Unit LIST:\n");
-    LiveUnit* unit;
-    LiveRange_ForAllUnits(lr, unit)
-    {
-      LiveUnit_Dump(*i);
-    }
-
-  fprintf(stderr, "Interference List:\n");
-    LiveRange* intf_lr;
-    LiveRange_ForAllFears(lr,intf_lr)
-    {
-      fprintf(stderr, "  %d\n", (intf_lr)->id);
-    }
-
-
-  fprintf(stderr,"************* END LIVE RANGE DUMP ***************\n"); 
-}
-
-
-/*
- *======================
- * LiveUnit_DDump()
- *======================
- *
- ***/
-void LiveUnit_DDump(LiveUnit* unit)
-{
-#ifdef __DEBUG
-  LiveUnit_Dump(unit);
-#endif
-}
-
-/*
- *======================
- * LiveUnit_Dump()
- *======================
- *
- ***/
-void LiveUnit_Dump(LiveUnit* unit)
-{
-  fprintf(stderr,"LR Unit: %s (%d)\n",bname(unit->block),
-                                      id(unit->block));
-  fprintf(stderr,"  Need Load: %c\n",unit->need_load ? 'Y' : 'N');
-  fprintf(stderr,"  Need Store: %c\n",unit->need_store ? 'Y' : 'N');
-  fprintf(stderr,"  Uses: %d\n",unit->uses);
-  fprintf(stderr,"  Defs: %d\n",unit->defs);
-  fprintf(stderr,"  Start With Def: %c\n",unit->start_with_def?'Y':'N');
-  fprintf(stderr,"  SSA    Name: %d\n",unit->orig_name);
-  fprintf(stderr,"  Source Name: %d\n",SSA_name_map[unit->orig_name]);
-}
-
-
-/*
- *=======================================
- * LRList_ComputePriorityAndChooseTop()
- *=======================================
- *
- ***/
-LiveRange* ComputePriorityAndChooseTop(LRSet* lrs)
-{
-  float top_prio = MIN_PRIORITY;
-  LiveRange* top_lr = NULL;
-  LiveRange* lr = NULL;
-  
-  LRSet_ForAllCandidates(lrs, lr)
-  {
-    //priority has never been computed
-    if(lr->priority == UNDEFINED_PRIORITY)
-    {
-      //compute priority
-      lr->priority = LiveRange_ComputePriority(lr);
-      debug("priority for LR: %d is %.3f", lr->id, lr->priority);
-
-      //check to see if this live range is a non-candidate for
-      //allocation. I think we need to only check this the first time
-      //we compute the priority function. if the priority changes due
-      //to a live range split it should be reset to undefined so we
-      //can compute it again.
-      if(lr->priority < 0.0 || LiveRange_UnColorable(lr))
-      {
-        LiveRange_MarkNonCandidateAndDelete(lr);
-        continue;
-      }
-    }
-
-    //see if this live range has a greater priority
-    if(lr->priority > top_prio)
-    {
-      top_prio = lr->priority;
-      top_lr = lr;
-    }
-  }
-
-  if(top_lr != NULL)
-  {
-    debug("top priority is %.3f LR: %d", top_prio, top_lr->id);
-    LRSet_Remove(lrs, top_lr);
-  }
-  return top_lr;
-}
-
-
-
-/*
- *==============
- * LRList_Add()
- *==============
- *
- ***/
-void LRList_Add(LRList* lrs, LiveRange* lr)
-{
-  lrs->push_back(lr);
-}
-
-/*
- *==============
- * LRList_Empty()
- *==============
- *
- ***/
-Boolean LRList_Empty(LRList lrs)
-{
-  return lrs.empty();
-}
-
-
-/*
- *==============
- * LRList_Size()
- *==============
- *
- ***/
-Unsigned_Int LRList_Size(LRList* lrs)
-{
-  return lrs->size();
-}
-
-/*
- *==============
- * LRList_PopTop()
- *==============
- *
- ***/
-LiveRange* LRList_Pop(LRList* lrs)
-{
-  LiveRange* lr = lrs->back();
-  lrs->pop_back();
-  return lr;
-}
-
-
-/*
- *================================
- * LRList_UpdateConstrainedLists()
- *================================
- * Makes sure that the live ranges are in the constrained lists if
- * they are constrained. This is used to update the lists after a live
- * range split for the live ranges that interfere with both the old
- * and the new live range.
- *
- ***/
-void LRSet_UpdateConstrainedLists(LRSet* for_lrs, 
-                                   LRSet* constr_lrs,
-                                   LRSet* unconstr_lrs)
-{
-  LiveRange* lr;
-  LRSet_ForAllCandidates(for_lrs, lr)
-  {
-      if(LiveRange_Constrained(lr))
-      {
-        debug("ensuring LR: %d is in constr", lr->id);
-        LRSet_Remove(unconstr_lrs, lr);
-        LRSet_Add(constr_lrs, lr);
-      }
-  }
-}
-
-
-/*
- *================================
- * LRList_Remove()
- *================================
- *
- ***/
-void LRList_Remove(LRList* lrs, LiveRange* lr)
-{
-  LRList::iterator elem;
-  elem = find(lrs->begin(), lrs->end(), lr);
-  if(elem != lrs->end())
-  {
-    lrs->erase(elem);
-  }
-}
-
-
-/*
- *================================
- * LRList_AddUnique()
- *================================
- *
- ***/
-void LRList_AddUnique(LRList* lrs, LiveRange* lr)
-{
-  LRList::iterator elem;
-  elem = find(lrs->begin(), lrs->end(), lr);
-  if(elem == lrs->end())
-  {
-    LRList_Add(lrs, lr);
-  }
-}
-
-/*
- *================================
- * LiveRange_StoreOpcode()
- *================================
- *
- ***/
-static const Opcode_Names store_opcodes[] = 
-  {NOP,    /* NO_DEFS */
-   iSSTor, /* INT_DEF */ 
-   fSSTor, /* FLOAT_DEF */
-   dSSTor, /* DOUBLE_DEF */
-   cSSTor, /* COMPLEX_DEF */
-   qSSTor, /* DCOMPLEX_DEF */ 
-   NOP};   /* MULT_DEFS */
-Opcode_Names LiveRange_StoreOpcode(LiveRange* lr)
-{
-  assert(lr->type != NO_DEFS && lr->type != MULT_DEFS);
-  return store_opcodes[lr->type];
-}
-
-/*
- *================================
- * LiveRange_LoadOpcode()
- *================================
- *
- ***/
-static const Opcode_Names load_opcodes[] = 
-  {NOP,    /* NO_DEFS */
-   iSLDor, /* INT_DEF */ 
-   fSLDor, /* FLOAT_DEF */
-   dSLDor, /* DOUBLE_DEF */
-   cSLDor, /* COMPLEX_DEF */
-   qSLDor, /* DCOMPLEX_DEF */ 
-   NOP};   /* MULT_DEFS */
-Opcode_Names LiveRange_LoadOpcode(LiveRange* lr)
-{
-  assert(lr->type != NO_DEFS && lr->type != MULT_DEFS);
-  return load_opcodes[lr->type];
-}
-
-/*
- *================================
- * LiveRange_CopyOpcode()
- *================================
- *
- ***/
-static const Opcode_Names copy_opcodes[] = 
-  {NOP,    /* NO_DEFS */
-   i2i, /* INT_DEF */ 
-   f2f, /* FLOAT_DEF */
-   d2d, /* DOUBLE_DEF */
-   c2c, /* COMPLEX_DEF */
-   q2q, /* DCOMPLEX_DEF */ 
-   NOP};   /* MULT_DEFS */
-Opcode_Names LiveRange_CopyOpcode(const LiveRange* lr)
-{
-  assert(lr->type != NO_DEFS && lr->type != MULT_DEFS);
-  return copy_opcodes[lr->type];
-}
-
-
-
-/*
- *================================
- * LiveRange_GetAlignemnt()
- *================================
- *
- ***/
-static const Unsigned_Int alignment_size[] = 
-  {0, /* NO_DEFS */
-   sizeof(Int), /* INT_DEF */ 
-   sizeof(float), /* FLOAT_DEF */
-   sizeof(Double), /* DOUBLE_DEF */
-   2*sizeof(Double), /* COMPLEX_DEF */ //TODO:figire sizeof(Complex)
-   4*sizeof(Double),/* DCOMPLEX_DEF */ 
-   0};/* MULT_DEFS */
-Unsigned_Int LiveRange_GetAlignment(LiveRange* lr)
-{
-  assert(lr->type != NO_DEFS && lr->type != MULT_DEFS);
-  return alignment_size[lr->type];
-}
-
-/*
- *================================
- * LiveRange_GetTag()
- *================================
- *
- ***/
-Expr LiveRange_GetTag(LiveRange* lr)
-{
-  if(lr->tag == TAG_UNASSIGNED)
-  {
-    char str[32];
-    sprintf(str, "@SPILL_%d(%d)", lr->orig_lrid, 
-                                  LiveRange_MemLocation(lr));
-    lr->tag = Expr_Install_String(str);
-  }
-
-  return lr->tag;
-}
-
-/*
- *========================
- * LiveRange_MemLocation()
- *========================
- * Returns the memory location to be used by the live range
- */
-MemoryLocation LiveRange_MemLocation(LiveRange* lr)
-{
-  if(lr_mem_map[lr->orig_lrid] == MEM_UNASSIGNED)
-  {
-    lr_mem_map[lr->orig_lrid] = 
-      ReserveStackSpace(LiveRange_GetAlignment(lr));
-  }
-
-  return lr_mem_map[lr->orig_lrid];
-}
-
-/*
- *========================
- * LiveRange_MemLocation()
- *========================
- */
-RegisterClass LiveRange_RegisterClass(LiveRange* lr)
-{
-  return lr->rc;
-}
-
-
 VectorSet LiveRange_UsedColorSet(LiveRange* lr, Block* blk)
 {
   RegisterClass rc = LiveRange_RegisterClass(lr);
   return mRcBlkId_VsUsedColor[rc][id(blk)];
 }
+
+}//end anonymous namespace
 
 

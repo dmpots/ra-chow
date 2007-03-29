@@ -10,6 +10,7 @@
 #include <string.h>
 #include "debug.h"
 #include "live_range.h"
+#include "live_unit.h"
 #include "dot_dump.h"
 
 #define puts(...) \
