@@ -40,7 +40,7 @@ LRID dot_dump_lr = 0;
  *======================
  *
  ***/
-void LiveRange_DDumpAll(LRList* lrs)
+void LiveRange_DDumpAll(LRVec* lrs)
 {
 #ifdef __DEBUG
   LiveRange_DumpAll(lrs);
@@ -53,9 +53,9 @@ void LiveRange_DDumpAll(LRList* lrs)
  *======================
  *
  ***/
-void LiveRange_DumpAll(LRList* lrs)
+void LiveRange_DumpAll(LRVec* lrs)
 {
-  for(LRList::iterator i = lrs->begin(); i != lrs->end(); i++)
+  for(LRVec::iterator i = lrs->begin(); i != lrs->end(); i++)
   {
     LiveRange_Dump(*i);
   }

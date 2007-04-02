@@ -38,7 +38,7 @@
 typedef unsigned int LOOPVAR;
 
 /* globals */
-LRList Chow::live_ranges;
+LRVec Chow::live_ranges;
 Arena  chow_arena;
 BB_Stats bb_stats;
 Unsigned_Int** mBlkIdSSAName_Color;
@@ -118,7 +118,7 @@ void RunChow()
   InitChow();
 
   //separate unconstrained live ranges
-  for(LRList::size_type i = 0; i < live_ranges.size(); i++)
+  for(LRVec::size_type i = 0; i < live_ranges.size(); i++)
   {
     lr = live_ranges[i];
     //only look at candidates
@@ -393,7 +393,7 @@ void LiveRange_BuildInitialSSA()
 
 
   //compute where the loads and stores need to go in the live range
-  for(LRList::size_type i = 0; i < live_ranges.size(); i++)
+  for(LRVec::size_type i = 0; i < live_ranges.size(); i++)
     live_ranges[i]->MarkLoadsAndStores();
 
   Debug::LiveRange_DDumpAll(&live_ranges);

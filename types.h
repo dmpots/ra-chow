@@ -29,7 +29,7 @@ typedef std::vector<Register> RegisterList;
 /* convienient typedefs for live range containers */
 struct LiveRange;
 struct LRcmp;
-typedef std::vector<LiveRange*> LRList;
+typedef std::vector<LiveRange*> LRVec;
 typedef std::set<LiveRange*, LRcmp> LRSet;
 
 #endif

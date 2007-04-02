@@ -36,8 +36,8 @@ namespace Debug {
   extern std::vector<LRID> dot_dumped_lrids;
   extern LRID dot_dump_lr;
 
-  void LiveRange_DumpAll(LRList*);
-  void LiveRange_DDumpAll(LRList* lrs);
+  void LiveRange_DumpAll(LRVec*);
+  void LiveRange_DDumpAll(LRVec* lrs);
   void LiveRange_Dump(LiveRange* lr);
   void LiveRange_DDump(LiveRange* lr);
   void LiveUnit_Dump(LiveUnit* );
