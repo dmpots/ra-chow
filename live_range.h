@@ -7,8 +7,6 @@
 #include <vector>
 #include "types.h"
 
-
-
 /* forward definition of a comparison object used by the std::set
  * implementation to compare LiveRanges. implementation of this struct
  * follows below */
@@ -17,14 +15,22 @@ struct LRcmp;
 /* forward definition of LiveUnit structure */
 struct LiveUnit;
 
-
 /* a live range is the unit of allocation for the register allocator.
  * these will be assigned a color */
 typedef float Priority;
 struct LiveRange
 {
+  /* class varaibles */
+  static void Init(Arena); /* class initialization function */
+  static Arena arena; /* for memory allocation needs */
+  static VectorSet tmpbbset; /* for memory allocation needs */
+
+  /* constructor */
+  LiveRange(RegisterClass rc, LRID lrid);
+
+  /* fields */
   VectorSet bb_list;  /* basic blocks making up this LR */ 
-  /* set of live range interferences */
+                      /* set of live range interferences */
   std::set<LiveRange*, LRcmp> *fear_list;
   VectorSet forbidden; /* forbidden colors for this LR */
   std::list<LiveUnit*> *units;  /* live units making up this LR */ 
@@ -65,10 +71,8 @@ struct LRcmp
 };
 
 
-
 /*---------------------LIVE RANGE FUNCTIONS-------------------------*/
 //FIXME: review to see if these should be elsewhere (chow.c perhaps?)
-void LiveRange_AllocLiveRanges(Arena, LRList&, Unsigned_Int);
 void LiveRange_SplitNeighbors(LiveRange* lr, LRSet* , LRSet*);
 LiveUnit* AddLiveUnitOnce(LRID lrid, Block* b, VectorSet lrset, Variable orig_name);
 LiveRange* ComputePriorityAndChooseTop(LRSet* lrs);

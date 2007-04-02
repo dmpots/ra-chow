@@ -18,6 +18,7 @@ CPPSRCFILES=shared_globals.cc\
          debug.cc\
          live_unit.cc\
          spill.cc\
+         color.cc\
 
 OBJS=${SRCFILES:.c=.o}
 OBJS+=${CPPSRCFILES:.cc=.o}

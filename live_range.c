@@ -20,6 +20,7 @@
 #include "cfg_tools.h" //control graph manipulation utilities
 #include "dot_dump.h" //to dump live ranges in dot format
 #include "spill.h"
+#include "color.h"
 
 /*------------------MODULE LOCAL DEFINITIONS-------------------*/
 
@@ -63,13 +64,8 @@ namespace {
 
 
 /* local variables */
-  Arena lr_arena;
   const float UNDEFINED_PRIORITY = 666;
   const float MIN_PRIORITY = -3.4e38;
-  VectorSet** mRcBlkId_VsUsedColor;
-  VectorSet tmpbbset;
-  VectorSet no_bbs;
-  MemoryLocation* lr_mem_map;
 
 
 /* local types */
@@ -85,8 +81,7 @@ namespace {
   Priority LiveUnit_ComputePriority(LiveRange*, LiveUnit*);
   Boolean LiveRange_ColorsAvailable(LiveRange* lr);
   Boolean VectorSet_Full(VectorSet vs);
-  LiveRange* LiveRange_Create(Arena, RegisterClass);
-  VectorSet LiveRange_UsedColorSet(LiveRange* lr, Block* blk);
+  Boolean VectorSet_Empty(VectorSet vs);
   void AddEdgeExtensionNode(Edge*, LiveRange*, LiveUnit*,SpillType);
 
   bool LiveUnit_CanMoveLoad(LiveRange* lr, LiveUnit* lu);
@@ -154,6 +149,43 @@ Chain_ForAllUses(_runner, v)\
 
 /*
  *============================
+ * LiveRange::Init()
+ *============================
+ * Initialize class variables
+ ***/
+Arena LiveRange::arena = NULL;
+VectorSet LiveRange::tmpbbset = NULL;
+void LiveRange::Init(Arena arena)
+{
+  LiveRange::arena = arena;
+  LiveRange::tmpbbset = VectorSet_Create(arena, block_count+1);
+}
+
+
+/*
+ *============================
+ * LiveRange Constructor
+ *============================
+ * Allocates and initializes a live range 
+ ***/
+LiveRange::LiveRange(RegisterClass reg_class, LRID lrid)
+{
+  orig_lrid = lrid;
+  id = lrid;
+  rc = reg_class;
+  priority = UNDEFINED_PRIORITY;
+  color = NO_COLOR;
+  bb_list = VectorSet_Create(LiveRange::arena, block_count+1);
+  fear_list = new std::set<LiveRange*, LRcmp>;
+  units = new std::list<LiveUnit*>;
+  forbidden = 
+    VectorSet_Create(LiveRange::arena, RegisterClass_NumMachineReg(rc));
+  is_candidate  = TRUE;
+  type = NO_DEFS; //type will be set later
+}
+
+/*
+ *============================
  * LiveRange::begin()
  *============================
  * returns an iterator to the beginning of the live unit sequence
@@ -172,65 +204,6 @@ LiveRange::iterator LiveRange::begin() const
 LiveRange::iterator LiveRange::end() const
 {
   return units->end();
-}
-
-
-/*
- *============================
- * LiveRange_AllocLiveRanges()
- *============================
- * Allocates space for initial live ranges and sets default values.
- *
- ***/
-void LiveRange_AllocLiveRanges(Arena arena, 
-                               LRList &lrs, 
-                               Unsigned_Int num_lrs)
-{
-  LOOPVAR i;
-  lr_arena = arena;
-  Chow::liverange_count = num_lrs;
-
-  lrs.resize(Chow::liverange_count, NULL); //allocate space
-  for(i = 0; i < Chow::liverange_count; i++) //allocate each live range
-  {
-    lrs[i] = LiveRange_Create(arena,
-                              RegisterClass_InitialRegisterClassForLRID(i));
-    lrs[i]->orig_lrid = i;
-    lrs[i]->id = i;
-  }
-
-  //allocate a mapping from blocks to a set of used colors
-  mRcBlkId_VsUsedColor = (VectorSet**)
-       Arena_GetMemClear(arena,sizeof(VectorSet*)*(cRegisterClass));
-
-  for(RegisterClass rc = 0; rc < cRegisterClass; rc++)
-  {
-    mRcBlkId_VsUsedColor[rc] = (VectorSet*)
-        Arena_GetMemClear(arena,sizeof(VectorSet)*(block_count+1));
-    Block* b;
-    ForAllBlocks(b)
-    {
-      Unsigned_Int bid = id(b);
-      Unsigned_Int cReg = RegisterClass_NumMachineReg(rc);
-      mRcBlkId_VsUsedColor[rc][bid] = VectorSet_Create(arena, cReg);
-      VectorSet_Clear(mRcBlkId_VsUsedColor[rc][bid]);
-    } 
-  }
-
-  //set where all register bits are set
-
-  //temporary set used for various live range computations
-  tmpbbset = VectorSet_Create(arena, block_count+1);
-  no_bbs = VectorSet_Create(arena, block_count+1);
-  VectorSet_Clear(no_bbs);
-
-
-  unsigned int seed = time(NULL);
-  //seed = 1154486980;
-  srand(seed);
-  debug("SRAND: %u", seed);
-  //srand(74499979);
-  //srand(44979);
 }
 
 /*
@@ -320,7 +293,7 @@ void LiveRange::AssignColor()
   //update the basic block taken set and add loads and stores
   LiveRange_ForAllUnits(this, unit)
   {
-    VectorSet vs = LiveRange_UsedColorSet(this, unit->block);
+    VectorSet vs = Coloring::UsedColors(this->rc, unit->block);
     assert(!VectorSet_Member(vs, color));
     VectorSet_Insert(vs, color);
     mBlkIdSSAName_Color[id(unit->block)][orig_lrid] = color;
@@ -673,32 +646,6 @@ LiveRange* ComputePriorityAndChooseTop(LRSet* lrs)
 
 /*------------------INTERNAL MODULE FUNCTIONS--------------------*/
 namespace {
-/*
- *============================
- * LiveRange_Create()
- *============================
- * Allocates and initializes a live range 
- ***/
-LiveRange* LiveRange_Create(Arena arena, RegisterClass rc)
-{
-  LiveRange* lr;
-  lr = (LiveRange*)Arena_GetMemClear(arena, sizeof(LiveRange));
-  lr->orig_lrid = (LRID)-1;
-  lr->id = 0;
-  lr->priority = UNDEFINED_PRIORITY;
-  lr->color = NO_COLOR;
-  lr->bb_list = VectorSet_Create(arena, block_count+1);
-  lr->fear_list = new std::set<LiveRange*, LRcmp>;
-  lr->units = new std::list<LiveUnit*>;
-  lr->forbidden = VectorSet_Create(arena, RegisterClass_NumMachineReg(rc));
-  lr->is_candidate  = TRUE;
-  lr->type = NO_DEFS;
-  lr->rc  = rc;
-
-  return lr;
-}
-
-
 
 /*
  *=============================
@@ -708,7 +655,7 @@ LiveRange* LiveRange_Create(Arena arena, RegisterClass rc)
  ***/
 LiveUnit* LiveRange_AddLiveUnitBlock(LiveRange* lr, Block* b)
 {
-  LiveUnit* unit = LiveUnit_Alloc(lr_arena);
+  LiveUnit* unit = LiveUnit_Alloc(LiveRange::arena);
 
   //assign initial values
   unit->block = b;
@@ -788,8 +735,8 @@ Boolean LiveRange_InterferesWith(LiveRange* lr1, LiveRange* lr2)
   {
     return FALSE;
   }
-  VectorSet_Intersect(tmpbbset, lr1->bb_list, lr2->bb_list);
-  return (!VectorSet_Equal(no_bbs, tmpbbset));
+  VectorSet_Intersect(LiveRange::tmpbbset, lr1->bb_list, lr2->bb_list);
+  return (!VectorSet_Empty(LiveRange::tmpbbset));
 }
 
 
@@ -819,7 +766,6 @@ void LiveRange_RemoveInterference(LiveRange* lr1, LiveRange* lr2)
 Priority LiveRange_OrigComputePriority(LiveRange* lr);
 Priority LiveRange_ComputePriority(LiveRange* lr)
 {
-  //return .1*(rand() % 100);
   LiveUnit* lu;
   Priority pr = 0.0;
   Unsigned_Int clu = 0; //count of live units
@@ -946,7 +892,7 @@ Boolean LiveRange_UnColorable(LiveRange* lr)
     //must have a free register where we have a def or a use
     if(unit->defs > 0 || unit->uses > 0)
     {
-      VectorSet vsUsedColors = LiveRange_UsedColorSet(lr, unit->block);
+      VectorSet vsUsedColors = Coloring::UsedColors(lr->rc, unit->block);
       if(!VectorSet_Full(vsUsedColors))
       {
         return false;
@@ -969,7 +915,7 @@ void AddEdgeExtensionNode(Edge* e, LiveRange* lr, LiveUnit* unit,
   {
     //create and add the edge extension
     ee = (Edge_Extension*) 
-      Arena_GetMemClear(lr_arena, sizeof(Edge_Extension));
+      Arena_GetMemClear(LiveRange::arena, sizeof(Edge_Extension));
     ee->spill_list = new std::list<MovedSpillDescription>;
     edgPred->edge_extension = ee;
   }
@@ -1103,7 +1049,7 @@ LRTuple LiveRange_Split(LiveRange* origlr,
  */
 LiveRange* LiveRange_SplitFrom(LiveRange* origlr)
 {
-  LiveRange* newlr = LiveRange_Create(lr_arena, origlr->rc);
+  LiveRange* newlr = new LiveRange(origlr->rc, origlr->id);
   newlr->orig_lrid = origlr->orig_lrid;
   newlr->id = LiveRange_NextId;
   newlr->is_candidate = TRUE;
@@ -1188,7 +1134,7 @@ void LiveRange_UpdateAfterSplit(LiveRange* newlr,
   LiveRange_ForAllUnits(origlr, unit)
   {
     unit = *i;
-    VectorSet vsUsed = LiveRange_UsedColorSet(origlr, unit->block);
+    VectorSet vsUsed = Coloring::UsedColors(origlr->rc, unit->block);
     VectorSet_Union(origlr->forbidden, 
                     origlr->forbidden,
                     vsUsed);
@@ -1210,7 +1156,7 @@ void LiveRange_UpdateAfterSplit(LiveRange* newlr,
 void LiveRange_AddBlock(LiveRange* lr, Block* b)
 {
   VectorSet_Insert(lr->bb_list, id(b));
-  VectorSet vsUsed = LiveRange_UsedColorSet(lr, b);
+  VectorSet vsUsed = Coloring::UsedColors(lr->rc, b);
   VectorSet_Union(lr->forbidden, 
                   lr->forbidden,
                   vsUsed);
@@ -1246,7 +1192,7 @@ LiveUnit* LiveRange_ChooseSplitPoint(LiveRange* lr)
 
   LiveRange_ForAllUnits(lr, unit)
   {
-    VectorSet vsUsed = LiveRange_UsedColorSet(lr, unit->block);
+    VectorSet vsUsed = Coloring::UsedColors(lr->rc, unit->block);
     if(!VectorSet_Full(vsUsed))
     {
       //only take it if there is a use
@@ -1289,7 +1235,7 @@ LiveUnit* LiveRange_IncludeInSplit(LiveRange* newlr,
   LiveUnit* unit = NULL;
   //we can include this block in the split if it does not max out the
   //forbidden set
-  VectorSet vsUsed = LiveRange_UsedColorSet(origlr, b);
+  VectorSet vsUsed = Coloring::UsedColors(origlr->rc, b);
   VectorSet vsT =
     RegisterClass_TmpVectorSet(origlr->rc);
   VectorSet_Union(vsT,
@@ -1520,20 +1466,10 @@ Boolean VectorSet_Full(VectorSet vs)
 {
   return (VectorSet_Size(vs) == vs->universe_size);
 }
-
-
-/*
- *=============================
- * LiveRange_UsedColorSet()
- *=============================
- *
- ***/
-VectorSet LiveRange_UsedColorSet(LiveRange* lr, Block* blk)
+Boolean VectorSet_Empty(VectorSet vs)
 {
-  RegisterClass rc = lr->rc;
-  return mRcBlkId_VsUsedColor[rc][id(blk)];
+  return (VectorSet_Size(vs) == 0);
 }
-
 
 /*
  *================================

@@ -30,6 +30,7 @@
 #include "assign.h" //Handles some aspects of register assignment
 #include "cfg_tools.h" 
 #include "spill.h" 
+#include "color.h" 
 
 
 /* types */
@@ -70,6 +71,7 @@ static void InitChow();
 static UFSet* Find_Set(Variable v);
 static void ConvertLiveInNamespaceSSAToLiveRange();
 static void MoveLoadsAndStores();
+void AllocLiveRanges(Arena arena, Unsigned_Int num_lrs);
 
 //copy operations
 namespace {
@@ -288,9 +290,12 @@ void LiveRange_BuildInitialSSA()
                                        lr_name_map);
   }
 
+  //initialize coloring structures based on number of register classes
+  Coloring::Init(chow_arena, cRegisterClass);
+
   //now that we know how many live ranges we start with allocate them
   bb_stats = Compute_BBStats(uf_arena, SSA_def_count);
-  LiveRange_AllocLiveRanges(chow_arena, live_ranges, clrInitial);
+  AllocLiveRanges(chow_arena, clrInitial);
 
   //build the interference graph
   //find all live ranges that are referenced or live out in this
@@ -392,6 +397,31 @@ void LiveRange_BuildInitialSSA()
     live_ranges[i]->MarkLoadsAndStores();
 
   Debug::LiveRange_DDumpAll(&live_ranges);
+}
+
+/*
+ *============================
+ * AllocLiveRanges()
+ *============================
+ * Allocates space for initial live ranges and sets default values.
+ *
+ ***/
+void AllocLiveRanges(Arena arena, Unsigned_Int num_lrs)
+{
+  using Chow::live_ranges;
+  using Chow::liverange_count;
+
+  //initialize LiveRange class
+  LiveRange::Init(arena);
+
+  //create initial live ranges
+  liverange_count = num_lrs;
+  live_ranges.resize(liverange_count, NULL); //allocate space
+  for(LOOPVAR i = 0; i < liverange_count; i++) //allocate each live range
+  {
+    live_ranges[i] = new
+      LiveRange(RegisterClass_InitialRegisterClassForLRID(i), i);
+  }
 }
 
 //make sure that if we have already added a live unit for this lrid
