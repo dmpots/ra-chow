@@ -72,6 +72,8 @@ static UFSet* Find_Set(Variable v);
 static void ConvertLiveInNamespaceSSAToLiveRange();
 static void MoveLoadsAndStores();
 void AllocLiveRanges(Arena arena, Unsigned_Int num_lrs);
+void SplitNeighbors(LiveRange* lr, LRSet* constr_lr, LRSet* unconstr_lr);
+void UpdateConstrainedLists(LiveRange* , LiveRange* , LRSet*, LRSet*);
 
 //copy operations
 namespace {
@@ -150,7 +152,7 @@ void RunChow()
     }
     lr->AssignColor();
     debug("LR: %d is top priority, given color: %d", lr->id, lr->color);
-    LiveRange_SplitNeighbors(lr, &constr_lrs, &unconstr_lrs);
+    SplitNeighbors(lr, &constr_lrs, &unconstr_lrs);
   }
 
   //assign registers to unconstrained live ranges
@@ -171,6 +173,12 @@ void RunChow()
   chowstats.clrFinal = live_ranges.size();
 }
 
+/*
+ *=============================
+ * AllocChowMemory()
+ *=============================
+ * Allocates memory used for chow algorithm
+ */
 void AllocChowMemory()
 {
   //allocate a mapping of block x SSA_name -> register
@@ -516,6 +524,124 @@ void ConvertLiveInNamespaceSSAToLiveRange()
     }
   }
 }
+
+/*
+ *============================
+ * SplitNeighbors()
+ *============================
+ *
+ * Checks a live range for neighbors that need to be split because we
+ * just assigned a color to this live range. a neighbor will need to
+ * be split when its forbidden set is equal to the set of all
+ * registers.
+ *
+ * splitting the neighbors may shuffle them around on the constrained
+ * and unconstrained lists so we pass them in for possible
+ * modification.
+ ***/
+void SplitNeighbors(LiveRange* lr, LRSet* constr_lr, LRSet* unconstr_lr)
+{
+  debug("BEGIN SPLITTING");
+
+  //make a copy of the interference list as a worklist since splitting
+  //may add and remove items to the original interference list
+  LRVec worklist(lr->fear_list->size());
+  copy(lr->fear_list->begin(), lr->fear_list->end(), worklist.begin());
+
+  //our neighbors are the live ranges we interfere with
+  LiveRange* intf_lr;
+  while(!worklist.empty())
+  {
+    intf_lr = worklist.back(); worklist.pop_back();
+    //only check allocation candidates, may not be a candidate if it
+    //has already been assigned a color
+    if(!(intf_lr->is_candidate)) continue;
+
+    //split if no registers available
+    if(!intf_lr->HasColorAvailable())
+    {
+      debug("Need to split LR: %d", intf_lr->id);
+      if(intf_lr->IsEntirelyUnColorable())
+      {
+        //delete this live range from the interference graph. we dont
+        //need to update the constrained lists at this point because
+        //deleting this live range should have no effect on whether
+        //the live ranges it interferes with are constrained or not
+        intf_lr->MarkNonCandidateAndDelete();
+      }
+      else //try to split
+      {
+        //Split() returns the new live range that we know is colorable
+        LiveRange* new_lr = intf_lr->Split();
+        UpdateConstrainedLists(new_lr, intf_lr, constr_lr, unconstr_lr);
+
+        //if the remainder of the live range we just split from
+        //interferes with the live range we assigned a color to then 
+        //add it to the work list because it may need to be split more
+        if(intf_lr->InterferesWith(lr)) worklist.push_back(intf_lr);
+
+        debug("split complete for LR: %d", intf_lr->id);
+        Debug::LiveRange_DDump(intf_lr);
+        Debug::LiveRange_DDump(new_lr);
+      }
+    }
+  }
+  debug("DONE SPLITTING");
+} 
+
+
+/*
+ *================================
+ * UpdateConstrainedLists()
+ *================================
+ * Makes sure that the live ranges are in the constrained lists if
+ * they are constrained. This is used to update the lists after a live
+ * range split for the live ranges that interfere with both the old
+ * and the new live range.
+ *
+ ***/
+void UpdateConstrainedLists(LiveRange* newlr, 
+                            LiveRange* origlr,
+                            LRSet* constr_lrs, 
+                            LRSet* unconstr_lrs)
+{
+  //update constrained lists, only need to update for any live range
+  //that interferes with both the new and original live range because
+  //those are the only live ranges that could have changed status
+  LRSet updates;
+  set_intersection(newlr->fear_list->begin(), newlr->fear_list->end(),
+                   origlr->fear_list->begin(), origlr->fear_list->end(),
+                   inserter(updates,updates.begin()));
+
+  for(LRSet::iterator i = updates.begin(); i != updates.end(); i++)
+  {
+    LiveRange* lr = *i;
+    if(!lr->is_candidate) continue;
+
+    if(lr->IsConstrained())
+    {
+      debug("ensuring LR: %d is in constr", lr->id);
+      unconstr_lrs->erase(lr);
+      constr_lrs->insert(lr);
+    }
+  }
+
+  //also, need to update the new and original live range positions
+  if(newlr->IsConstrained())
+  {
+    constr_lrs->insert(newlr);
+  }
+  else
+  {
+    unconstr_lrs->insert(newlr);
+  }
+  if(!origlr->IsConstrained())
+  {
+    constr_lrs->erase(origlr);
+    unconstr_lrs->insert(origlr);
+  }
+}
+
 
 
 /*

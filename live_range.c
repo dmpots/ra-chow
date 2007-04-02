@@ -79,7 +79,6 @@ namespace {
 /* local functions */
   void Def_CollectUniqueUseNames(Variable, std::list<Variable>&);
   Priority LiveUnit_ComputePriority(LiveRange*, LiveUnit*);
-  Boolean LiveRange_ColorsAvailable(LiveRange* lr);
   Boolean VectorSet_Full(VectorSet vs);
   Boolean VectorSet_Empty(VectorSet vs);
   void AddEdgeExtensionNode(Edge*, LiveRange*, LiveUnit*,SpillType);
@@ -92,23 +91,19 @@ namespace {
   void LiveRange_RemoveLiveUnit(LiveRange* , LiveUnit* );
   void LiveRange_RemoveLiveUnitBlock(LiveRange* lr, Block* b);
   void LiveRange_TransferLiveUnit(LiveRange*, LiveRange*, LiveUnit*);
-  Boolean LiveRange_UnColorable(LiveRange* lr);
   void LiveRange_RemoveInterference(LiveRange* from, LiveRange* with);
-  LRTuple LiveRange_Split(LiveRange* lr, LRSet* , LRSet* );
   LiveUnit* LiveRange_ChooseSplitPoint(LiveRange*);
   LiveUnit* LiveRange_IncludeInSplit(LiveRange*, LiveRange*, Block*);
   void LiveRange_AddBlock(LiveRange* lr, Block* b);
-  void LiveRange_UpdateAfterSplit(LiveRange*,LiveRange*,LRSet*,LRSet*);
+  void LiveRange_UpdateAfterSplit(LiveRange*,LiveRange*);
   Boolean LiveRange_EntryPoint(LiveRange* lr, LiveUnit* unit);
   void LiveRange_MarkLoads(LiveRange* lr);
   void LiveRange_MarkStores(LiveRange* lr);
   void LiveRange_InsertLoad(LiveRange* lr, LiveUnit* unit);
   void LiveRange_InsertStore(LiveRange*lr, LiveUnit* unit);
   LiveRange* LiveRange_SplitFrom(LiveRange* origlr);
-  Boolean LiveRange_InterferesWith(LiveRange* lr1, LiveRange* lr2);
   Priority LiveRange_OrigComputePriority(LiveRange* lr);
   Priority LiveRange_ComputePriority(LiveRange* lr);
-  void UpdateConstrainedLists(LRSet* , LRSet* , LRSet* ); 
 }
 
 
@@ -401,72 +396,6 @@ void LiveRange::AssignColor()
 }
 
 /*
- *============================
- * LiveRange_SplitNeighbors()
- *============================
- *
- * Checks a live range for neighbors that need to be split because we
- * just assigned a color to this live range. a neighbor will need to
- * be split when its forbidden set is equal to the set of all
- * registers.
- *
- * splitting the neighbors may shuffle them around on the constrained
- * and unconstrained lists so we pass them in for possible
- * modification.
- ***/
-void LiveRange_SplitNeighbors(LiveRange* lr, 
-                              LRSet* constr_lr,
-                              LRSet* unconstr_lr)
-{
-  debug("BEGIN SPLITTING");
-
-  //make a copy of the interference list as a worklist since splitting
-  //may add and remove items to the original interference list
-  LRVec worklist(lr->fear_list->size());
-  copy(lr->fear_list->begin(), lr->fear_list->end(), worklist.begin());
-
-  //our neighbors are the live ranges we interfere with
-  LiveRange* intf_lr;
-  LRTuple lr_tup;
-  while(!worklist.empty())
-  {
-    intf_lr = worklist.back(); worklist.pop_back();
-    //only check allocation candidates, may not be a candidate if it
-    //has already been assigned a color
-    if(!(intf_lr->is_candidate)) continue;
-
-    //split if no registers available
-    if(!LiveRange_ColorsAvailable(intf_lr))
-    {
-      debug("Need to split LR: %d", intf_lr->id);
-      if(LiveRange_UnColorable(intf_lr))
-      {
-        //delete this live range from the interference graph. we dont
-        //need to update the constrained lists at this point because
-        //deleting this live range should have no effect on whether
-        //the live ranges it interferes with are constrained or not
-        intf_lr->MarkNonCandidateAndDelete();
-      }
-      else //try to split
-      {
-        lr_tup = LiveRange_Split(intf_lr, constr_lr, unconstr_lr);
-
-        //if the remainder of the live range we just split 
-        //interferes with the live range we assigned a color to then 
-        //add it to the work list because it may need to be split more
-        if(LiveRange_InterferesWith(lr_tup.snd, lr))
-          worklist.push_back(lr_tup.snd)
-
-        debug("split complete for LR: %d", intf_lr->id);
-        Debug::LiveRange_DDump(lr_tup.fst);
-        Debug::LiveRange_DDump(lr_tup.snd);
-      }
-    }
-  }
-  debug("DONE SPLITTING");
-} 
-
-/*
  *=============================
  * LiveRange::LiveUnitForBlock()
  *=============================
@@ -620,7 +549,7 @@ LiveRange* ComputePriorityAndChooseTop(LRSet* lrs)
       //we compute the priority function. if the priority changes due
       //to a live range split it should be reset to undefined so we
       //can compute it again.
-      if(lr->priority < 0.0 || LiveRange_UnColorable(lr))
+      if(lr->priority < 0.0 || lr->IsEntirelyUnColorable())
       {
         lr->MarkNonCandidateAndDelete();
         continue;
@@ -643,6 +572,137 @@ LiveRange* ComputePriorityAndChooseTop(LRSet* lrs)
   return top_lr;
 }
 
+/*
+ *=============================
+ * LiveRange::InterferesWith()
+ *=============================
+ *
+ * Used to determine if two live ranges interfere
+ * true - if the live ranges interfere
+ ***/
+Boolean LiveRange::InterferesWith(LiveRange* lr2)
+{
+  if(rc != lr2->rc)
+  {
+    return FALSE;
+  }
+  VectorSet_Intersect(LiveRange::tmpbbset, bb_list, lr2->bb_list);
+  return (!VectorSet_Empty(LiveRange::tmpbbset));
+}
+
+/*
+ *===============================
+ * LiveRange::HasColorAvailable()
+ *===============================
+ * return true if there is at least one register that can be assigned
+ *  to this live range in all of its live units
+ */ 
+Boolean LiveRange::HasColorAvailable()
+{
+  return (!VectorSet_Full(forbidden));
+}
+
+/*
+ *=======================================
+ * LiveRange::IsEntirelyUnColorable()
+ *=======================================
+ * returns true if the live range is uncolorable
+ *
+ ***/
+Boolean LiveRange::IsEntirelyUnColorable()
+{
+  //a live range is uncolorable when all registers have been used
+  //throughout the entire length of the live range (i.e. each live
+  //unit has no available registers). we need to have a mapping of
+  //basic blocks to used registers for that block in order to see
+  //which registers are available.
+  
+  LiveUnit* unit;
+  LiveRange_ForAllUnits(this, unit)
+  {
+    //must have a free register where we have a def or a use
+    if(unit->defs > 0 || unit->uses > 0)
+    {
+      VectorSet vsUsedColors = Coloring::UsedColors(rc, unit->block);
+      if(!VectorSet_Full(vsUsedColors))
+      {
+        return false;
+      }
+    }
+  }
+
+  debug("LR: %d is UNCOLORABLE", id);
+  return true;
+}
+
+/*
+ *============================
+ * LiveRange::Split()
+ *============================
+ *
+ * Does the majority of the work in splitting a live range. the live
+ * range will be split into two live ranges. the new live range may
+ * interfere with the live range we just assigned a color to, so we
+ * pass the intereference list in case we need to add to it.
+ * 
+ * splitting the neighbors may shuffle them around on the constrained
+ * and unconstrained lists so we pass them in for possible
+ * modification.
+ *
+ * return value:
+ * fst - the new live range carved out from the original
+ * snd - the remainder of the original live range
+ ***/
+LiveRange* LiveRange::Split()
+{
+  chowstats.cSplits++;
+
+  //create a new live range and initialize values
+  LiveRange* newlr = LiveRange_SplitFrom(this);
+
+  //chose the live unit that will start the new live range
+  LiveUnit* startunit;
+  LiveUnit* unit;
+  startunit = LiveRange_ChooseSplitPoint(this);
+  assert(startunit != NULL);
+
+  debug("adding block: %s to  lr'", bname(startunit->block));
+  LiveRange_TransferLiveUnit(newlr, this, startunit);
+  Chow::live_ranges.push_back(newlr);
+  debug("ADDED LR: %d, size: %d", newlr->id, (int)Chow::live_ranges.size());
+
+  //keep a queue of successors that we may add to the new live range
+  std::list<Block*> succ_list;
+  succ_list.push_back(startunit->block);
+  while(!succ_list.empty())
+  {
+    Edge* e;
+    Block* b = succ_list.front();
+    succ_list.pop_front();
+
+    Block_ForAllSuccs(e, b)
+    {
+      Block* succ = e->succ;
+      if((unit = LiveRange_IncludeInSplit(newlr, this, succ)) != NULL)
+      {
+        debug("adding block: %s to  lr'", bname(succ));
+        LiveRange_TransferLiveUnit(newlr, this, unit);
+        succ_list.push_back(succ); //explore the succs of this node
+      }
+    }
+  }
+
+  LiveRange_UpdateAfterSplit(newlr, this);
+  
+  if(Debug::dot_dump_lr && Debug::dot_dump_lr == newlr->orig_lrid)
+  {
+    char fname[32] = {0};
+    sprintf(fname, "tmp_%d_%d.dot", newlr->orig_lrid, newlr->id);
+    dot_dump_lr(newlr, fname);
+    Debug::dot_dumped_lrids.push_back(newlr->id);
+  }
+  return newlr;
+}
 
 /*------------------INTERNAL MODULE FUNCTIONS--------------------*/
 namespace {
@@ -718,25 +778,6 @@ void LiveRange_RemoveLiveUnit(LiveRange* lr, LiveUnit* unit)
   {
     lr->units->erase(elem);
   }
-}
-
-
-/*
- *=============================
- * LiveRange_InterferesWith()
- *=============================
- *
- * Used to determine if two live ranges interfere
- * true - if the live ranges interfere
- ***/
-Boolean LiveRange_InterferesWith(LiveRange* lr1, LiveRange* lr2)
-{
-  if(lr1->rc != lr2->rc)
-  {
-    return FALSE;
-  }
-  VectorSet_Intersect(LiveRange::tmpbbset, lr1->bb_list, lr2->bb_list);
-  return (!VectorSet_Empty(LiveRange::tmpbbset));
 }
 
 
@@ -871,39 +912,6 @@ bool LiveUnit_CanMoveLoad(LiveRange* lr, LiveUnit* lu)
 }
 
 
-/*
- *=======================================
- * LiveRange_UnColorable()
- *=======================================
- * returns true if the live range is uncolorable
- *
- ***/
-Boolean LiveRange_UnColorable(LiveRange* lr)
-{
-  //a live range is uncolorable when all registers have been used
-  //throughout the entire length of the live range (i.e. each live
-  //unit has no available registers). we need to have a mapping of
-  //basic blocks to used registers for that block in order to see
-  //which registers are available.
-  
-  LiveUnit* unit;
-  LiveRange_ForAllUnits(lr, unit)
-  {
-    //must have a free register where we have a def or a use
-    if(unit->defs > 0 || unit->uses > 0)
-    {
-      VectorSet vsUsedColors = Coloring::UsedColors(lr->rc, unit->block);
-      if(!VectorSet_Full(vsUsedColors))
-      {
-        return false;
-      }
-    }
-  }
-
-  debug("LR: %d is UNCOLORABLE", lr->id);
-  return true;
-}
-
 
 void AddEdgeExtensionNode(Edge* e, LiveRange* lr, LiveUnit* unit, 
                           SpillType spillType)
@@ -965,80 +973,6 @@ void LiveRange_InsertStore(LiveRange*lr, LiveUnit* unit)
 }
 
 
-/*
- *============================
- * LiveRange_Split()
- *============================
- *
- * Does the majority of the work in splitting a live range. the live
- * range will be split into two live ranges. the new live range may
- * interfere with the live range we just assigned a color to, so we
- * pass the intereference list in case we need to add to it.
- * 
- * splitting the neighbors may shuffle them around on the constrained
- * and unconstrained lists so we pass them in for possible
- * modification.
- *
- * return value:
- * fst - the new live range carved out from the original
- * snd - the remainder of the original live range
- ***/
-LRTuple LiveRange_Split(LiveRange* origlr,
-                     LRSet* constr_lrs,
-                     LRSet* unconstr_lrs)
-{
-  chowstats.cSplits++;
-
-  //create a new live range and initialize values
-  LiveRange* newlr = LiveRange_SplitFrom(origlr);
-
-  //chose the live unit that will start the new live range
-  LiveUnit* startunit;
-  LiveUnit* unit;
-  startunit = LiveRange_ChooseSplitPoint(origlr);
-  assert(startunit != NULL);
-
-  debug("adding block: %s to  lr'", bname(startunit->block));
-  LiveRange_TransferLiveUnit(newlr, origlr, startunit);
-  Chow::live_ranges.push_back(newlr);
-  debug("ADDED LR: %d, size: %d", newlr->id, (int)Chow::live_ranges.size());
-
-  //keep a queue of successors that we may add to the new live range
-  std::list<Block*> succ_list;
-  succ_list.push_back(startunit->block);
-  while(!succ_list.empty())
-  {
-    Edge* e;
-    Block* b = succ_list.front();
-    succ_list.pop_front();
-
-    Block_ForAllSuccs(e, b)
-    {
-      Block* succ = e->succ;
-      if((unit = LiveRange_IncludeInSplit(newlr, origlr, succ)) != NULL)
-      {
-        debug("adding block: %s to  lr'", bname(succ));
-        LiveRange_TransferLiveUnit(newlr, origlr, unit);
-        succ_list.push_back(succ); //explore the succs of this node
-      }
-    }
-  }
-
-  LiveRange_UpdateAfterSplit(newlr, origlr, constr_lrs, unconstr_lrs);
-  
-  LRTuple ret;
-  ret.fst = newlr; ret.snd = origlr;
-
-  if(Debug::dot_dump_lr && Debug::dot_dump_lr == newlr->orig_lrid)
-  {
-    char fname[32] = {0};
-    sprintf(fname, "tmp_%d_%d.dot", newlr->orig_lrid, newlr->id);
-    dot_dump_lr(newlr, fname);
-    Debug::dot_dumped_lrids.push_back(newlr->id);
-  }
-  return ret;
-}
-
 
 /*
  *================================
@@ -1069,10 +1003,7 @@ LiveRange* LiveRange_SplitFrom(LiveRange* origlr)
  *================================
  *
  */
-void LiveRange_UpdateAfterSplit(LiveRange* newlr, 
-                                LiveRange* origlr,
-                                LRSet* constr_lrs,
-                                LRSet* unconstr_lrs)
+void LiveRange_UpdateAfterSplit(LiveRange* newlr, LiveRange* origlr)
 {
 
   //1. rebuild interferences of those live ranges that interfere with 
@@ -1082,43 +1013,19 @@ void LiveRange_UpdateAfterSplit(LiveRange* newlr,
   LiveRange_ForAllFearsCopy(origlr, fearlr)
   {
     //update newlr interference
-    if(LiveRange_InterferesWith(newlr, fearlr))
+    if(newlr->InterferesWith(fearlr))
     {
       //LiveRange_AddInterference(newlr, fearlr);
       newlr->AddInterference(fearlr);
     }
 
     //update origlr interference
-    if(!LiveRange_InterferesWith(origlr, fearlr))
+    if(!origlr->InterferesWith(fearlr))
     {
       LiveRange_RemoveInterference(origlr, fearlr);
     }
   }
 
-  //update constrained lists, only need to update for any live range
-  //that interferes with both the new and original live range because
-  //those are the only live ranges that could have changed status
-  LRSet updates;
-  set_intersection(newlr->fear_list->begin(), newlr->fear_list->end(),
-                origlr->fear_list->begin(), origlr->fear_list->end(),
-                inserter(updates,updates.begin()));
-  UpdateConstrainedLists(&updates,constr_lrs,unconstr_lrs);
-  //also, need to update the new and original live range positions
-  //updates.insert(newlr);
-  //updates.insert(origlr);
-  if(newlr->IsConstrained())
-  {
-    constr_lrs->insert(newlr);
-  }
-  else
-  {
-    unconstr_lrs->insert(newlr);
-  }
-  if(!origlr->IsConstrained())
-  {
-    constr_lrs->erase(origlr);
-    unconstr_lrs->insert(origlr);
-  }
 
   //the need_load and need_store flags actually depend on the
   //boundries of the live range so we must recompute them
@@ -1449,18 +1356,6 @@ Boolean LiveRange_EntryPoint(LiveRange* lr, LiveUnit* unit)
 }
 
 
-
-/*
- *============================
- * LiveRange_ColorsAvailable()
- *============================
- * return true if there are registers that can be assigned to this
- * live range in at least on basic block
- */ 
-Boolean LiveRange_ColorsAvailable(LiveRange* lr)
-{
-  return (!VectorSet_Full(lr->forbidden));
-}
 //this breaks all encapsulation for VectorSets but i need this 
 Boolean VectorSet_Full(VectorSet vs)
 {
@@ -1469,35 +1364,6 @@ Boolean VectorSet_Full(VectorSet vs)
 Boolean VectorSet_Empty(VectorSet vs)
 {
   return (VectorSet_Size(vs) == 0);
-}
-
-/*
- *================================
- * UpdateConstrainedLists()
- *================================
- * Makes sure that the live ranges are in the constrained lists if
- * they are constrained. This is used to update the lists after a live
- * range split for the live ranges that interfere with both the old
- * and the new live range.
- *
- ***/
-void UpdateConstrainedLists(LRSet* for_lrs, 
-                                   LRSet* constr_lrs,
-                                   LRSet* unconstr_lrs)
-{
-  LiveRange* lr;
-  for(LRSet::iterator i = for_lrs->begin(); i != for_lrs->end(); i++)
-  {
-    lr = *i;
-    if(!lr->is_candidate) continue;
-
-    if(lr->IsConstrained())
-    {
-      debug("ensuring LR: %d is in constr", lr->id);
-      unconstr_lrs->erase(lr);
-      constr_lrs->insert(lr);
-    }
-  }
 }
 
 }//end anonymous namespace

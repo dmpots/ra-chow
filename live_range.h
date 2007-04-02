@@ -7,6 +7,7 @@
 #include <vector>
 #include "types.h"
 
+/*--------------------------FORWARD DEFS--------------------------*/
 /* forward definition of a comparison object used by the std::set
  * implementation to compare LiveRanges. implementation of this struct
  * follows below */
@@ -15,6 +16,7 @@ struct LRcmp;
 /* forward definition of LiveUnit structure */
 struct LiveUnit;
 
+/*-------------------LIVE RANGE DATA STRUCTURE--------------------*/
 /* a live range is the unit of allocation for the register allocator.
  * these will be assigned a color */
 typedef float Priority;
@@ -54,8 +56,13 @@ struct LiveRange
   Opcode_Names StoreOpcode() const;
   Opcode_Names CopyOpcode() const;
   unsigned int Alignment() const;
+  LiveRange* Split();
+  Boolean IsEntirelyUnColorable();
+  Boolean HasColorAvailable();
+  Boolean InterferesWith(LiveRange* lr2);
 
-  /* iterator for live units in this live range */
+  /* iterators */
+  /* for live units in this live range */
   typedef std::list<LiveUnit*>::const_iterator iterator;
   iterator begin() const;
   iterator end() const;
@@ -71,9 +78,8 @@ struct LRcmp
 };
 
 
-/*---------------------LIVE RANGE FUNCTIONS-------------------------*/
+/*---------------------HELPER FUNCTIONS-------------------------*/
 //FIXME: review to see if these should be elsewhere (chow.c perhaps?)
-void LiveRange_SplitNeighbors(LiveRange* lr, LRSet* , LRSet*);
 LiveUnit* AddLiveUnitOnce(LRID lrid, Block* b, VectorSet lrset, Variable orig_name);
 LiveRange* ComputePriorityAndChooseTop(LRSet* lrs);
 
@@ -82,6 +88,7 @@ inline void LRName(const LiveRange* lr, char* buf)
   sprintf(buf, "%d_%d", lr->orig_lrid, lr->id);
 }
 
+/*-------------------SPILLING DATA STRUCTURES-----------------------*/
 /* for moving loads and stores onto edges so that we can do code
  * motion as described in chow */
 enum SpillType  {STORE_SPILL, LOAD_SPILL};
