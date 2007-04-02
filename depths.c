@@ -1,4 +1,4 @@
-#include "globals.h"
+#include "shared_globals.h"
 #include "depths.h"
 static Arena depth_arena;
 static DJ_GRAPH_INFO *DJ_graph_info;

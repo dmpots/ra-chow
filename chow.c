@@ -38,7 +38,6 @@ typedef unsigned int LOOPVAR;
 
 /* globals */
 LRList Chow::live_ranges;
-//LRList live_ranges = Chow::live_ranges; //FIXME: HACK
 Arena  chow_arena;
 BB_Stats bb_stats;
 Unsigned_Int** mBlkIdSSAName_Color;

@@ -5,7 +5,7 @@
  * way and also in the Globals namespace, which is how they are
  * accessed in the chow allocator.
  */
-#include "globals.h"
+#include "shared_globals.h"
 
 unsigned int* depths;
 unsigned int* Globals::depths;

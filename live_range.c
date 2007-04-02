@@ -15,10 +15,10 @@
 #include "chow.h"
 #include "params.h"
 #include "util.h"
-#include "globals.h" 
+#include "shared_globals.h" 
 #include "rc.h" //RegisterClass definitions 
 #include "cfg_tools.h" //control graph manipulation utilities
-#include "dot_dump.h" //control graph manipulation utilities
+#include "dot_dump.h" //to dump live ranges in dot format
 #include "spill.h"
 
 /*------------------MODULE LOCAL DEFINITIONS-------------------*/
@@ -235,7 +235,7 @@ void LiveRange_AllocLiveRanges(Arena arena,
 
 /*
  *=============================
- * LiveRange_AddInterference()
+ * LiveRange::AddInterference()
  *=============================
  *
  ***/
@@ -501,7 +501,6 @@ void LiveRange_SplitNeighbors(LiveRange* lr,
  * Returns the LiveUnit associated with the given block. If no such
  * unit exists NULL is returned.
  ***/
-//LiveUnit* LiveRange::operator[](Block* b)
 LiveUnit* LiveRange::LiveUnitForBlock(Block* b) const
 {
   LiveUnit* unit;
@@ -695,9 +694,6 @@ LiveRange* LiveRange_Create(Arena arena, RegisterClass rc)
   lr->is_candidate  = TRUE;
   lr->type = NO_DEFS;
   lr->rc  = rc;
-
-  //for memory operations
-
 
   return lr;
 }

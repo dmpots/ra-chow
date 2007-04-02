@@ -6,7 +6,7 @@
 #include "cleave.h"
 #include "debug.h"
 #include "depths.h" //for computing loop nesting depth
-#include "globals.h" 
+#include "shared_globals.h" 
 #include "rc.h" //RegisterClass definitions 
 #include "dot_dump.h"
 

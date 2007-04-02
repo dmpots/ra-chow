@@ -13,7 +13,7 @@ SRCFILES=union_find.c\
          cfg_tools.c\
          dot_dump.c\
 
-CPPSRCFILES=globals.cc\
+CPPSRCFILES=shared_globals.cc\
          params.cc\
          debug.cc\
          live_unit.cc\
