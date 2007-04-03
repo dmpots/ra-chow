@@ -585,8 +585,6 @@ LiveRange* LiveRange::Split()
 
   debug("adding block: %s to  lr'", bname(startunit->block));
   LiveRange_TransferLiveUnit(newlr, this, startunit);
-  Chow::live_ranges.push_back(newlr);
-  debug("ADDED LR: %d, size: %d", newlr->id, (int)Chow::live_ranges.size());
 
   //keep a queue of successors that we may add to the new live range
   std::list<Block*> succ_list;

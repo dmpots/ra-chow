@@ -475,8 +475,8 @@ void AllocLiveRanges(Arena arena, Unsigned_Int num_lrs)
   live_ranges.resize(liverange_count, NULL); //allocate space
   for(LOOPVAR i = 0; i < liverange_count; i++) //allocate each live range
   {
-    live_ranges[i] = new
-      LiveRange(RegisterClass_InitialRegisterClassForLRID(i), i);
+    live_ranges[i] = 
+      new LiveRange(RegisterClass_InitialRegisterClassForLRID(i), i);
   }
 }
 
@@ -565,13 +565,19 @@ void SplitNeighbors(LiveRange* lr, LRSet* constr_lr, LRSet* unconstr_lr)
         //need to update the constrained lists at this point because
         //deleting this live range should have no effect on whether
         //the live ranges it interferes with are constrained or not
+        //since it was never given a color
         intf_lr->MarkNonCandidateAndDelete();
       }
       else //try to split
       {
         //Split() returns the new live range that we know is colorable
-        LiveRange* new_lr = intf_lr->Split();
-        UpdateConstrainedLists(new_lr, intf_lr, constr_lr, unconstr_lr);
+        LiveRange* newlr = intf_lr->Split();
+        //add new liverange to list of live ranges
+        Chow::live_ranges.push_back(newlr);
+        debug("ADDED LR: %d", newlr->id);
+
+        //make sure constrained lists are up-to-date after split
+        UpdateConstrainedLists(newlr, intf_lr, constr_lr, unconstr_lr);
 
         //if the remainder of the live range we just split from
         //interferes with the live range we assigned a color to then 
@@ -580,7 +586,7 @@ void SplitNeighbors(LiveRange* lr, LRSet* constr_lr, LRSet* unconstr_lr)
 
         debug("split complete for LR: %d", intf_lr->id);
         Debug::LiveRange_DDump(intf_lr);
-        Debug::LiveRange_DDump(new_lr);
+        Debug::LiveRange_DDump(newlr);
       }
     }
   }
