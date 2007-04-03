@@ -12,7 +12,6 @@
 #include "live_range.h"
 #include "live_unit.h"
 #include "debug.h"
-#include "chow.h"
 #include "params.h"
 #include "util.h"
 #include "shared_globals.h" 
@@ -126,7 +125,7 @@ LiveRange::LiveRange(RegisterClass reg_class, LRID lrid)
   id = lrid;
   rc = reg_class;
   priority = UNDEFINED_PRIORITY;
-  color = NO_COLOR;
+  color = Coloring::NO_COLOR;
   bb_list = VectorSet_Create(LiveRange::arena, block_count+1);
   fear_list = new std::set<LiveRange*, LRcmp>;
   units = new std::list<LiveUnit*>;
@@ -195,7 +194,7 @@ bool LiveRange::IsConstrained() const
  ***/
 void LiveRange::MarkNonCandidateAndDelete()
 {
-  color = NO_COLOR;
+  color = Coloring::NO_COLOR;
   is_candidate = FALSE;
   Stats::chowstats.cSpills++;
 
@@ -249,7 +248,7 @@ void LiveRange::AssignColor()
     VectorSet vs = Coloring::UsedColors(this->rc, unit->block);
     assert(!VectorSet_Member(vs, color));
     VectorSet_Insert(vs, color);
-    mBlkIdSSAName_Color[id(unit->block)][orig_lrid] = color;
+    Coloring::SetColor(unit->block, orig_lrid, color);
 
     // ----------------  LOAD STORE OPTIMIZATION -----------------
     if(Params::Algorithm::move_loads_and_stores)
@@ -866,7 +865,7 @@ LiveRange* LiveRange_SplitFrom(LiveRange* origlr)
   newlr->type = origlr->type;
 
   //some sanity checks
-  assert(origlr->color == NO_COLOR);
+  assert(origlr->color == Coloring::NO_COLOR);
   assert(origlr->is_candidate == TRUE);
 
   return newlr;

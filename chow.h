@@ -12,10 +12,8 @@
 #include "types.h"
 
 /* constants */
-const Color NO_COLOR = -1u;
 
 //2-d array block x variable
-extern Unsigned_Int** mBlkIdSSAName_Color;
 extern Arena chow_arena;
 
 /* exported functions */

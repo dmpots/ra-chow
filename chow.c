@@ -42,7 +42,6 @@ typedef unsigned int LOOPVAR;
 /* globals */
 LRVec Chow::live_ranges;
 Arena  chow_arena;
-Unsigned_Int** mBlkIdSSAName_Color;
 
 /* locals */
 static Unsigned_Int clrInitial = 0; //count of initial live ranges
@@ -216,21 +215,6 @@ LiveRange* ComputePriorityAndChooseTop(LRSet* lrs)
  */
 void AllocChowMemory()
 {
-  //allocate a mapping of block x SSA_name -> register
-  mBlkIdSSAName_Color = (Unsigned_Int**)
-    Arena_GetMemClear(chow_arena, 
-                      sizeof(Unsigned_Int*) * (1+block_count));
-  LOOPVAR i;
-  for(i = 0; i < block_count+1; i++)
-  {
-    mBlkIdSSAName_Color[i] = (Unsigned_Int*)
-      Arena_GetMemClear(chow_arena, 
-                        sizeof(Unsigned_Int) * Chow::live_ranges.size() );
-      LOOPVAR j;
-      for(j = 0; j < Chow::live_ranges.size(); j++)
-        mBlkIdSSAName_Color[i][j] = NO_COLOR;
-  }
-
 }
 
 /*
@@ -332,7 +316,7 @@ void LiveRange_BuildInitialSSA()
   }
 
   //initialize coloring structures based on number of register classes
-  Coloring::Init(chow_arena, cRegisterClass);
+  Coloring::Init(chow_arena, cRegisterClass, clrInitial);
 
   //now that we know how many live ranges we start with allocate them
   Stats::ComputeBBStats(uf_arena, SSA_def_count);
@@ -740,13 +724,15 @@ void RenameRegisters()
  **/
 Register GetMachineRegAssignment(Block* b, LRID lrid)
 {
+  using Coloring::GetColor;
+  using Coloring::NO_COLOR;
 
   if(lrid == Spill::frame.lrid)
     return Spill::REG_FP;
 
    /* return REG_UNALLOCATED; spill everything */
 
-  Register color = mBlkIdSSAName_Color[id(b)][lrid];
+  Register color = GetColor(b, lrid);
   if(color == NO_COLOR)
     return REG_UNALLOCATED;
 
