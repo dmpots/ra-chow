@@ -11,7 +11,7 @@
 struct LiveRange;
 
 namespace Spill {
-//types//
+/*types*/
 struct Frame {
   Operation* op;
   MemoryLocation stack_pointer;
@@ -19,15 +19,17 @@ struct Frame {
   LRID lrid;
 };
 
-//variables//
+/*variables*/
 extern Frame frame;
 extern const Register REG_FP;
 
-//functions//
+/*functions*/
 MemoryLocation SpillLocation(const LiveRange* lr);
 void Init();
 Expr SpillTag(const LiveRange* lr);
 void RewriteFrameOp();
+Inst* InsertStore(LRID,Inst*,Register,Register,InstInsertLocation);
+void InsertLoad(LRID, Inst*, Register, Register);
 
 }
 

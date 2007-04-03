@@ -817,11 +817,13 @@ void AddEdgeExtensionNode(Edge* e, LiveRange* lr, LiveUnit* unit,
  */
 void LiveRange_InsertLoad(LiveRange* lr, LiveUnit* unit)
 {
+  using Spill::InsertLoad;
+  using Spill::frame;
+
   Block* b = unit->block;
   debug("INSERTING LOAD: lrid: %d, block: %s, to: %d",
         lr->id, bname(unit->block), unit->orig_name);
-  Insert_Load(lr->id, Block_FirstInst(b), unit->orig_name,
-              Spill::frame.ssa_name);
+  InsertLoad(lr->id, Block_FirstInst(b), unit->orig_name, frame.ssa_name);
 }
 
 /*
@@ -835,12 +837,15 @@ void LiveRange_InsertLoad(LiveRange* lr, LiveUnit* unit)
  */
 void LiveRange_InsertStore(LiveRange*lr, LiveUnit* unit)
 {
+  using Spill::InsertStore;
+  using Spill::frame;
+
   Block* b = unit->block;
   debug("INSERTING STORE: lrid: %d, block: %s, to: %d",
         lr->id, bname(unit->block), unit->orig_name);
   (void)
-   Insert_Store(lr->id, Block_LastInst(b), unit->orig_name,
-                 Spill::frame.ssa_name, BEFORE_INST);
+   InsertStore(lr->id, Block_LastInst(b), unit->orig_name,
+                      frame.ssa_name, BEFORE_INST);
 }
 
 

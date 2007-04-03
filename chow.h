@@ -19,8 +19,6 @@ extern Unsigned_Int** mBlkIdSSAName_Color;
 extern Arena chow_arena;
 
 /* exported functions */
-Inst* Insert_Store(LRID,Inst*,Register,Register,InstInsertLocation);
-void Insert_Load(LRID, Inst*, Register, Register);
 Register GetMachineRegAssignment(Block*, LRID);
 void CheckRegisterLimitFeasibility(void);
 void LiveRange_BuildInitialSSA(void);

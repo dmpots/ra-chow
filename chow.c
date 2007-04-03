@@ -50,20 +50,6 @@ static Unsigned_Int clrInitial = 0; //count of initial live ranges
 /* local functions */
 static void assert_same_orig_name(LRID,Variable,VectorSet,Block* b);
 static void AllocChowMemory();
-static Inst* Inst_CreateLoad(Opcode_Names opcode,
-                             Expr tag, 
-                             Unsigned_Int alignment, 
-                             Comment_Val comment,
-                             Unsigned_Int offset,
-                             Register base_reg,
-                             Register dest_reg);
-static Inst* Inst_CreateStore(Opcode_Names opcode,
-                      Expr tag,
-                      Unsigned_Int alignment, 
-                      Comment_Val comment,
-                      Unsigned_Int offset,
-                      Register base_reg,
-                      Register val);
 static void InitChow();
 static void MoveLoadsAndStores();
 void AllocLiveRanges(Arena arena, Unsigned_Int num_lrs);
@@ -769,172 +755,6 @@ Register GetMachineRegAssignment(Block* b, LRID lrid)
 }
 /*
  *===================
- * Insert_Load()
- *===================
- * Inserts a load instruction for the given live range before the
- * passed instruction.
- */
-//FIXME: move this to spill.cc
-void Insert_Load(LRID lrid, Inst* before_inst, Register dest, 
-                                               Register base)
-{
-  LiveRange* lr = Chow::live_ranges[lrid];
-  Expr tag = Spill::SpillTag(lr);
-
-  Opcode_Names opcode = lr->LoadOpcode();
-  Unsigned_Int alignment = lr->Alignment();
-  Unsigned_Int offset = Spill::SpillLocation(lr);
-  //assert(offset != MEM_UNASSIGNED); //can happen with use b4 def
-  debug("Inserting load for LR: %d, to reg: %d, from offset: %d,"
-         "base: %d", lrid, dest, offset, base);
-
-  //generate a comment
-  char str[64];
-  sprintf(str, "LOAD %d_%d", lr->orig_lrid, lr->id); 
-  Comment_Val comment = Comment_Install(str);
-
-  Inst* ld_inst = 
-    Inst_CreateLoad(opcode, tag, alignment, comment, offset, base, dest);
-
-  //finally insert the new instruction
-  Block_Insert_Instruction(ld_inst, before_inst);
-
-}
-
-/*
- *===================
- * Inst_CreateLoad()
- *===================
- * Creates a new load Inst based on the passed parameters
- * load instruction format:
- *  iLDor  @ref align offset base => reg
- */
-static Inst* Inst_CreateLoad(Opcode_Names opcode,
-                      Expr tag,
-                      Unsigned_Int alignment, 
-                      Comment_Val comment,
-                      Unsigned_Int offset,
-                      Register base_reg,
-                      Register dest_reg)
-{
-  //allocate a new instruction
-  const int LD_OPSIZE = 7;
-  Inst* ld_inst = (Inst*)Inst_Allocate(chow_arena, 1);
-  Operation* ld_op = (Operation*)Operation_Allocate(chow_arena, 
-                                                    LD_OPSIZE);
-  ld_inst->operations[0] = ld_op;
-  ld_inst->operations[1] = NULL;
-
-  //fill in struct
-  ld_op->opcode  = opcode;
-  ld_op->comment = comment;
-  ld_op->source_line_ref = Expr_Install_String("0");
-  ld_op->constants = 3;
-  ld_op->referenced = 4;
-  ld_op->defined = 5;
-  ld_op->critical = TRUE;
-
-  //fill in arguments array
-  ld_op->arguments[0] = tag;
-  ld_op->arguments[1] = Expr_Install_Int(alignment);
-  ld_op->arguments[2] = Expr_Install_Int(offset);
-  ld_op->arguments[3] = base_reg;
-  ld_op->arguments[4] = dest_reg;
-  ld_op->arguments[5] = 0;
-  ld_op->arguments[6] = 0;
-
-  return ld_inst;
-}
-
-
-/*
- *===================
- * Insert_Store()
- *===================
- * Inserts a store instruction for the given live range around the
- * passed instruction based on the loc paramerter (before or after).
- *
- * returns the instruction inserted
- */
-Inst* Insert_Store(LRID lrid, Inst* around_inst, Register src,
-                   Register base, InstInsertLocation loc)
-{
-  LiveRange* lr = Chow::live_ranges[lrid];
-  Expr tag = Spill::SpillTag(lr);
-
-  MemoryLocation offset = Spill::SpillLocation(lr);
-  debug("Inserting store for LR: %d, from reg: %d to offset: %d",
-         lrid, src, offset);
-
-  //generate a comment
-  char str[64]; 
-  sprintf(str, "STORE %d_%d", lr->orig_lrid, lr->id); 
-  Comment_Val comment = Comment_Install(str);
-
-  //get opcode and alignment for live range
-  Opcode_Names opcode = lr->StoreOpcode();
-  Unsigned_Int alignment = lr->Alignment();
-
-  //create a new store instruction
-  Inst* st_inst = 
-    Inst_CreateStore(opcode, tag, alignment, comment, offset, base, src);
-
-  //finally insert the new instruction
-  if(loc == AFTER_INST)
-    Block_Insert_Instruction(st_inst, around_inst->next_inst);
-  else
-    Block_Insert_Instruction(st_inst, around_inst);
-
-  return st_inst;
-}
-
-/*
- *===================
- * Inst_CreateStore()
- *===================
- * Creates a new store Inst based on the passed parameters
- * store instruction format:
- *  iSSTor @ref align offset base val
- */
-static Inst* Inst_CreateStore(Opcode_Names opcode,
-                      Expr tag,
-                      Unsigned_Int alignment, 
-                      Comment_Val comment,
-                      Unsigned_Int offset,
-                      Register base_reg,
-                      Register val)
-{
-  //allocate a new instruction
-  const int ST_OPSIZE = 7;
-  Inst* st_inst = (Inst*)Inst_Allocate(chow_arena, 1);
-  Operation* st_op = (Operation*)Operation_Allocate(chow_arena, 
-                                                    ST_OPSIZE);
-  st_inst->operations[0] = st_op;
-  st_inst->operations[1] = NULL;
-
-  //fill in struct
-  st_op->opcode  = opcode;
-  st_op->comment = comment;
-  st_op->source_line_ref = Expr_Install_String("0");
-  st_op->constants = 3;
-  st_op->referenced = 5;
-  st_op->defined = 5;
-  st_op->critical = TRUE;
-
-  //fill in arguments array
-  st_op->arguments[0] = tag;
-  st_op->arguments[1] = Expr_Install_Int(alignment);
-  st_op->arguments[2] = Expr_Install_Int(offset);
-  st_op->arguments[3] = base_reg;
-  st_op->arguments[4] = val;
-  st_op->arguments[5] = 0;
-  st_op->arguments[6] = 0;
-
-  return st_inst;
-}
-
-/*
- *===================
  * Insert_Copy()
  *===================
  * Inserts a copy from one live range to another, using the registers
@@ -1259,17 +1079,17 @@ void MoveLoadsAndStores()
             debug("moving store from %s to %s for lrid: %d_%d",
                    bname(msd.orig_blk), bname(blkST),
                    msd.lr->orig_lrid, msd.lr->id);
-            Insert_Store(msd.lr->id, Block_FirstInst(blkST),
-                         mReg, Spill::REG_FP,
-                         BEFORE_INST);
+            Spill::InsertStore(msd.lr->id, Block_FirstInst(blkST),
+                               mReg, Spill::REG_FP,
+                               BEFORE_INST);
           }
           else
           {
             debug("moving load from %s to %s for lrid: %d_%d",
                    bname(msd.orig_blk), bname(blkLD),
                    msd.lr->orig_lrid, msd.lr->id);
-            Insert_Load(msd.lr->id, Block_LastInst(blkLD), 
-                        mReg, Spill::REG_FP);
+            Spill::InsertLoad(msd.lr->id, Block_LastInst(blkLD), 
+                              mReg, Spill::REG_FP);
           }
         }
       }
