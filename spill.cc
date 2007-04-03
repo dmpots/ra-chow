@@ -2,6 +2,7 @@
 #include <map>
 
 #include "spill.h"
+#include "mapping.h"
 #include "live_range.h"
 
 namespace {
@@ -47,6 +48,7 @@ void Init()
   //initialize the stack pointer so that we have a correct value when
   //we need to insert loads and stores
   frame.stack_pointer = Frame_GetStackSize(frame.op);
+  frame.lrid = Mapping::SSAName2LRID(frame.ssa_name);
 }
 
 /*

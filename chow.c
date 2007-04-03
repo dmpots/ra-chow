@@ -239,9 +239,9 @@ void AllocChowMemory()
   {
     mBlkIdSSAName_Color[i] = (Unsigned_Int*)
       Arena_GetMemClear(chow_arena, 
-                        sizeof(Unsigned_Int) * Chow::liverange_count );
+                        sizeof(Unsigned_Int) * Chow::live_ranges.size() );
       LOOPVAR j;
-      for(j = 0; j < Chow::liverange_count; j++)
+      for(j = 0; j < Chow::live_ranges.size(); j++)
         mBlkIdSSAName_Color[i][j] = NO_COLOR;
   }
 
@@ -262,7 +262,6 @@ void InitChow()
   //this from the interference graph and remember which lrid holds the
   //frame pointer
   Spill::Init();
-  Spill::frame.lrid = Mapping::SSAName2LRID(Spill::frame.ssa_name);
   Chow::live_ranges[Spill::frame.lrid]->MarkNonCandidateAndDelete();
 
   //clear out edge extensions if needed
@@ -465,15 +464,13 @@ void LiveRange_BuildInitialSSA()
 void AllocLiveRanges(Arena arena, Unsigned_Int num_lrs)
 {
   using Chow::live_ranges;
-  using Chow::liverange_count;
 
   //initialize LiveRange class
-  LiveRange::Init(arena);
+  LiveRange::Init(arena, num_lrs);
 
   //create initial live ranges
-  liverange_count = num_lrs;
-  live_ranges.resize(liverange_count, NULL); //allocate space
-  for(LOOPVAR i = 0; i < liverange_count; i++) //allocate each live range
+  live_ranges.resize(num_lrs, NULL); //allocate space
+  for(LOOPVAR i = 0; i < num_lrs; i++) //allocate each live range
   {
     live_ranges[i] = 
       new LiveRange(RegisterClass_InitialRegisterClassForLRID(i), i);

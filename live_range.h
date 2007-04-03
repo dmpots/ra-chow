@@ -24,10 +24,11 @@ typedef float Priority;
 struct LiveRange
 {
   /* class varaibles */
-  static void Init(Arena); /* class initialization function */
+  static void Init(Arena,unsigned int); /* class initialization function */
   static Arena arena; /* for memory allocation needs */
   static VectorSet tmpbbset; /* for memory allocation needs */
   static const float UNDEFINED_PRIORITY;
+  static unsigned int counter;
 
   /* constructor */
   LiveRange(RegisterClass rc, LRID lrid);

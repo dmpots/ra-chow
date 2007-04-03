@@ -36,7 +36,6 @@ inline int max(int a, int b) { return a > b ? a : b;}
 struct LiveRange;
 namespace Chow {
   extern std::vector<LiveRange*> live_ranges;
-  extern unsigned int liverange_count;
 }
 
 #endif

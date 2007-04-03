@@ -23,10 +23,6 @@
 #include "color.h"
 
 /*------------------MODULE LOCAL DEFINITIONS-------------------*/
-
-/* globals */
-unsigned int Chow::liverange_count;
-
 namespace {
 /* local constants */
   const Opcode_Names load_opcodes[] =  /* load */
@@ -124,8 +120,6 @@ for(std::list<LiveUnit*>::iterator i = (lr)->units->begin(); \
     i++) \
    if(((unit) = *i) || TRUE) 
 
-#define LiveRange_NextId (Chow::liverange_count++);
-
 /* Def_ForAllUseBlocks(Variable v, Block* b) */
 #define Def_ForAllUseBlocks(v, b)\
 Chains_List* _runner;\
@@ -144,10 +138,12 @@ Chain_ForAllUses(_runner, v)\
 Arena LiveRange::arena = NULL;
 VectorSet LiveRange::tmpbbset = NULL;
 const float LiveRange::UNDEFINED_PRIORITY = 666;
-void LiveRange::Init(Arena arena)
+unsigned int LiveRange::counter = 0;
+void LiveRange::Init(Arena arena, unsigned int counter_start)
 {
   LiveRange::arena = arena;
   LiveRange::tmpbbset = VectorSet_Create(arena, block_count+1);
+  LiveRange::counter = counter_start;
 }
 
 
@@ -906,9 +902,9 @@ void LiveRange_InsertStore(LiveRange*lr, LiveUnit* unit)
  */
 LiveRange* LiveRange_SplitFrom(LiveRange* origlr)
 {
-  LiveRange* newlr = new LiveRange(origlr->rc, origlr->id);
+  LiveRange* newlr = new LiveRange(origlr->rc, NO_LRID);
   newlr->orig_lrid = origlr->orig_lrid;
-  newlr->id = LiveRange_NextId;
+  newlr->id = LiveRange::counter++;
   newlr->is_candidate = TRUE;
   newlr->type = origlr->type;
 
