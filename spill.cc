@@ -2,7 +2,6 @@
 #include <map>
 
 #include "spill.h"
-#include "chow.h"
 #include "live_range.h"
 #include "mapping.h"
 
@@ -14,6 +13,7 @@ namespace {
   //local variables//
   std::map<LRID, MemoryLocation> lr_mem_map;
   std::map<LRID, Expr> lr_tag_map;
+  Arena spill_arena;
 
   //local functions//
   Operation* get_frame_operation();
@@ -54,7 +54,7 @@ Frame frame;
  *========================
  * Initialize module so that it can be used to generate spill code
  */
-void Init()
+void Init(Arena arena)
 {
   //get and keep a reference to the frame operation
   frame.op = get_frame_operation();
@@ -64,6 +64,9 @@ void Init()
   //we need to insert loads and stores
   frame.stack_pointer = Frame_GetStackSize(frame.op);
   frame.lrid = Mapping::SSAName2LRID(frame.ssa_name);
+
+  //keep arena for allocating new instructions
+  spill_arena = arena;
 }
 
 /*
@@ -120,10 +123,10 @@ void RewriteFrameOp()
  * Inserts a load instruction for the given live range before the
  * passed instruction.
  */
-void InsertLoad(LRID lrid, Inst* before_inst, Register dest, 
+void InsertLoad(LiveRange* lr, Inst* before_inst, Register dest, 
                                                Register base)
 {
-  LiveRange* lr = Chow::live_ranges[lrid];
+  //LiveRange* lr = Chow::live_ranges[lrid];
   Expr tag = Spill::SpillTag(lr);
 
   Opcode_Names opcode = lr->LoadOpcode();
@@ -156,10 +159,10 @@ void InsertLoad(LRID lrid, Inst* before_inst, Register dest,
  *
  * returns the instruction inserted
  */
-Inst* InsertStore(LRID lrid, Inst* around_inst, Register src,
+Inst* InsertStore(LiveRange* lr, Inst* around_inst, Register src,
                    Register base, InstInsertLocation loc)
 {
-  LiveRange* lr = Chow::live_ranges[lrid];
+  //LiveRange* lr = Chow::live_ranges[lrid];
   Expr tag = Spill::SpillTag(lr);
 
   MemoryLocation offset = Spill::SpillLocation(lr);
@@ -307,8 +310,8 @@ Inst* Inst_CreateLoad(Opcode_Names opcode,
 {
   //allocate a new instruction
   const int LD_OPSIZE = 7;
-  Inst* ld_inst = (Inst*)Inst_Allocate(chow_arena, 1);
-  Operation* ld_op = (Operation*)Operation_Allocate(chow_arena, 
+  Inst* ld_inst = (Inst*)Inst_Allocate(spill_arena, 1);
+  Operation* ld_op = (Operation*)Operation_Allocate(spill_arena, 
                                                     LD_OPSIZE);
   ld_inst->operations[0] = ld_op;
   ld_inst->operations[1] = NULL;
@@ -352,8 +355,8 @@ Inst* Inst_CreateStore(Opcode_Names opcode,
 {
   //allocate a new instruction
   const int ST_OPSIZE = 7;
-  Inst* st_inst = (Inst*)Inst_Allocate(chow_arena, 1);
-  Operation* st_op = (Operation*)Operation_Allocate(chow_arena, 
+  Inst* st_inst = (Inst*)Inst_Allocate(spill_arena, 1);
+  Operation* st_op = (Operation*)Operation_Allocate(spill_arena, 
                                                     ST_OPSIZE);
   st_inst->operations[0] = st_op;
   st_inst->operations[1] = NULL;

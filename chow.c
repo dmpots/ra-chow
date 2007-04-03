@@ -247,7 +247,7 @@ void InitChow()
   //allocation since it resides in a special reserved register. remove
   //this from the interference graph and remember which lrid holds the
   //frame pointer
-  Spill::Init();
+  Spill::Init(chow_arena);
   Chow::live_ranges[Spill::frame.lrid]->MarkNonCandidateAndDelete();
 
   //clear out edge extensions if needed
@@ -1079,7 +1079,7 @@ void MoveLoadsAndStores()
             debug("moving store from %s to %s for lrid: %d_%d",
                    bname(msd.orig_blk), bname(blkST),
                    msd.lr->orig_lrid, msd.lr->id);
-            Spill::InsertStore(msd.lr->id, Block_FirstInst(blkST),
+            Spill::InsertStore(msd.lr, Block_FirstInst(blkST),
                                mReg, Spill::REG_FP,
                                BEFORE_INST);
           }
@@ -1088,7 +1088,7 @@ void MoveLoadsAndStores()
             debug("moving load from %s to %s for lrid: %d_%d",
                    bname(msd.orig_blk), bname(blkLD),
                    msd.lr->orig_lrid, msd.lr->id);
-            Spill::InsertLoad(msd.lr->id, Block_LastInst(blkLD), 
+            Spill::InsertLoad(msd.lr, Block_LastInst(blkLD), 
                               mReg, Spill::REG_FP);
           }
         }

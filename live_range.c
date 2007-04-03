@@ -823,7 +823,7 @@ void LiveRange_InsertLoad(LiveRange* lr, LiveUnit* unit)
   Block* b = unit->block;
   debug("INSERTING LOAD: lrid: %d, block: %s, to: %d",
         lr->id, bname(unit->block), unit->orig_name);
-  InsertLoad(lr->id, Block_FirstInst(b), unit->orig_name, frame.ssa_name);
+  InsertLoad(lr, Block_FirstInst(b), unit->orig_name, frame.ssa_name);
 }
 
 /*
@@ -844,7 +844,7 @@ void LiveRange_InsertStore(LiveRange*lr, LiveUnit* unit)
   debug("INSERTING STORE: lrid: %d, block: %s, to: %d",
         lr->id, bname(unit->block), unit->orig_name);
   (void)
-   InsertStore(lr->id, Block_LastInst(b), unit->orig_name,
+   InsertStore(lr, Block_LastInst(b), unit->orig_name,
                       frame.ssa_name, BEFORE_INST);
 }
 

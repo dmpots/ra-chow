@@ -25,11 +25,11 @@ extern const Register REG_FP;
 
 /*functions*/
 MemoryLocation SpillLocation(const LiveRange* lr);
-void Init();
+void Init(Arena);
 Expr SpillTag(const LiveRange* lr);
 void RewriteFrameOp();
-Inst* InsertStore(LRID,Inst*,Register,Register,InstInsertLocation);
-void InsertLoad(LRID, Inst*, Register, Register);
+Inst* InsertStore(LiveRange*,Inst*,Register,Register,InstInsertLocation);
+void InsertLoad(LiveRange*, Inst*, Register, Register);
 
 }
 

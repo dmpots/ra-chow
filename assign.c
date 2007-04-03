@@ -164,6 +164,7 @@ void ensure_reg_assignment(Register* reg,
 {
   using Spill::InsertLoad;
   using Spill::InsertStore;
+  using Chow::live_ranges;
 
   //this live range is spilled. find a temporary register
   if(*reg == REG_UNALLOCATED)
@@ -188,12 +189,13 @@ void ensure_reg_assignment(Register* reg,
     {
       if(purpose == FOR_USE)
       {
-        InsertLoad(lrid, *updatedInst, tmpReg, Spill::REG_FP);
+        InsertLoad(live_ranges[lrid], *updatedInst, tmpReg, Spill::REG_FP);
       }
       else //FOR_DEF
       {
         *updatedInst = 
-          InsertStore(lrid, *updatedInst, tmpReg, Spill::REG_FP, AFTER_INST);
+          InsertStore(live_ranges[lrid], 
+                      *updatedInst, tmpReg, Spill::REG_FP, AFTER_INST);
       }
     }
     *reg = tmpReg;
@@ -206,7 +208,7 @@ void ensure_reg_assignment(Register* reg,
     //load if needed
     if(has_been_evicted(lrid, *reg))
     {
-      InsertLoad(lrid, *updatedInst, *reg, Spill::REG_FP);
+      InsertLoad(live_ranges[lrid], *updatedInst, *reg, Spill::REG_FP);
     }
   }
 }
@@ -480,6 +482,7 @@ ReservedReg* find_usable_reg(const std::vector<ReservedReg*>* reserved,
 void reset_free_tmp_regs(Inst* last_inst)
 {
   using Spill::InsertLoad;
+  using Chow::live_ranges;
 
   debug("resetting free tmp regs");
   //take care of business for each register class
@@ -499,7 +502,8 @@ void reset_free_tmp_regs(Inst* last_inst)
     for(evIT = evicted->begin(); evIT != evicted->end(); evIT++)
     {
       LRID evictedLRID = (*evIT).first;
-      InsertLoad(evictedLRID, last_inst, (*evIT).second, Spill::REG_FP);
+      InsertLoad(live_ranges[evictedLRID], 
+                last_inst, (*evIT).second, Spill::REG_FP);
     }
 
     //2) remove all evicted registers from evicted list
