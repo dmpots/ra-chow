@@ -82,7 +82,6 @@ namespace {
   void LiveRange_RemoveLiveUnit(LiveRange* , LiveUnit* );
   void LiveRange_RemoveLiveUnitBlock(LiveRange* lr, Block* b);
   void LiveRange_TransferLiveUnit(LiveRange*, LiveRange*, LiveUnit*);
-  void LiveRange_RemoveInterference(LiveRange* from, LiveRange* with);
   LiveUnit* LiveRange_ChooseSplitPoint(LiveRange*);
   LiveUnit* LiveRange_IncludeInSplit(LiveRange*, LiveRange*, Block*);
   void LiveRange_AddBlock(LiveRange* lr, Block* b);
@@ -95,38 +94,6 @@ namespace {
   LiveRange* LiveRange_SplitFrom(LiveRange* origlr);
   Priority LiveRange_OrigComputePriority(LiveRange* lr);
 }
-
-
-//FIXME: get rid of control flow macros
-//iterate through interference list. if stmt used as a cheat for its
-//side effect 
-#define LiveRange_ForAllFears(lr, f_lr) \
-for (LRSet::iterator i = (lr->fear_list->begin()); \
-     i != (lr->fear_list->end());\
-     i++) \
-   if(((f_lr) = *i) || TRUE) 
-
-//copy(lr->fear_list->begin(), lr->fear_list->end(), _tmpset.begin());
-#define LiveRange_ForAllFearsCopy(lr, f_lr)\
-LRSet _tmpset(*(lr->fear_list));\
-for(LRSet::iterator i = _tmpset.begin();\
-    i != _tmpset.end();\
-    i++)\
-   if(((f_lr) = *i) || TRUE) 
-    
-#define LiveRange_ForAllUnits(lr, unit) \
-for(std::list<LiveUnit*>::iterator i = (lr)->units->begin(); \
-    i != (lr)->units->end(); \
-    i++) \
-   if(((unit) = *i) || TRUE) 
-
-/* Def_ForAllUseBlocks(Variable v, Block* b) */
-#define Def_ForAllUseBlocks(v, b)\
-Chains_List* _runner;\
-Chain_ForAllUses(_runner, v)\
-  if(((b = _runner->block)) || TRUE)
-
-
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
 /*
@@ -228,16 +195,18 @@ bool LiveRange::IsConstrained() const
  ***/
 void LiveRange::MarkNonCandidateAndDelete()
 {
-  LiveRange* intf_lr;
   color = NO_COLOR;
   is_candidate = FALSE;
   Stats::chowstats.cSpills++;
 
   debug("deleting LR: %d from interference graph", this->id);
-  LiveRange_ForAllFearsCopy(this, intf_lr)
+  //remove me from all neighbors fear list
+  for(LRSet::iterator it = fear_list->begin(); it != fear_list->end(); it++)
   {
-    LiveRange_RemoveInterference(intf_lr, this);
+    (*it)->fear_list->erase(this);
   }
+  //delete all live ranges in my fear list
+  fear_list->clear();
 
   //clear the bb_list so that this live range will no longer interfere
   //with any other live ranges
@@ -266,18 +235,17 @@ void LiveRange::AssignColor()
   debug("assigning color: %d to lr: %d", color, this->id);
 
   //update the interfering live ranges forbidden set
-  LiveRange* intf_lr;
-  LiveUnit* unit;
-  LiveRange_ForAllFears(this, intf_lr)
+  for(LRSet::iterator it = fear_list->begin(); it != fear_list->end(); it++)
   {
+    LiveRange* intf_lr = *it;
     VectorSet_Insert(intf_lr->forbidden, color);
-    debug("adding color: %d to forbid list for LR: %d", color,
-                                                        intf_lr->id)
+    debug("adding color: %d to forbid list for LR: %d", color, intf_lr->id)
   }
 
   //update the basic block taken set and add loads and stores
-  LiveRange_ForAllUnits(this, unit)
+  for(LiveRange::iterator it = begin(); it != end(); it++)
   {
+    LiveUnit* unit = *it;
     VectorSet vs = Coloring::UsedColors(this->rc, unit->block);
     assert(!VectorSet_Member(vs, color));
     VectorSet_Insert(vs, color);
@@ -529,10 +497,9 @@ Boolean LiveRange::IsEntirelyUnColorable() const
   //unit has no available registers). we need to have a mapping of
   //basic blocks to used registers for that block in order to see
   //which registers are available.
-  
-  LiveUnit* unit;
-  LiveRange_ForAllUnits(this, unit)
+  for(LiveRange::iterator it = begin(); it != end(); it++)
   {
+    LiveUnit* unit = *it;
     //must have a free register where we have a def or a use
     if(unit->defs > 0 || unit->uses > 0)
     {
@@ -716,21 +683,6 @@ void LiveRange_RemoveLiveUnit(LiveRange* lr, LiveUnit* unit)
 }
 
 
-/*
- *=============================
- * LiveRange_RemoveInterference()
- *=============================
- *
- ***/
-void LiveRange_RemoveInterference(LiveRange* lr1, LiveRange* lr2)
-{
-    //remove lr2 from lr1
-    lr1->fear_list->erase(lr2);
-
-    //remove lr1 from lr2
-    lr2->fear_list->erase(lr1);
-}
-
 
 /*
  *=======================================
@@ -814,11 +766,11 @@ Priority LiveRange_OrigComputePriority(LiveRange* lr)
   using Params::Machine::move_cost_weight;
   using Params::Algorithm::loop_depth_weight;
 
-  LiveUnit* lu;
   int clu = 0; //count of live units
   Priority pr = 0.0;
-  LiveRange_ForAllUnits(lr, lu)
+  for(LiveRange::iterator it = lr->begin(); it != lr->end(); it++)
   {
+    LiveUnit* lu = *it;
     Priority unitPrio = 
         load_save_weight  * lu->uses 
       + store_save_weight * lu->defs 
@@ -925,26 +877,32 @@ LiveRange* LiveRange_SplitFrom(LiveRange* origlr)
 void LiveRange_UpdateAfterSplit(LiveRange* newlr, LiveRange* origlr)
 {
 
-  //1. rebuild interferences of those live ranges that interfere with 
-  //the original live range. work on a copy of the list because
-  //rebuilding interferences may modify the fear_list of the origlr
-  LiveRange* fearlr;
-  LiveRange_ForAllFearsCopy(origlr, fearlr)
+  //rebuild interferences of those live ranges that interfere with 
+  //the original live range. they may now interfere with the new live
+  //range and/or no longer interefer with the original live range
+  for(LRSet::iterator it = origlr->fear_list->begin(); 
+      it != origlr->fear_list->end();)
   {
+    LiveRange* fearlr = *it;
     //update newlr interference
     if(newlr->InterferesWith(fearlr))
     {
-      //LiveRange_AddInterference(newlr, fearlr);
       newlr->AddInterference(fearlr);
     }
 
     //update origlr interference
     if(!origlr->InterferesWith(fearlr))
     {
-      LiveRange_RemoveInterference(origlr, fearlr);
+      //increment iterator before delete
+      LRSet::iterator del = it++; 
+      fearlr->fear_list->erase(origlr);
+      origlr->fear_list->erase(del);
+    }
+    else //does not interfere increment iterator normally
+    {
+      it++; 
     }
   }
-
 
   //the need_load and need_store flags actually depend on the
   //boundries of the live range so we must recompute them
@@ -955,11 +913,10 @@ void LiveRange_UpdateAfterSplit(LiveRange* newlr, LiveRange* origlr)
   //removing live units means we need to update the forbidden list
   //only do this for the orig live range since the new live range
   //keeps track as it goes
-  LiveUnit* unit;
   VectorSet_Clear(origlr->forbidden);
-  LiveRange_ForAllUnits(origlr, unit)
+  for(LiveRange::iterator it = origlr->begin(); it != origlr->end(); it++)
   {
-    unit = *i;
+    LiveUnit* unit = *it;
     VectorSet vsUsed = Coloring::UsedColors(origlr->rc, unit->block);
     VectorSet_Union(origlr->forbidden, 
                     origlr->forbidden,
@@ -1009,13 +966,13 @@ void LiveRange_TransferLiveUnit(LiveRange* to,
  */ 
 LiveUnit* LiveRange_ChooseSplitPoint(LiveRange* lr)
 {
-  LiveUnit* unit = NULL;
   LiveUnit* startunit = NULL;
   LiveUnit* first = NULL;
   LiveUnit* startdefunit = NULL;
 
-  LiveRange_ForAllUnits(lr, unit)
+  for(LiveRange::iterator it = lr->begin(); it != lr->end(); it++)
   {
+    LiveUnit* unit = *it;
     VectorSet vsUsed = Coloring::UsedColors(lr->rc, unit->block);
     if(!VectorSet_Full(vsUsed))
     {
@@ -1081,9 +1038,9 @@ LiveUnit* LiveRange_IncludeInSplit(LiveRange* newlr,
  */
 void LiveRange_MarkLoads(LiveRange* lr)
 {
-  LiveUnit* unit;
-  LiveRange_ForAllUnits(lr, unit)
+  for(LiveRange::iterator it = lr->begin(); it != lr->end(); it++)
   {
+    LiveUnit* unit = *it;
     //need a load if we don't start with a def and we are an entry
     //point to the live range
     if(!(unit->start_with_def))
@@ -1107,23 +1064,24 @@ void LiveRange_MarkStores(LiveRange* lr)
 {
 debug("*** MARKING STORES for LR: %d ***\n", lr->id);
   //walk through the live units and look for a store 
-  LiveUnit* unit;
   Boolean fStore = FALSE; //lr contains a store
   std::list<Variable> def_list;
 
-  LiveRange_ForAllUnits(lr, unit)
+  for(LiveRange::iterator it = lr->begin(); it != lr->end(); it++)
   {
+    LiveUnit* unit = *it;
     if(unit->defs > 0)
     {
       fStore = TRUE; //TODO: can optimize by caching this in LR
       Def_CollectUniqueUseNames(unit->orig_name, def_list);
     }//if(nstores > 1)
-  }//ForAllUnits()
+  }
 
   if(fStore)
   {
-    LiveRange_ForAllUnits(lr, unit)
+    for(LiveRange::iterator it = lr->begin(); it != lr->end(); it++)
     {
+      LiveUnit* unit = *it;
       //check if any successor blocks in the live range need a load
       Edge* edg;
       Block* blkSucc;
