@@ -5,6 +5,7 @@
 #include <list>
 
 #include "types.h"
+#include "debug.h"
 
 /* live units hold info about the basic blocks in a live range. there
  * is a 1-1 mapping from live units to basic blocks in a live range */

@@ -62,12 +62,6 @@ namespace {
    4*sizeof(Double),/* DCOMPLEX_DEF */ 
    0};/* MULT_DEFS */
 
-
-/* local variables */
-  const float UNDEFINED_PRIORITY = 666;
-  const float MIN_PRIORITY = -3.4e38;
-
-
 /* local types */
   /* hold pairs of live range */
   struct LRTuple
@@ -85,6 +79,7 @@ namespace {
 
   bool LiveUnit_CanMoveLoad(LiveRange* lr, LiveUnit* lu);
   int LiveUnit_LoadLoopDepth(LiveRange*  lr, LiveUnit* lu);
+  Priority LiveUnit_ComputePriority(LiveRange* lr, LiveUnit* lu);
 
   LiveUnit* LiveRange_AddLiveUnit(LiveRange*, LiveUnit*);
   LiveUnit* LiveRange_AddLiveUnitBlock(LiveRange*, Block*);
@@ -103,7 +98,6 @@ namespace {
   void LiveRange_InsertStore(LiveRange*lr, LiveUnit* unit);
   LiveRange* LiveRange_SplitFrom(LiveRange* origlr);
   Priority LiveRange_OrigComputePriority(LiveRange* lr);
-  Priority LiveRange_ComputePriority(LiveRange* lr);
 }
 
 
@@ -141,7 +135,6 @@ Chain_ForAllUses(_runner, v)\
 
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
-
 /*
  *============================
  * LiveRange::Init()
@@ -150,6 +143,7 @@ Chain_ForAllUses(_runner, v)\
  ***/
 Arena LiveRange::arena = NULL;
 VectorSet LiveRange::tmpbbset = NULL;
+const float LiveRange::UNDEFINED_PRIORITY = 666;
 void LiveRange::Init(Arena arena)
 {
   LiveRange::arena = arena;
@@ -494,58 +488,6 @@ unsigned int LiveRange::Alignment() const
   return alignment_size[type];
 }
 
-/*
- *=======================================
- * ComputePriorityAndChooseTop()
- *=======================================
- *
- ***/
-LiveRange* ComputePriorityAndChooseTop(LRSet* lrs)
-{
-  float top_prio = MIN_PRIORITY;
-  LiveRange* top_lr = NULL;
-  LiveRange* lr = NULL;
-  
-  //look at all candidates
-  for(LRSet::iterator i = lrs->begin(); i != lrs->end(); i++)
-  {
-    lr = *i;
-    if(!lr->is_candidate) continue;
-
-    //priority has never been computed
-    if(lr->priority == UNDEFINED_PRIORITY)
-    {
-      //compute priority
-      lr->priority = LiveRange_ComputePriority(lr);
-      debug("priority for LR: %d is %.3f", lr->id, lr->priority);
-
-      //check to see if this live range is a non-candidate for
-      //allocation. I think we need to only check this the first time
-      //we compute the priority function. if the priority changes due
-      //to a live range split it should be reset to undefined so we
-      //can compute it again.
-      if(lr->priority < 0.0 || lr->IsEntirelyUnColorable())
-      {
-        lr->MarkNonCandidateAndDelete();
-        continue;
-      }
-    }
-
-    //see if this live range has a greater priority
-    if(lr->priority > top_prio)
-    {
-      top_prio = lr->priority;
-      top_lr = lr;
-    }
-  }
-
-  if(top_lr != NULL)
-  {
-    debug("top priority is %.3f LR: %d", top_prio, top_lr->id);
-    lrs->erase(top_lr);
-  }
-  return top_lr;
-}
 
 /*
  *=============================
@@ -704,6 +646,27 @@ LiveRange::AddLiveUnitForBlock(Block* b,
   return unit;
 }
 
+/*
+ *=======================================
+ * LiveRange::ComputePriority()
+ *=======================================
+ *
+ ***/
+Priority LiveRange::ComputePriority()
+{
+  Priority pr = 0.0;
+  Unsigned_Int clu = 0; //count of live units
+  for(LiveRange::iterator luIT = begin(); luIT != end(); luIT++)
+  {
+    pr += LiveUnit_ComputePriority(this, *luIT);
+    clu++;
+  }
+  //TODO: set priority in this function
+  priority = pr/clu;
+  return priority;
+}
+
+
 /*------------------INTERNAL MODULE FUNCTIONS--------------------*/
 namespace {
 
@@ -775,53 +738,6 @@ void LiveRange_RemoveInterference(LiveRange* lr1, LiveRange* lr2)
 }
 
 
-
-/*
- *=======================================
- * LiveRange_ComputePriority()
- *=======================================
- *
- ***/
-Priority LiveRange_OrigComputePriority(LiveRange* lr);
-Priority LiveRange_ComputePriority(LiveRange* lr)
-{
-  LiveUnit* lu;
-  Priority pr = 0.0;
-  Unsigned_Int clu = 0; //count of live units
-  LiveRange_ForAllUnits(lr, lu)
-  {
-    pr += LiveUnit_ComputePriority(lr, lu);
-    clu++;
-  }
-  return pr/clu;
-}
-
-//kept for prosperity in case we want to compare orig priority to the
-//priority used when moving loads and stores
-Priority LiveRange_OrigComputePriority(LiveRange* lr)
-{
-  using Params::Machine::load_save_weight;
-  using Params::Machine::store_save_weight;
-  using Params::Machine::move_cost_weight;
-  using Params::Algorithm::loop_depth_weight;
-
-  LiveUnit* lu;
-  int clu = 0; //count of live units
-  Priority pr = 0.0;
-  LiveRange_ForAllUnits(lr, lu)
-  {
-    Priority unitPrio = 
-        load_save_weight  * lu->uses 
-      + store_save_weight * lu->defs 
-      - move_cost_weight  * lu->need_store
-      - move_cost_weight  * lu->need_load;
-    pr += unitPrio 
-          * pow(loop_depth_weight, Globals::depths[id(lu->block)]);
-    clu++;
-  }
-  return pr/clu;
-}
-
 /*
  *=======================================
  * LiveUnit_ComputePriority()
@@ -848,28 +764,14 @@ Priority LiveUnit_ComputePriority(LiveRange* lr, LiveUnit* lu)
   return unitPrio;
 }
 
-/*
- *=======================================
- * LiveUnit_LoadLoopDepth()
- * computes loop depth level for inserting loads. the level could be
- * decreased by one to account for moving a load up from a loop header
- *=======================================
- *
- ***/
-int LiveUnit_LoadLoopDepth(LiveRange*  lr, LiveUnit* lu)
-{
-    int depth = depths[id(lu->block)];
-    if(Block_IsLoopHeader(lu->block) && LiveUnit_CanMoveLoad(lr, lu))
-    {
-      depth -= 1;
-    }
-    return depth;
-}
+
 
 /*
  *=======================================
  * LiveUnit_CanMoveLoad()
  *=======================================
+ * used by LiveUnit to compute priority taking into account the final
+ * resting place of the load
  *
  ***/
 bool LiveUnit_CanMoveLoad(LiveRange* lr, LiveUnit* lu)
@@ -889,6 +791,51 @@ bool LiveUnit_CanMoveLoad(LiveRange* lr, LiveUnit* lu)
   return (lrPreds > 0 && Params::Algorithm::move_loads_and_stores);
 }
 
+/*
+ *=======================================
+ * LiveUnit_LoadLoopDepth()
+ * computes loop depth level for inserting loads. the level could be
+ * decreased by one to account for moving a load up from a loop header
+ *=======================================
+ *
+ ***/
+int LiveUnit_LoadLoopDepth(LiveRange*  lr, LiveUnit* lu)
+{
+    int depth = depths[id(lu->block)];
+    if(Block_IsLoopHeader(lu->block) && LiveUnit_CanMoveLoad(lr, lu))
+    {
+      depth -= 1;
+    }
+    return depth;
+}
+
+
+
+//kept for prosperity in case we want to compare orig priority to the
+//priority used when moving loads and stores
+Priority LiveRange_OrigComputePriority(LiveRange* lr)
+{
+  using Params::Machine::load_save_weight;
+  using Params::Machine::store_save_weight;
+  using Params::Machine::move_cost_weight;
+  using Params::Algorithm::loop_depth_weight;
+
+  LiveUnit* lu;
+  int clu = 0; //count of live units
+  Priority pr = 0.0;
+  LiveRange_ForAllUnits(lr, lu)
+  {
+    Priority unitPrio = 
+        load_save_weight  * lu->uses 
+      + store_save_weight * lu->defs 
+      - move_cost_weight  * lu->need_store
+      - move_cost_weight  * lu->need_load;
+    pr += unitPrio 
+          * pow(loop_depth_weight, Globals::depths[id(lu->block)]);
+    clu++;
+  }
+  return pr/clu;
+}
 
 
 void AddEdgeExtensionNode(Edge* e, LiveRange* lr, LiveUnit* unit, 
@@ -1027,8 +974,8 @@ void LiveRange_UpdateAfterSplit(LiveRange* newlr, LiveRange* origlr)
 
   //reset the priorites on the split live ranges since they are no
   //longer current. they will be recomputed if needed
-  newlr->priority = UNDEFINED_PRIORITY;
-  origlr->priority = UNDEFINED_PRIORITY;
+  newlr->priority  = LiveRange::UNDEFINED_PRIORITY;
+  origlr->priority = LiveRange::UNDEFINED_PRIORITY;
 }
 
  

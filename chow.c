@@ -70,6 +70,7 @@ void AllocLiveRanges(Arena arena, Unsigned_Int num_lrs);
 void SplitNeighbors(LiveRange* lr, LRSet* constr_lr, LRSet* unconstr_lr);
 void UpdateConstrainedLists(LiveRange* , LiveRange* , LRSet*, LRSet*);
 LiveUnit* AddLiveUnitOnce(LRID, Block*, VectorSet, Variable);
+LiveRange* ComputePriorityAndChooseTop(LRSet* lrs);
 
 //copy operations
 namespace {
@@ -167,6 +168,58 @@ void RunChow()
 
   //record some statistics about the allocation
   Stats::chowstats.clrFinal = live_ranges.size();
+}
+
+/*
+ *=======================================
+ * ComputePriorityAndChooseTop()
+ *=======================================
+ *
+ ***/
+LiveRange* ComputePriorityAndChooseTop(LRSet* lrs)
+{
+  float top_prio = -3.4e38; //a very small number
+  LiveRange* top_lr = NULL;
+  LiveRange* lr = NULL;
+  
+  //look at all candidates
+  for(LRSet::iterator i = lrs->begin(); i != lrs->end(); i++)
+  {
+    lr = *i;
+    if(!lr->is_candidate) continue;
+
+    //priority has never been computed
+    if(lr->priority == LiveRange::UNDEFINED_PRIORITY)
+    {
+      lr->ComputePriority();
+      debug("priority for LR: %d is %.3f", lr->id, lr->priority);
+
+      //check to see if this live range is a non-candidate for
+      //allocation. I think we need to only check this the first time
+      //we compute the priority function. if the priority changes due
+      //to a live range split it should be reset to undefined so we
+      //can compute it again.
+      if(lr->priority < 0.0 || lr->IsEntirelyUnColorable())
+      {
+        lr->MarkNonCandidateAndDelete();
+        continue;
+      }
+    }
+
+    //see if this live range has a greater priority
+    if(lr->priority > top_prio)
+    {
+      top_prio = lr->priority;
+      top_lr = lr;
+    }
+  }
+
+  if(top_lr != NULL)
+  {
+    debug("top priority is %.3f LR: %d", top_prio, top_lr->id);
+    lrs->erase(top_lr);
+  }
+  return top_lr;
 }
 
 /*

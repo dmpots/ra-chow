@@ -27,6 +27,7 @@ struct LiveRange
   static void Init(Arena); /* class initialization function */
   static Arena arena; /* for memory allocation needs */
   static VectorSet tmpbbset; /* for memory allocation needs */
+  static const float UNDEFINED_PRIORITY;
 
   /* constructor */
   LiveRange(RegisterClass rc, LRID lrid);
@@ -62,6 +63,7 @@ struct LiveRange
   Boolean HasColorAvailable() const;
   Boolean InterferesWith(LiveRange* lr2) const;
   LiveUnit* AddLiveUnitForBlock(Block*, Variable, const Stats::BBStats& );
+  Priority LiveRange::ComputePriority();
 
   /* iterators */
   /* for live units in this live range */
@@ -81,9 +83,6 @@ struct LRcmp
 
 
 /*---------------------HELPER FUNCTIONS-------------------------*/
-//FIXME: review to see if these should be elsewhere (chow.c perhaps?)
-LiveRange* ComputePriorityAndChooseTop(LRSet* lrs);
-
 inline void LRName(const LiveRange* lr, char* buf)
 {
   sprintf(buf, "%d_%d", lr->orig_lrid, lr->id);
