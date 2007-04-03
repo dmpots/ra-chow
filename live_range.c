@@ -17,7 +17,6 @@
 #include "shared_globals.h" 
 #include "rc.h" //RegisterClass definitions 
 #include "cfg_tools.h" //control graph manipulation utilities
-#include "dot_dump.h" //to dump live ranges in dot format
 #include "spill.h"
 #include "color.h"
 
@@ -573,10 +572,8 @@ LiveRange* LiveRange::Split()
   
   if(Debug::dot_dump_lr && Debug::dot_dump_lr == newlr->orig_lrid)
   {
-    char fname[32] = {0};
-    sprintf(fname, "tmp_%d_%d.dot", newlr->orig_lrid, newlr->id);
-    dot_dump_lr(newlr, fname);
-    Debug::dot_dumped_lrids.push_back(newlr->id);
+    Debug::DotDumpLR(newlr, "split");
+    Debug::dot_dumped_lrs.push_back(newlr);
   }
   return newlr;
 }

@@ -33,7 +33,7 @@
 struct LiveUnit;
 struct LiveRange;
 namespace Debug {
-  extern std::vector<LRID> dot_dumped_lrids;
+  extern std::vector<LiveRange*> dot_dumped_lrs;
   extern LRID dot_dump_lr;
 
   void LiveRange_DumpAll(LRVec*);
@@ -42,6 +42,10 @@ namespace Debug {
   void LiveRange_DDump(LiveRange* lr);
   void LiveUnit_Dump(LiveUnit* );
   void LiveUnit_DDump(LiveUnit* unit);
+  void DumpInitialLiveRanges();
+
+  void DotDumpLR(LiveRange* lr, const char* tag);
+  void DotDumpFinalLRs();
 }
 
 #endif /* __DEBUG_H */

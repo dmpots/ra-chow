@@ -24,21 +24,27 @@ typedef struct register_contents
 } RegisterContents;
 
 
-/* exported functions */
-void reset_free_tmp_regs(Inst* last_inst);
-void ensure_reg_assignment(Register* reg, 
-                           LRID lrid, 
-                           Block* blk,
-                           Inst*  origInst, 
-                           Inst** updatedInst, 
-                           Operation* op,
-                           RegPurpose purpose,
-                           const RegisterList& instUses,
-                           const RegisterList& instDefs);
-
 typedef const std::vector<ReservedReg*>::iterator ReservedIterator;
 typedef std::map<LRID, ReservedReg*>::iterator RegMapIterator;
 typedef std::list<std::pair<LRID, Register> > EvictedList;
 typedef std::vector<ReservedReg*> ReservedList;
 
+
+namespace Assign {
+  /* constants */
+  extern const Register REG_UNALLOCATED;
+
+  /* exported functions */
+  Register GetMachineRegAssignment(Block* b, LRID lrid);
+  void EnsureReg(Register* reg, 
+                 LRID lrid, 
+                 Block* blk,
+                 Inst*  origInst, 
+                 Inst** updatedInst, 
+                 Operation* op,
+                 RegPurpose purpose,
+                 const RegisterList& instUses,
+                 const RegisterList& instDefs);
+  void ResetFreeTmpRegs(Inst* last_inst);
+}
 #endif

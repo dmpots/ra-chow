@@ -1,17 +1,21 @@
 /*====================================================================
  * 
  *====================================================================
- * $Id: dot_dump.c 155 2006-07-24 22:15:51Z dmp $
- * $HeadURL: http://dmpots.com/svn/research/compilers/regalloc/src/dot_dump.c $
  ********************************************************************/
 
 #include <Shared.h>
 #include <stdio.h>
 #include <string.h>
-#include "debug.h"
+#include "dot_dump.h"
 #include "live_range.h"
 #include "live_unit.h"
-#include "dot_dump.h"
+
+/* local functions */
+namespace {
+  void name(Block*, char*);
+  void name(Block*, LiveRange*, char*);
+  void color(Block*, LiveRange*, char*);
+}
 
 #define puts(...) \
                  {fprintf(stdout,__VA_ARGS__);\
@@ -21,16 +25,16 @@
                  fprintf(outfile, "\n");}
 #define isdot(c) ((c) == '.')
 
-
-void dot_dump_lr(LiveRange* lr){dot_dump_lr(lr, stdout);}
-void dot_dump_lr(LiveRange* lr, const char* fname )
+namespace Dot {
+void Dump(LiveRange* lr){Dump(lr, stdout);}
+void Dump(LiveRange* lr, const char* fname )
 {
   FILE* fp = fopen(fname, "w");
   if(fp == NULL) {error("unable to open file: %s", fname); abort();}
-  dot_dump_lr(lr, fp);
+  Dump(lr, fp);
   fclose(fp);
 }
-void dot_dump_lr(LiveRange* lr, FILE* outfile)
+void Dump(LiveRange* lr, FILE* outfile)
 {
   Block* b;
   Edge* e;
@@ -59,7 +63,7 @@ void dot_dump_lr(LiveRange* lr, FILE* outfile)
 }
 
 
-void dot_dump()
+void Dump()
 {
   Block* b;
   Edge* e;
@@ -84,7 +88,10 @@ void dot_dump()
   }
   puts("}"); //graph
 } /* main */
+}/* end namespace Dot */
 
+
+namespace {
 void name(Block* b, char* buf)
 {
   unsigned int i,k;
@@ -145,5 +152,5 @@ void color(Block* b, LiveRange* lr, char* buf)
     buf[0] = '\0';
 }
 
-
+}
 

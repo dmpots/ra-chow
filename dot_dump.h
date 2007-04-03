@@ -2,15 +2,14 @@
 #define __GUARD_DOT_DUMP_H
 
 #include <Shared.h>
-#include "live_range.h"
 
 
-void name(Block*, char*);
-void name(Block*, LiveRange*, char*);
-void color(Block*, LiveRange*, char*);
-void dot_dump();
-void dot_dump_lr(LiveRange* lr, FILE* outfile);
-void dot_dump_lr(LiveRange* lr, const char* fname);
-void dot_dump_lr(LiveRange* lr);
+struct LiveRange;
+namespace Dot {
+  void Dump(void);
+  void Dump(LiveRange* lr, FILE* outfile);
+  void Dump(LiveRange* lr, const char* fname);
+  void Dump(LiveRange* lr);
+}
 
 #endif

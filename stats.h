@@ -42,6 +42,7 @@ extern ChowStats chowstats;
 /*-------------------------FUNCTIONS---------------------------*/
 void ComputeBBStats(Arena, Unsigned_Int);
 BBStats GetStatsForBlock(Block* blk, LRID lrid);
+void DumpAllocationStats();
 }
 
 #endif

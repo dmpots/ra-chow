@@ -3,9 +3,7 @@
 #include <Shared.h>
 #include "chow.h"
 #include "params.h"
-#include "cleave.h"
 #include "debug.h"
-#include "depths.h" //for computing loop nesting depth
 #include "shared_globals.h" 
 #include "rc.h" //RegisterClass definitions 
 #include "dot_dump.h"
@@ -60,13 +58,11 @@ static int process_(Param_Details*, char*);
 static const char* get_usage(Param_Help idx);
 static void usage(Boolean);
 static void Param_InitDefaults(void);
-static void DumpParams(void);
-static void DumpChowStats(void);
+static void DumpParamTable(void);
 static void Output(void);
-static void DumpInitialLiveRanges();
-static void DotDumpLR(LRID lrid, const char* tag);
-static void DotDumpFinalLRs(LRID lrid);
 static void EnforceParameterConsistency();
+static void CheckRegisterLimitFeasibility(void);
+static inline int max(int a, int b) { return a > b ? a : b;}
 
 /*#### module variables ####*/
 static const int SUCCESS = 0;
@@ -180,40 +176,18 @@ int main(Int argc, Char **argv)
   //some paramerters should implicitly set other params, and this
   //function takse care of making sure our flags are consistent
   EnforceParameterConsistency();
-
-  //make an initial check to ensure not too many registers are used
   CheckRegisterLimitFeasibility();
 
-  //areana for all chow memory allocations
-  chow_arena = Arena_Create(); 
+  //Run the priority algorithm
+  Chow::Run();
 
-  //split basic blocks to desired size
-  InitCleaver(chow_arena, Params::Algorithm::bb_max_insts);
-  CleaveBlocks();
-  
-  //initialize the register class data structures 
-  InitRegisterClasses(chow_arena, 
-                      Params::Machine::num_registers,
-                      Params::Machine::enable_register_classes,
-                      Params::Algorithm::num_reserved_registers);
-
-  //compute initial live ranges
-  LiveRange_BuildInitialSSA();
-  //DumpInitialLiveRanges();
-  if(Debug::dot_dump_lr){DotDumpLR(Debug::dot_dump_lr, "initial");}
-
-  //compute loop nesting depth needed for computing priorities
-  find_nesting_depths(chow_arena); Globals::depths = depths;
-  
-  //run the priority algorithm
-  RunChow();
-  if(Debug::dot_dump_lr){DotDumpFinalLRs(Debug::dot_dump_lr);}
-  RenameRegisters();
- 
-  //Dump(); 
+  //output results
   Output(); 
-  DumpParams();
-  DumpChowStats();
+
+  //dump input paramerters and allocation stats
+  DumpParamTable();
+  Stats::DumpAllocationStats();
+
   return EXIT_SUCCESS;
 } /* main */
 
@@ -380,12 +354,12 @@ static const char* get_usage(Param_Help idx)
 }
 
 /*
- *===========
- * DumpParams()
- *===========
+ *==================
+ * DumpParamTable()
+ *==================
  *
  ***/
-void DumpParams()
+void DumpParamTable()
 {
   LOOPVAR i;
   Param_Details param;
@@ -414,58 +388,70 @@ void DumpParams()
 
 
 /*
- *================
- * DumpChowStats()
- *================
+ *====================================
+ * CheckRegisterLimitFeasibility()
+ *====================================
+ * This function makes sure that we can allocate the code given the
+ * number of machine registers. We walk the code and look for the
+ * maximum number of registers used/defined in any instruction and
+ * make sure that number is fewer than the number of machine registers
+ * we are given.
  *
+ * if ForceMinimumRegisterCount is enabled then we will modify
+ * the number of machine registers.
  ***/
-static void DumpChowStats()
+void CheckRegisterLimitFeasibility()
 {
-  using Stats::chowstats;
-  fprintf(stderr, "***** ALLOCATION STATISTICS *****\n");
-  fprintf(stderr, " Inital  LiveRange Count: %d\n",
-                                           chowstats.clrInitial);
-  fprintf(stderr, " Final   LiveRange Count: %d\n",
-                                           chowstats.clrFinal);
-  fprintf(stderr, " Colored LiveRange Count: %d\n",
-                                           chowstats.clrColored+1);
-  fprintf(stderr, " Spilled LiveRange Count: %d\n", 
-                                           chowstats.cSpills-1);
-  fprintf(stderr, " Number of Splits: %d\n", chowstats.cSplits);
-  fprintf(stderr, " Inserted Copies : %d\n", chowstats.cInsertedCopies);
-  fprintf(stderr, " Thwarted Copies : %d\n", chowstats.cThwartedCopies);
-  fprintf(stderr, "***** ALLOCATION STATISTICS *****\n");
-  //note: +/- 1 colored/spill count is for frame pointer live range
-}
+  Block* b;
+  Inst* inst;
+  Operation** op;
+  Register* reg;
+  int cRegUses;
+  int cRegDefs;
+  int cRegMax = 0;
 
-void DumpInitialLiveRanges()
-{
-  LOOPVAR i;
-  for(i = 0; i < SSA_def_count; i++)
+  ForAllBlocks(b)
   {
-    debug("SSA_map: %d ==> %d", i, SSA_name_map[i]);
-    SSA_name_map[i] = Mapping::SSAName2LRID(i);
+    Block_ForAllInsts(inst, b)
+    {
+      cRegUses = 0;
+      cRegDefs = 0;
+      Inst_ForAllOperations(op, inst)
+      {
+        Operation_ForAllUses(reg, *op)
+        {
+          cRegUses++;
+        }
+
+        Operation_ForAllDefs(reg, *op)
+        {
+          cRegDefs++;
+        }
+        if(cRegUses > cRegMax ){cRegMax = cRegUses; }
+        if(cRegDefs > cRegMax) {cRegMax = cRegDefs; }
+      }
+    } 
   }
-  SSA_Restore();   
-  Output();
-  exit(0);
+  if(cRegMax > Params::Machine::num_registers)
+  {
+    if(Params::Program::force_minimum_register_count)
+    {
+      Params::Machine::num_registers = max(cRegMax,4); //4 is my minimum
+      fprintf(stderr, 
+      "Adjusting the number of machine registers "
+      "to permit allocation: %d\n", Params::Machine::num_registers);
+    }
+    else
+    {
+      //Block_Dump(b, NULL, TRUE);
+          fprintf(stderr, 
+"Impossible allocation.\n\
+You asked me to allocate with %d registers, but I found an operation\n\
+that needs %d registers. Sorry, but this is a research compiler not \n\
+a magic wand.\n", Params::Machine::num_registers, cRegMax);
+          exit(EXIT_FAILURE);
+    }
+  }
 }
 
-void DotDumpLR(LRID lrid, const char* tag)
-{
-  char fname[32] = {0};
-  sprintf(fname, "tmp_%d_%d_%s.dot", lrid, lrid, tag);
-  dot_dump_lr(Chow::live_ranges[lrid], fname);
-}
-void DotDumpFinalLRs(LRID lrid)
-{
-  DotDumpLR(Debug::dot_dump_lr, "final");
-  for(unsigned int i = 0; i < Debug::dot_dumped_lrids.size(); i++)
-    DotDumpLR(Debug::dot_dumped_lrids[i], "final");
-}
 
-//define this to avoid a compiler warning for unused functions
-void thisMayGiveACompilerWarning()
-{
-  DotDumpLR(0, "bullshit"); DumpInitialLiveRanges();
-}

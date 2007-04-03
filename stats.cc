@@ -84,6 +84,33 @@ BBStats GetStatsForBlock(Block* blk, LRID lrid)
   return bb_stats[id(blk)][lrid];
 }
 
+/*
+ *======================
+ * DumpAllocationStats()
+ *======================
+ *
+ ***/
+void DumpAllocationStats()
+{
+  using Stats::chowstats;
+  fprintf(stderr, "***** ALLOCATION STATISTICS *****\n");
+  fprintf(stderr, " Inital  LiveRange Count: %d\n",
+                                           chowstats.clrInitial);
+  fprintf(stderr, " Final   LiveRange Count: %d\n",
+                                           chowstats.clrFinal);
+  fprintf(stderr, " Colored LiveRange Count: %d\n",
+                                           chowstats.clrColored+1);
+  fprintf(stderr, " Spilled LiveRange Count: %d\n", 
+                                           chowstats.cSpills-1);
+  fprintf(stderr, " Number of Splits: %d\n", chowstats.cSplits);
+  fprintf(stderr, " Inserted Copies : %d\n", chowstats.cInsertedCopies);
+  fprintf(stderr, " Thwarted Copies : %d\n", chowstats.cThwartedCopies);
+  fprintf(stderr, "***** ALLOCATION STATISTICS *****\n");
+  //note: +/- 1 colored/spill count is for frame pointer live range
+}
+
+
+
 }
 /*------------------INTERNAL MODULE FUNCTIONS--------------------*/
 

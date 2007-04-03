@@ -5,6 +5,7 @@
  * $HeadURL: http://dmpots.com/svn/research/compilers/regalloc/src/chow.c $
  ********************************************************************/
 
+/*-----------------------MODULE INCLUDES-----------------------*/
 #include <Shared.h>
 #include <SSA.h>
 #include <stdio.h>
@@ -24,7 +25,6 @@
 #include "live_range.h"
 #include "live_unit.h"
 #include "union_find.h"
-#include "reach.h"
 #include "debug.h"
 #include "rc.h" //RegisterClass definitions 
 #include "assign.h" //Handles some aspects of register assignment
@@ -33,31 +33,12 @@
 #include "color.h" 
 #include "stats.h" 
 #include "mapping.h" 
+#include "cleave.h"
+#include "depths.h" //for computing loop nesting depth
+#include "shared_globals.h" //Global namespace for iloc Shared vars
 
 
-/* types */
-//using namespace std;
-typedef unsigned int LOOPVAR;
-
-/* globals */
-LRVec Chow::live_ranges;
-Arena  chow_arena;
-
-/* locals */
-static Unsigned_Int clrInitial = 0; //count of initial live ranges
-
-/* local functions */
-static void assert_same_orig_name(LRID,Variable,VectorSet,Block* b);
-static void AllocChowMemory();
-static void InitChow();
-static void MoveLoadsAndStores();
-void AllocLiveRanges(Arena arena, Unsigned_Int num_lrs);
-void SplitNeighbors(LiveRange* lr, LRSet* constr_lr, LRSet* unconstr_lr);
-void UpdateConstrainedLists(LiveRange* , LiveRange* , LRSet*, LRSet*);
-LiveUnit* AddLiveUnitOnce(LRID, Block*, VectorSet, Variable);
-LiveRange* ComputePriorityAndChooseTop(LRSet* lrs);
-
-//copy operations
+/*------------------MODULE LOCAL DEFINITIONS-------------------*/
 namespace {
   struct CopyDescription
   {
@@ -80,8 +61,77 @@ namespace {
   void Insert_Copy(const LiveRange* lrSrc, const LiveRange* lrDest,
                  Inst* around_inst, Register src, Register dest, 
                  InstInsertLocation loc);
+
+  /* local functions */
+  void assert_same_orig_name(LRID,Variable,VectorSet,Block* b);
+  void MoveLoadsAndStores();
+  void AllocLiveRanges(Arena arena, Unsigned_Int num_lrs);
+  void SplitNeighbors(LiveRange*, LRSet*, LRSet*);
+  void UpdateConstrainedLists(LiveRange* , LiveRange* , LRSet*, LRSet*);
+  LiveUnit* AddLiveUnitOnce(LRID, Block*, VectorSet, Variable);
+  LiveRange* ComputePriorityAndChooseTop(LRSet* lrs);
+  void BuildInitialLiveRanges(Arena);
+  void AllocateRegisters();
+  void RenameRegisters();
+
 }
 
+/*--------------------BEGIN IMPLEMENTATION---------------------*/
+namespace Chow {
+  /* globals */
+  Arena arena;
+  LRVec live_ranges;
+}
+
+void Chow::Run()
+{
+  //arena for all chow memory allocations
+  arena = Arena_Create(); 
+
+  //--- Initialization for building live ranges ---//
+  if(Params::Algorithm::bb_max_insts > 0)
+  {
+    //split basic blocks to desired size
+    InitCleaver(arena, Params::Algorithm::bb_max_insts);
+    CleaveBlocks();
+  }
+  InitRegisterClasses(arena, 
+                      Params::Machine::num_registers,
+                      Params::Machine::enable_register_classes,
+                      Params::Algorithm::num_reserved_registers);
+
+  //--- Build live ranges ---//
+  BuildInitialLiveRanges(arena);
+  if(Debug::dot_dump_lr){
+    LiveRange* lr = live_ranges[Debug::dot_dump_lr];
+    Debug::DotDumpLR(lr, "initial");
+    Debug::dot_dumped_lrs.push_back(lr);
+  }
+
+  //--- Initialization for allocating registers ---//
+  //compute loop nesting depth needed for computing priorities
+  find_nesting_depths(arena); Globals::depths = depths;
+  Spill::Init(arena);
+  if(Params::Algorithm::move_loads_and_stores)
+  {
+    //clear out edge extensions 
+    Block* b;
+    Edge* e;
+    ForAllBlocks(b)
+    {
+      Block_ForAllPreds(e,b) e->edge_extension = NULL;
+      Block_ForAllSuccs(e,b) e->edge_extension = NULL;
+    }
+  }
+
+  //--- Run the priority algorithm ---//
+  AllocateRegisters();
+  RenameRegisters();
+  if(Debug::dot_dump_lr) Debug::DotDumpFinalLRs(); 
+}
+
+/*-----------------INTERNAL MODULE FUNCTIONS-------------------*/
+namespace {
 /*
  *=======================
  * RunChow()
@@ -90,7 +140,7 @@ namespace {
  * Does the actual register allocation
  *
  ***/
-void RunChow()
+void AllocateRegisters()
 {
   using Chow::live_ranges;
 
@@ -98,8 +148,11 @@ void RunChow()
   LRSet constr_lrs;
   LRSet unconstr_lrs;
 
-  //allocate any memory needed by the chow allocator
-  InitChow();
+  //the register that holds the frame pointer is not a candidate for
+  //allocation since it resides in a special reserved register. remove
+  //this from the interference graph 
+  live_ranges[Spill::frame.lrid]->MarkNonCandidateAndDelete();
+
 
   //separate unconstrained live ranges
   for(LRVec::size_type i = 0; i < live_ranges.size(); i++)
@@ -209,47 +262,7 @@ LiveRange* ComputePriorityAndChooseTop(LRSet* lrs)
 
 /*
  *=============================
- * AllocChowMemory()
- *=============================
- * Allocates memory used for chow algorithm
- */
-void AllocChowMemory()
-{
-}
-
-/*
- *=============================
- * InitChow()
- *=============================
- * Initialize global variables used during allocation
- */
-void InitChow()
-{
-  AllocChowMemory();
-
-  //the register that holds the frame pointer is not a candidate for
-  //allocation since it resides in a special reserved register. remove
-  //this from the interference graph and remember which lrid holds the
-  //frame pointer
-  Spill::Init(chow_arena);
-  Chow::live_ranges[Spill::frame.lrid]->MarkNonCandidateAndDelete();
-
-  //clear out edge extensions if needed
-  if(Params::Algorithm::move_loads_and_stores)
-  {
-    Block* b;
-    Edge* e;
-    ForAllBlocks(b)
-    {
-      Block_ForAllPreds(e,b) e->edge_extension = NULL;
-      Block_ForAllSuccs(e,b) e->edge_extension = NULL;
-    }
-  }
-}
-
-/*
- *=============================
- * LiveRange_BuildInitialSSA()
+ * BuildInitialLiveRanges()
  *=============================
  * Each live range starts out where no definition reaches a use
  * outside the live range. This means that no stores will be necessary
@@ -263,7 +276,7 @@ void InitChow()
  * 
  * 
  */
-void LiveRange_BuildInitialSSA()
+void BuildInitialLiveRanges(Arena chow_arena)
 {
   using Chow::live_ranges;
   using Mapping::SSAName2LRID;
@@ -302,7 +315,8 @@ void LiveRange_BuildInitialSSA()
       }
     }
   }
-  clrInitial = uf_set_count - 1; //no lr for SSA name 0
+
+  unsigned int clrInitial = uf_set_count - 1; //no lr for SSA name 0
   debug("SSA NAMES: %d", SSA_def_count);
   debug("UNIQUE LRs: %d", clrInitial);
   Stats::chowstats.clrInitial = clrInitial;
@@ -333,7 +347,6 @@ void LiveRange_BuildInitialSSA()
   Inst* inst;
   Operation** op;
   Unsigned_Int* reg;
-  LOOPVAR j;
   VectorSet lrset = VectorSet_Create(uf_arena, clrInitial);
   ForAllBlocks(b)
   {
@@ -383,7 +396,7 @@ void LiveRange_BuildInitialSSA()
     //block in their live range
     Liveness_Info info;
     info = SSA_live_out[id(b)];
-    for(j = 0; j < info.size; j++)
+    for(unsigned int j = 0; j < info.size; j++)
     {
       //debug("LIVE: %d is LRID: %d",info.names[j], SSAName2LRID(info.names[j]));
       //add block to each live range
@@ -440,7 +453,7 @@ void AllocLiveRanges(Arena arena, Unsigned_Int num_lrs)
 
   //create initial live ranges
   live_ranges.resize(num_lrs, NULL); //allocate space
-  for(LOOPVAR i = 0; i < num_lrs; i++) //allocate each live range
+  for(unsigned int i = 0; i < num_lrs; i++) //allocate each live range
   {
     live_ranges[i] = 
       new LiveRange(RegisterClass_InitialRegisterClassForLRID(i), i);
@@ -625,6 +638,9 @@ void UpdateConstrainedLists(LiveRange* newlr,
 void RenameRegisters()
 {
   using Mapping::SSAName2LRID;
+  using Assign::GetMachineRegAssignment;
+  using Assign::ResetFreeTmpRegs;
+  using Assign::EnsureReg;
 
   debug("allocation complete. renaming registers...");
 
@@ -679,9 +695,9 @@ void RenameRegisters()
           lrid = SSAName2LRID(*reg);
           *reg = GetMachineRegAssignment(b, lrid);
           //make sure the live range is in a register
-          ensure_reg_assignment(reg, lrid, b, origInst, updatedInst,
-                                *op, FOR_USE,
-                                instUses, instDefs);
+          EnsureReg(reg, lrid, b, origInst, updatedInst,
+                    *op, FOR_USE,
+                    instUses, instDefs);
         }
 
         Operation_ForAllDefs(reg, *op)
@@ -689,9 +705,9 @@ void RenameRegisters()
           lrid = SSAName2LRID(*reg);
           *reg = GetMachineRegAssignment(b, lrid); 
           //make sure the live range is in a register
-          ensure_reg_assignment(reg, lrid, b, origInst, updatedInst,
-                               *op, FOR_DEF,
-                                instUses, instDefs);
+          EnsureReg(reg, lrid, b, origInst, updatedInst,
+                    *op, FOR_DEF,
+                    instUses, instDefs);
         }
 
       } 
@@ -699,7 +715,7 @@ void RenameRegisters()
     //make available the tmp regs used in this instruction
     //pass in a pointer to the last instruction in the block so
     //that we can insert loads for evicted registers
-    reset_free_tmp_regs(b->inst->prev_inst); 
+    ResetFreeTmpRegs(b->inst->prev_inst); 
   }
 
   //if we are to optimize positions of loads and stores, do so after
@@ -716,29 +732,7 @@ void RenameRegisters()
 }
 
 
-/*
- *==========================
- * GetMachineRegAssignment()
- *==========================
- * Gets the machine register assignment for a lrid in a given block
- **/
-Register GetMachineRegAssignment(Block* b, LRID lrid)
-{
-  using Coloring::GetColor;
-  using Coloring::NO_COLOR;
 
-  if(lrid == Spill::frame.lrid)
-    return Spill::REG_FP;
-
-   /* return REG_UNALLOCATED; spill everything */
-
-  Register color = GetColor(b, lrid);
-  if(color == NO_COLOR)
-    return REG_UNALLOCATED;
-
-  RegisterClass rc = Chow::live_ranges[lrid]->rc;
-  return RegisterClass_MachineRegForColor(rc, color);
-}
 /*
  *===================
  * Insert_Copy()
@@ -746,7 +740,6 @@ Register GetMachineRegAssignment(Block* b, LRID lrid)
  * Inserts a copy from one live range to another, using the registers
  * passed to the function.
  */
-namespace {
 void Insert_Copy(const LiveRange* lrSrc, const LiveRange* lrDest,
                  Inst* around_inst, Register src, Register dest, 
                  InstInsertLocation loc)
@@ -785,8 +778,8 @@ Inst* Inst_CreateCopy(Opcode_Names opcode,
 {
   const int CP_OPSIZE = 7;
   //allocate a new instruction
-  Inst* cp_inst = (Inst*)Inst_Allocate(chow_arena, 1);
-  Operation* cp_op = (Operation*)Operation_Allocate(chow_arena, 
+  Inst* cp_inst = (Inst*)Inst_Allocate(Chow::arena, 1);
+  Operation* cp_op = (Operation*)Operation_Allocate(Chow::arena, 
                                                     CP_OPSIZE);
   cp_inst->operations[0] = cp_op;
   cp_inst->operations[1] = NULL;
@@ -811,75 +804,7 @@ Inst* Inst_CreateCopy(Opcode_Names opcode,
 
   return cp_inst;
 }
-}
 
-/*
- *====================================
- * CheckRegisterLimitFeasibility()
- *====================================
- * This function makes sure that we can allocate the code given the
- * number of machine registers. We walk the code and look for the
- * maximum number of registers used/defined in any instruction and
- * make sure that number is fewer than the number of machine registers
- * we are given.
- *
- * if ForceMinimumRegisterCount is enabled then we will modify
- * the number of machine registers.
- ***/
-void CheckRegisterLimitFeasibility()
-{
-  Block* b;
-  Inst* inst;
-  Operation** op;
-  Register* reg;
-  int cRegUses;
-  int cRegDefs;
-  int cRegMax = 0;
-
-  ForAllBlocks(b)
-  {
-    Block_ForAllInsts(inst, b)
-    {
-      cRegUses = 0;
-      cRegDefs = 0;
-      Inst_ForAllOperations(op, inst)
-      {
-        Operation_ForAllUses(reg, *op)
-        {
-          cRegUses++;
-        }
-
-        Operation_ForAllDefs(reg, *op)
-        {
-          cRegDefs++;
-        }
-        if(cRegUses > cRegMax ){cRegMax = cRegUses; }
-        if(cRegDefs > cRegMax) {cRegMax = cRegDefs; }
-      }
-    } 
-  }
-  if(cRegMax > Params::Machine::num_registers)
-  {
-    if(Params::Program::force_minimum_register_count)
-    {
-      Params::Machine::num_registers = max(cRegMax,4); //4 is my minimum
-      fprintf(stderr, 
-      "Adjusting the number of machine registers "
-      "to permit allocation: %d\n", Params::Machine::num_registers);
-    }
-    else
-    {
-      //Block_Dump(b, NULL, TRUE);
-          fprintf(stderr, 
-"Impossible allocation.\n\
-You asked me to allocate with %d registers, but I found an operation\n\
-that needs %d registers. Sorry, but this is a research compiler not \n\
-a magic wand.\n", Params::Machine::num_registers, cRegMax);
-          exit(EXIT_FAILURE);
-    }
-  }
-
-}
 
 
 /*
@@ -1059,7 +984,7 @@ void MoveLoadsAndStores()
           MovedSpillDescription msd = (*ee);
           //use machine registers for these loads/stores 
           Register mReg =
-            GetMachineRegAssignment(msd.orig_blk, msd.lr->orig_lrid);
+            Assign::GetMachineRegAssignment(msd.orig_blk, msd.lr->orig_lrid);
           if(msd.spill_type == STORE_SPILL)
           {
             debug("moving store from %s to %s for lrid: %d_%d",
@@ -1087,7 +1012,6 @@ void MoveLoadsAndStores()
   }
 }
 
-namespace{
 /*
  *=======================
  * OrderCopies()
@@ -1112,10 +1036,10 @@ bool OrderCopies(const CopyList& rr_copies, CDL* ordered_copies)
 
     CopyDescription cd;
     cd.src_lr = msdSrc.lr;
-    cd.src_reg = GetMachineRegAssignment(msdSrc.orig_blk, 
+    cd.src_reg = Assign::GetMachineRegAssignment(msdSrc.orig_blk, 
                                         msdSrc.lr->orig_lrid);
     cd.dest_lr = msdDest.lr;
-    cd.dest_reg = GetMachineRegAssignment(msdDest.orig_blk, 
+    cd.dest_reg = Assign::GetMachineRegAssignment(msdDest.orig_blk, 
                                         msdDest.lr->orig_lrid);
     
 
@@ -1163,7 +1087,9 @@ bool OrderCopies(const CopyList& rr_copies, CDL* ordered_copies)
 
   return true;
 }
+
 }
+
 
 /*
  *===========

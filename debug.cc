@@ -7,6 +7,8 @@
 #include "debug.h"
 #include "live_range.h"
 #include "live_unit.h"
+#include "mapping.h"
+#include "dot_dump.h"
 using std::vector;
 
 
@@ -27,7 +29,7 @@ namespace Debug {
 //keep track of all the lrids that are dumped throughout the program.
 //there can be multiple lrids if the original lrid indicated by
 //dot_dump_lr is split during allocation
-vector<LRID> dot_dumped_lrids;
+vector<LiveRange*> dot_dumped_lrs;
 
 //used to control whether we dot dump a lr throughout the life of the
 //allocator. a non-zero value indicates the live range to watch
@@ -152,6 +154,50 @@ void LiveUnit_Dump(LiveUnit* unit)
   fprintf(stderr,"  Start With Def: %c\n",unit->start_with_def?'Y':'N');
   fprintf(stderr,"  SSA    Name: %d\n",unit->orig_name);
   fprintf(stderr,"  Source Name: %d\n",SSA_name_map[unit->orig_name]);
+}
+
+/*
+ *========================
+ * DumpInitialLiveRanges()
+ *========================
+ *
+ ***/
+void DumpInitialLiveRanges()
+{
+  LOOPVAR i;
+  for(i = 0; i < SSA_def_count; i++)
+  {
+    debug("SSA_map: %d ==> %d", i, SSA_name_map[i]);
+    SSA_name_map[i] = Mapping::SSAName2LRID(i);
+  }
+  SSA_Restore();   
+  Block_Put_All(stdout);
+  exit(0);
+}
+
+/*
+ *============
+ * DotDumpLR()
+ *============
+ *
+ ***/
+void DotDumpLR(LiveRange* lr, const char* tag)
+{
+  char fname[128] = {0};
+  sprintf(fname, "tmp_%d_%d_%s.dot", lr->orig_lrid, lr->id, tag);
+  Dot::Dump(lr, fname);
+}
+
+/*
+ *===================
+ * DotDumpFinalLRs()
+ *===================
+ *
+ ***/
+void DotDumpFinalLRs()
+{
+  for(unsigned int i = 0; i < Debug::dot_dumped_lrs.size(); i++)
+    DotDumpLR(Debug::dot_dumped_lrs[i], "final");
 }
 
 }//end Debug namespace

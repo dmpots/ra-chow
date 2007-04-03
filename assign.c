@@ -10,12 +10,15 @@
 
 #include "debug.h"
 #include "chow.h"
+#include "live_range.h"
 #include "rc.h"
 #include "assign.h"
 #include "types.h"
 #include "spill.h"
 #include "stats.h"
+#include "color.h"
 
+/*------------------MODULE LOCAL DEFINITIONS-------------------*/
 static Register bullshitReg = 1000;
 
 /* local functions */
@@ -44,130 +47,26 @@ void remove_unusable_reg(std::list<ReservedReg*>& potentials,
 
 Boolean has_been_evicted(LRID lrid, Register reg);
 /* --- end functions --- */
+/*--------------------BEGIN IMPLEMENTATION---------------------*/
+namespace Assign {
+const Register REG_UNALLOCATED = 666;
 
-/* debug routines */
-void dump_map_contents(ReservedRegMap& regMap)
-{
-  debug("-- map contents --");
-  ReservedRegMap::iterator rmIt;
-  for(rmIt = regMap.begin(); rmIt != regMap.end(); rmIt++)
-    debug("  %d --> %d", (*rmIt).first, ((*rmIt).second)->machineReg);
-  debug("-- end map contents --");
-}
-
-void dump_reglist_contents(RegisterList& regList)
-{
-  debug("-- reglist contents --");
-  RegisterList::iterator rmIt;
-  for(rmIt = regList.begin(); rmIt != regList.end(); rmIt++)
-    debug("  %d", (*rmIt));
-  debug("-- end reglist contents --");
-}
-
-/*
- *===================
- * get_free_tmp_reg()
- *===================
- * gets the next available free tmp register from the pool of
- * available free temp registers
- **/
-
-Boolean isFree(const ReservedReg* reserved){return reserved->free;}
-class ReservedReg_Usable : public std::unary_function<ReservedReg*, bool>
-{
-  const Inst* inst;
-  RegPurpose purpose;
-  const RegisterList& instUses;
-
-  public:
-  ReservedReg_Usable(const Inst* inst_, RegPurpose purpose_,
-                     const RegisterList& instUses_) :
-    inst(inst_), purpose(purpose_), instUses(instUses_) {}
-  /* we can use a previously used reserved reg if it is for a
-   * different instruction or it was used in the instruction to hold
-   * a USE and we now need it for a DEF. we also check the list of
-   * uses in the inst to make sure we don't use this temp register if
-   * the lrid it stores is needed for this instruction (even if it was
-   * put in for the previous instruction for example) */
-  bool operator() (const ReservedReg* reserved) const 
-  {
-    if(reserved->forInst != inst)
-    {
-      //make sure this reg is not used in the instruction under
-      //question since it has to occupy a register in that case
-      //and is not available to be evicted
-      if(purpose == FOR_USE)
-      {
-        if(find(instUses.begin(), instUses.end(), reserved->forLRID)
-           != instUses.end())
-        {
-          return false;
-        }
-      }
-      return true;
-    }
-    else //needed in the same inst
-    {
-      return reserved->forPurpose != purpose;
-    }
-    /*if(reserved->forInst != inst || reserved->forPurpose != purpose)
-    {
-      if(purpose == FOR_USE)
-      {
-        return 
-          (find(instUses.begin(), instUses.end(), reserved->forLRID)
-          ==
-          instUses.end());
-      }
-      return true;
-    }
-    return false;
-    */
-  }
-};
-
-class ReservedReg_MRegEq : public std::unary_function<ReservedReg*, bool>
-{
-  Register mReg; 
-
-  public:
-  ReservedReg_MRegEq(Register mReg_) : mReg(mReg_) {};
-  bool operator() (const ReservedReg* reserved) const 
-  {
-    return reserved->machineReg == mReg;
-  }
-};
-
-
-class ReservedReg_InstEq : public std::unary_function<ReservedReg*, bool>
-{
-  Inst* inst; 
-
-  public:
-  ReservedReg_InstEq(Inst* inst_) : inst(inst_) {};
-  bool operator() (const ReservedReg* reserved) const 
-  {
-    return reserved->forInst == inst;
-  }
-};
-
-
-void ensure_reg_assignment(Register* reg, 
-                           LRID lrid, 
-                           Block* blk,
-                           Inst*  origInst,
-                           Inst** updatedInst, 
-                           Operation* op,
-                           RegPurpose purpose,
-                           const RegisterList& instUses, 
-                           const RegisterList& instDefs)
+void EnsureReg(Register* reg, 
+               LRID lrid, 
+               Block* blk,
+               Inst*  origInst,
+               Inst** updatedInst, 
+               Operation* op,
+               RegPurpose purpose,
+               const RegisterList& instUses, 
+               const RegisterList& instDefs)
 {
   using Spill::InsertLoad;
   using Spill::InsertStore;
   using Chow::live_ranges;
 
   //this live range is spilled. find a temporary register
-  if(*reg == REG_UNALLOCATED)
+  if(*reg == Assign::REG_UNALLOCATED)
   {
     std::pair<Register,bool> regXneedMem;
     Register tmpReg;
@@ -213,6 +112,182 @@ void ensure_reg_assignment(Register* reg,
   }
 }
 
+/*
+ *===================
+ * reset_free_tmp_regs()
+ *===================
+ * used to reset the count of which temporary registers are in use for
+ * an instruction
+ **/
+void ResetFreeTmpRegs(Inst* last_inst)
+{
+  using Spill::InsertLoad;
+  using Chow::live_ranges;
+
+  debug("resetting free tmp regs");
+  //take care of business for each register class
+  for(RegisterClass rc = 0; rc < cRegisterClass; rc++)
+  {
+    RegisterContents* regContents =
+      RegisterClass_GetRegisterContentsForRegisterClass(rc);
+
+    //1) anyone that was evicted needs to be loaded back in
+    //TODO: this is bullshit!! (says tim).
+    //we can do better than just reloading the register because it is
+    //the end of the block. we could look down the path that leads
+    //from this block and see where the next use is and put the load
+    //right before it, but for now we just put the load here
+    EvictedList* evicted = regContents->evicted;
+    EvictedList::iterator evIT;
+    for(evIT = evicted->begin(); evIT != evicted->end(); evIT++)
+    {
+      LRID evictedLRID = (*evIT).first;
+      InsertLoad(live_ranges[evictedLRID], 
+                last_inst, (*evIT).second, Spill::REG_FP);
+    }
+
+    //2) remove all evicted registers from evicted list
+    evicted->clear();
+
+    //3) set all reserved registers to be FREE so they can be used in
+    //the next block
+    ReservedList* reserved = regContents->reserved;
+    ReservedList::iterator resIT;
+    for(resIT = reserved->begin(); resIT != reserved->end(); resIT++)
+    {
+      (*resIT)->free = TRUE;
+      (*resIT)->forLRID = NO_LRID;
+      (*resIT)->forInst = NULL;
+    }
+
+    //4) clear the regMap
+    regContents->regMap->clear();
+  }
+}
+
+
+/*
+ *==========================
+ * GetMachineRegAssignment()
+ *==========================
+ * Gets the machine register assignment for a lrid in a given block
+ **/
+Register GetMachineRegAssignment(Block* b, LRID lrid)
+{
+  using Coloring::GetColor;
+  using Coloring::NO_COLOR;
+
+  if(lrid == Spill::frame.lrid)
+    return Spill::REG_FP;
+
+   /* return REG_UNALLOCATED; spill everything */
+
+  Register color = GetColor(b, lrid);
+  if(color == NO_COLOR)
+    return REG_UNALLOCATED;
+
+  RegisterClass rc = Chow::live_ranges[lrid]->rc;
+  return RegisterClass_MachineRegForColor(rc, color);
+}
+
+}
+
+
+
+
+/*-----------------INTERNAL MODULE FUNCTIONS-------------------*/
+/* debug routines */
+void dump_map_contents(ReservedRegMap& regMap)
+{
+  debug("-- map contents --");
+  ReservedRegMap::iterator rmIt;
+  for(rmIt = regMap.begin(); rmIt != regMap.end(); rmIt++)
+    debug("  %d --> %d", (*rmIt).first, ((*rmIt).second)->machineReg);
+  debug("-- end map contents --");
+}
+
+void dump_reglist_contents(RegisterList& regList)
+{
+  debug("-- reglist contents --");
+  RegisterList::iterator rmIt;
+  for(rmIt = regList.begin(); rmIt != regList.end(); rmIt++)
+    debug("  %d", (*rmIt));
+  debug("-- end reglist contents --");
+}
+
+/*
+ *===================
+ * ReservedReg_Usable()
+ *===================
+ * says whether we can use the temporary register or not
+ **/
+Boolean isFree(const ReservedReg* reserved){return reserved->free;}
+class ReservedReg_Usable : public std::unary_function<ReservedReg*, bool>
+{
+  const Inst* inst;
+  RegPurpose purpose;
+  const RegisterList& instUses;
+
+  public:
+  ReservedReg_Usable(const Inst* inst_, RegPurpose purpose_,
+                     const RegisterList& instUses_) :
+    inst(inst_), purpose(purpose_), instUses(instUses_) {}
+  /* we can use a previously used reserved reg if it is for a
+   * different instruction or it was used in the instruction to hold
+   * a USE and we now need it for a DEF. we also check the list of
+   * uses in the inst to make sure we don't use this temp register if
+   * the lrid it stores is needed for this instruction (even if it was
+   * put in for the previous instruction for example) */
+  bool operator() (const ReservedReg* reserved) const 
+  {
+    if(reserved->forInst != inst)
+    {
+      //make sure this reg is not used in the instruction under
+      //question since it has to occupy a register in that case
+      //and is not available to be evicted
+      if(purpose == FOR_USE)
+      {
+        if(find(instUses.begin(), instUses.end(), reserved->forLRID)
+           != instUses.end())
+        {
+          return false;
+        }
+      }
+      return true;
+    }
+    else //needed in the same inst
+    {
+      return reserved->forPurpose != purpose;
+    }
+  }
+};
+
+class ReservedReg_MRegEq : public std::unary_function<ReservedReg*, bool>
+{
+  Register mReg; 
+
+  public:
+  ReservedReg_MRegEq(Register mReg_) : mReg(mReg_) {};
+  bool operator() (const ReservedReg* reserved) const 
+  {
+    return reserved->machineReg == mReg;
+  }
+};
+
+
+class ReservedReg_InstEq : public std::unary_function<ReservedReg*, bool>
+{
+  Inst* inst; 
+
+  public:
+  ReservedReg_InstEq(Inst* inst_) : inst(inst_) {};
+  bool operator() (const ReservedReg* reserved) const 
+  {
+    return reserved->forInst == inst;
+  }
+};
+
+
 Boolean has_been_evicted(LRID lrid, Register reg)
 {
 
@@ -253,12 +328,21 @@ Boolean has_been_evicted(LRID lrid, Register reg)
   return FALSE;
 }
 
+/*
+ *===================
+ * get_free_tmp_reg()
+ *===================
+ * gets the next available free tmp register from the pool of
+ * available free temp registers
+ **/
 std::pair<Register,bool>
 get_free_tmp_reg(LRID lrid, Block* blk, Inst* inst, Operation* op,
                  RegPurpose purpose, 
                  const RegisterList& instUses, 
                  const RegisterList& instDefs)
 {
+  using Assign::GetMachineRegAssignment;
+
   debug("looking for temporary reg for %s of lrid: %d",
     (purpose == FOR_USE ? "FOR_USE" : "FOR_DEF"), lrid);
 
@@ -434,9 +518,8 @@ Register mark_register_used(ReservedReg* tmpReg,
 void remove_unusable_reg(std::list<ReservedReg*>& potentials, 
                     LRID lridT, Block* blk )
 {
-  //LRID lridT = SSAName2LRID(ssaName);
-  Register mReg = GetMachineRegAssignment(blk, lridT);
-  if(mReg != REG_UNALLOCATED)
+  Register mReg = Assign::GetMachineRegAssignment(blk, lridT);
+  if(mReg != Assign::REG_UNALLOCATED)
   {
     debug("removing machine reg %d from potentials (lrid: %d)",
         mReg, lridT);
@@ -470,59 +553,5 @@ ReservedReg* find_usable_reg(const std::vector<ReservedReg*>* reserved,
 
 
 
-
-
-/*
- *===================
- * reset_free_tmp_regs()
- *===================
- * used to reset the count of which temporary registers are in use for
- * an instruction
- **/
-void reset_free_tmp_regs(Inst* last_inst)
-{
-  using Spill::InsertLoad;
-  using Chow::live_ranges;
-
-  debug("resetting free tmp regs");
-  //take care of business for each register class
-  for(RegisterClass rc = 0; rc < cRegisterClass; rc++)
-  {
-    RegisterContents* regContents =
-      RegisterClass_GetRegisterContentsForRegisterClass(rc);
-
-    //1) anyone that was evicted needs to be loaded back in
-    //TODO: this is bullshit!! (says tim).
-    //we can do better than just reloading the register because it is
-    //the end of the block. we could look down the path that leads
-    //from this block and see where the next use is and put the load
-    //right before it, but for now we just put the load here
-    EvictedList* evicted = regContents->evicted;
-    EvictedList::iterator evIT;
-    for(evIT = evicted->begin(); evIT != evicted->end(); evIT++)
-    {
-      LRID evictedLRID = (*evIT).first;
-      InsertLoad(live_ranges[evictedLRID], 
-                last_inst, (*evIT).second, Spill::REG_FP);
-    }
-
-    //2) remove all evicted registers from evicted list
-    evicted->clear();
-
-    //3) set all reserved registers to be FREE so they can be used in
-    //the next block
-    ReservedList* reserved = regContents->reserved;
-    ReservedList::iterator resIT;
-    for(resIT = reserved->begin(); resIT != reserved->end(); resIT++)
-    {
-      (*resIT)->free = TRUE;
-      (*resIT)->forLRID = NO_LRID;
-      (*resIT)->forInst = NULL;
-    }
-
-    //4) clear the regMap
-    regContents->regMap->clear();
-  }
-}
 
 
