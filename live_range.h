@@ -6,6 +6,7 @@
 #include <list>
 #include <vector>
 #include "types.h"
+#include "stats.h"
 
 /*--------------------------FORWARD DEFS--------------------------*/
 /* forward definition of a comparison object used by the std::set
@@ -57,9 +58,10 @@ struct LiveRange
   Opcode_Names CopyOpcode() const;
   unsigned int Alignment() const;
   LiveRange* Split();
-  Boolean IsEntirelyUnColorable();
-  Boolean HasColorAvailable();
-  Boolean InterferesWith(LiveRange* lr2);
+  Boolean IsEntirelyUnColorable() const;
+  Boolean HasColorAvailable() const;
+  Boolean InterferesWith(LiveRange* lr2) const;
+  LiveUnit* AddLiveUnitForBlock(Block*, Variable, const Stats::BBStats& );
 
   /* iterators */
   /* for live units in this live range */
@@ -80,7 +82,6 @@ struct LRcmp
 
 /*---------------------HELPER FUNCTIONS-------------------------*/
 //FIXME: review to see if these should be elsewhere (chow.c perhaps?)
-LiveUnit* AddLiveUnitOnce(LRID lrid, Block* b, VectorSet lrset, Variable orig_name);
 LiveRange* ComputePriorityAndChooseTop(LRSet* lrs);
 
 inline void LRName(const LiveRange* lr, char* buf)

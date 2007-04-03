@@ -31,6 +31,8 @@
 #include "cfg_tools.h" 
 #include "spill.h" 
 #include "color.h" 
+#include "stats.h" 
+#include "mapping.h" 
 
 
 /* types */
@@ -40,17 +42,12 @@ typedef unsigned int LOOPVAR;
 /* globals */
 LRVec Chow::live_ranges;
 Arena  chow_arena;
-BB_Stats bb_stats;
 Unsigned_Int** mBlkIdSSAName_Color;
-Chow_Stats chowstats = {0};
 
 /* locals */
-static LRID* lr_name_map;
 static Unsigned_Int clrInitial = 0; //count of initial live ranges
 
 /* local functions */
-static BB_Stats Compute_BBStats(Arena, Unsigned_Int);
-static void CreateLiveRangeNameMap(Arena);
 static void assert_same_orig_name(LRID,Variable,VectorSet,Block* b);
 static void AllocChowMemory();
 static Inst* Inst_CreateLoad(Opcode_Names opcode,
@@ -68,12 +65,11 @@ static Inst* Inst_CreateStore(Opcode_Names opcode,
                       Register base_reg,
                       Register val);
 static void InitChow();
-static UFSet* Find_Set(Variable v);
-static void ConvertLiveInNamespaceSSAToLiveRange();
 static void MoveLoadsAndStores();
 void AllocLiveRanges(Arena arena, Unsigned_Int num_lrs);
 void SplitNeighbors(LiveRange* lr, LRSet* constr_lr, LRSet* unconstr_lr);
 void UpdateConstrainedLists(LiveRange* , LiveRange* , LRSet*, LRSet*);
+LiveUnit* AddLiveUnitOnce(LRID, Block*, VectorSet, Variable);
 
 //copy operations
 namespace {
@@ -170,7 +166,7 @@ void RunChow()
   }
 
   //record some statistics about the allocation
-  chowstats.clrFinal = live_ranges.size();
+  Stats::chowstats.clrFinal = live_ranges.size();
 }
 
 /*
@@ -213,7 +209,7 @@ void InitChow()
   //this from the interference graph and remember which lrid holds the
   //frame pointer
   Spill::Init();
-  Spill::frame.lrid = SSAName2LRID(Spill::frame.ssa_name);
+  Spill::frame.lrid = Mapping::SSAName2LRID(Spill::frame.ssa_name);
   Chow::live_ranges[Spill::frame.lrid]->MarkNonCandidateAndDelete();
 
   //clear out edge extensions if needed
@@ -248,6 +244,7 @@ void InitChow()
 void LiveRange_BuildInitialSSA()
 {
   using Chow::live_ranges;
+  using Mapping::SSAName2LRID;
 
   //build ssa
   Unsigned_Int ssa_options = 0;
@@ -286,23 +283,21 @@ void LiveRange_BuildInitialSSA()
   clrInitial = uf_set_count - 1; //no lr for SSA name 0
   debug("SSA NAMES: %d", SSA_def_count);
   debug("UNIQUE LRs: %d", clrInitial);
-  chowstats.clrInitial = clrInitial;
+  Stats::chowstats.clrInitial = clrInitial;
 
   //create a mapping from ssa names to live range ids
-  CreateLiveRangeNameMap(uf_arena);
-  ConvertLiveInNamespaceSSAToLiveRange();
+  Mapping::CreateLiveRangeNameMap(uf_arena);
+  Mapping::ConvertLiveInNamespaceSSAToLiveRange();
   if(Params::Machine::enable_register_classes)
   {
-    RegisterClass_CreateLiveRangeTypeMap(uf_arena,
-                                       clrInitial,
-                                       lr_name_map);
+    RegisterClass_CreateLiveRangeTypeMap(uf_arena, clrInitial);
   }
 
   //initialize coloring structures based on number of register classes
   Coloring::Init(chow_arena, cRegisterClass);
 
   //now that we know how many live ranges we start with allocate them
-  bb_stats = Compute_BBStats(uf_arena, SSA_def_count);
+  Stats::ComputeBBStats(uf_arena, SSA_def_count);
   AllocLiveRanges(chow_arena, clrInitial);
 
   //build the interference graph
@@ -450,80 +445,30 @@ Block* b)
 }
 
 /*
- *========================
- * CreateLiveRangeNameMap
- *========================
- * Makes a mapping from SSA name to live range id and stores the
- * result in the global variable lr_name_map
- ***/
-void CreateLiveRangeNameMap(Arena arena)
-{
-  lr_name_map = (LRID*)
-        Arena_GetMemClear(arena,sizeof(LRID) * (SSA_def_count));
-  Unsigned_Int idcnt = 0; 
-  Unsigned_Int setid; //a setid may be 0
-  LOOPVAR i;
-
-  //initialize to known value
-  for(i = 0; i < SSA_def_count; i++)
-    lr_name_map[i] = NO_LRID;
-  
-  for(i = 1; i < SSA_def_count; i++)
-  {
-    setid = Find_Set(i)->id;
-    //debug("name: %d setid: %d lrid: %d", i, setid, lr_name_map[setid]);
-    if(lr_name_map[setid] != NO_LRID)
-    {
-      lr_name_map[i] = lr_name_map[setid]; //already seen this lr
-    } 
-    else
-    {
-      //assign next available lr id
-      lr_name_map[i] = lr_name_map[setid] = idcnt++;
-    }
-
-    debug("SSAName: %4d ==> LRID: %4d", i, lr_name_map[i]);
-  }
-  assert(idcnt == (clrInitial)); //we start lrids at 0
-}
-
-/*
- *========================================
- * ConvertLiveInNamespaceSSAToLiveRange()
- *========================================
- * Changes live range name space to use live range ids rather than the
- * ssa namespace.
+ *=============================
+ * AddLiveUnitOnce()
+ *=============================
  *
- * NOTE: Make sure you call this after building initial live ranges
- * because the live units need to know which SSA name they contain and
- * that information is taken from the ssa liveness info.
+ * adds the block to the live range, but only once depending on the
+ * contents of the *lrset*
+ * returns the new LiveUnit or NULL if it is already in the live range
  ***/
-void ConvertLiveInNamespaceSSAToLiveRange() 
+LiveUnit* 
+AddLiveUnitOnce(LRID lrid, Block* b, VectorSet lrset, Variable orig_name)
 {
-
-  Liveness_Info info;
-  Block* blk;
-  LOOPVAR j;
-  LRID lrid;
-  ForAllBlocks(blk)
+  //debug("ADDING: %d BLOCK: %s (%d)", lrid, bname(b), id(b));
+  LiveUnit* new_unit = NULL;
+  if(!VectorSet_Member(lrset, lrid))
   {
-    //TODO: do we need to convert live out too?
-    info = SSA_live_in[id(blk)];
-    for(j = 0; j < info.size; j++)
-    {
-      Variable vLive = info.names[j];
-      if(!(vLive < SSA_def_count))
-      {
-        error("invalid live in name %d", vLive);
-        continue;
-      }
-      //debug("Converting LIVE: %d to LRID: %d",vLive,
-      //       SSAName2LRID(vLive));
-      lrid = SSAName2LRID(vLive);
-      info.names[j] = lrid;
-    }
+    LiveRange* lr = Chow::live_ranges[lrid];
+    VectorSet_Insert(lrset, lrid);
+    Stats::BBStats bbstat = Stats::GetStatsForBlock(b, lr->id);
+    new_unit = lr->AddLiveUnitForBlock(b, orig_name, bbstat);
   }
-}
+
+  return new_unit;
+} 
+ 
 
 /*
  *============================
@@ -653,6 +598,8 @@ void UpdateConstrainedLists(LiveRange* newlr,
  ***/
 void RenameRegisters()
 {
+  using Mapping::SSAName2LRID;
+
   debug("allocation complete. renaming registers...");
 
   //stack pointer is the initial size of the stack frame
@@ -1005,89 +952,6 @@ Inst* Inst_CreateCopy(Opcode_Names opcode,
 }
 
 /*
- *===================
- * Find_Set()
- *===================
- * Returns pointer to the UFSet structure for the given variable
- **/
-UFSet* Find_Set(Variable v)
-{
-  return UFSet_Find(uf_sets[v]);
-}
-
-/*
- *===================
- * SSAName2LRID()
- *===================
- * Maps a variable to the initial live range id to which that variable
- * belongs. Once the splitting process starts this mapping may not be
- * valid and should not be used.
- **/
-LRID SSAName2LRID(Variable v)
-{
-  assert(v < SSA_def_count);
-  assert((lr_name_map[v] != NO_LRID) || v == 0);
-  return lr_name_map[v];
-}
-
-/*
- *===================
- * Compute_BBStats()
- *===================
- * Gathers statistics about variables on a per-live range basis.
- * Collects:
- *  1) number of uses in the block
- *  2) number of defs in the block
- *  3) if the first occurance is a def
- ***/
-BB_Stats Compute_BBStats(Arena arena, Unsigned_Int variable_count)
-{
-  Block* b;
-  Inst* inst;
-  Operation** op;
-  Variable* reg;
-  BB_Stats stats;
-  BB_Stat* bstats;
-
-
-  //allocate space to hold the stats
-  stats = (BB_Stat**)
-    Arena_GetMemClear(arena, sizeof(BB_Stat*) * (block_count + 1));
-  ForAllBlocks(b)
-  {
-    stats[id(b)] = (BB_Stat*) 
-      Arena_GetMemClear(arena, sizeof(BB_Stat) * variable_count);
-  }
-
-  LRID lrid;
-  ForAllBlocks(b)
-  {
-    bstats = stats[id(b)];
-    Block_ForAllInsts(inst, b)
-    {
-      Inst_ForAllOperations(op, inst)
-      {
-        Operation_ForAllUses(reg, *op)
-        {
-          lrid = SSAName2LRID(*reg);
-          bstats[lrid].uses++;
-        }
-
-        Operation_ForAllDefs(reg, *op)
-        {
-          lrid = SSAName2LRID(*reg);
-          bstats[lrid].defs++;
-          if(bstats[lrid].uses == 0)
-            bstats[lrid].start_with_def = TRUE;
-        }
-      } 
-    }
-  }
-
-  return stats;
-}
-
-/*
  *====================================
  * CheckRegisterLimitFeasibility()
  *====================================
@@ -1266,7 +1130,7 @@ void MoveLoadsAndStores()
                   rr_copies.push_back(make_pair(*eeT, *ee));
                   removals.push_back(ee);
                 }
-                chowstats.cInsertedCopies++;
+                Stats::chowstats.cInsertedCopies++;
               }
             }
           }
@@ -1318,7 +1182,7 @@ void MoveLoadsAndStores()
                   clIT != rr_copies.end(); clIT++)
               {
                 edg->edge_extension->spill_list->push_back(clIT->second);
-                chowstats.cThwartedCopies++;
+                Stats::chowstats.cThwartedCopies++;
               }
             }
           }

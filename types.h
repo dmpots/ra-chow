@@ -32,4 +32,6 @@ struct LRcmp;
 typedef std::vector<LiveRange*> LRVec;
 typedef std::set<LiveRange*, LRcmp> LRSet;
 
+const LRID NO_LRID = (LRID) -1; //not a valid LRID
+
 #endif

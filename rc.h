@@ -20,9 +20,8 @@ extern Unsigned_Int cRegisterClass;
 
 /* exported functions */
 RegisterClass RegisterClass_InitialRegisterClassForLRID(LRID lrid);
-void RegisterClass_CreateLiveRangeTypeMap(Arena arena, 
-                                          Unsigned_Int lr_count,
-                                          LRID* mSSAName_LRID);
+void RegisterClass_CreateLiveRangeTypeMap(Arena arena,
+                                          Unsigned_Int lr_count);
 Unsigned_Int RegisterClass_NumMachineReg(RegisterClass);
 Register RegisterClass_MachineRegForColor(RegisterClass, Color);
 void InitRegisterClasses(Arena arena, 

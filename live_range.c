@@ -241,7 +241,7 @@ void LiveRange::MarkNonCandidateAndDelete()
   LiveRange* intf_lr;
   color = NO_COLOR;
   is_candidate = FALSE;
-  chowstats.cSpills++;
+  Stats::chowstats.cSpills++;
 
   debug("deleting LR: %d from interference graph", this->id);
   LiveRange_ForAllFearsCopy(this, intf_lr)
@@ -272,7 +272,7 @@ void LiveRange::AssignColor()
   color = chosen_color;
   assert(color < RegisterClass_NumMachineReg(rc));
   is_candidate = FALSE; //no longer need a color
-  chowstats.clrColored++;
+  Stats::chowstats.clrColored++;
   debug("assigning color: %d to lr: %d", color, this->id);
 
   //update the interfering live ranges forbidden set
@@ -442,32 +442,7 @@ void LiveRange::MarkLoadsAndStores()
   LiveRange_MarkStores(this);
 }
 
-/*
- *=============================
- * AddLiveUnitOnce()
- *=============================
- *
- * adds the block to the live range, but only once depending on the
- * contents of the *lrset*
- ***/
-LiveUnit* AddLiveUnitOnce(LRID lrid, 
-                          Block* b, 
-                          VectorSet lrset, 
-                          Variable orig_name)
-{
-  //debug("ADDING: %d BLOCK: %s (%d)", lrid, bname(b), id(b));
-  LiveUnit* new_unit = NULL;
-  if(!VectorSet_Member(lrset, lrid))
-  {
-    LiveRange* lr = Chow::live_ranges[lrid];
-    VectorSet_Insert(lrset, lrid);
-    new_unit = LiveRange_AddLiveUnitBlock(lr, b);
-    new_unit->orig_name = orig_name;
-  }
 
-  return new_unit;
-} 
- 
 /*
  *================================
  * LiveRange::LoadOpcode()
@@ -580,7 +555,7 @@ LiveRange* ComputePriorityAndChooseTop(LRSet* lrs)
  * Used to determine if two live ranges interfere
  * true - if the live ranges interfere
  ***/
-Boolean LiveRange::InterferesWith(LiveRange* lr2)
+Boolean LiveRange::InterferesWith(LiveRange* lr2) const
 {
   if(rc != lr2->rc)
   {
@@ -597,7 +572,7 @@ Boolean LiveRange::InterferesWith(LiveRange* lr2)
  * return true if there is at least one register that can be assigned
  *  to this live range in all of its live units
  */ 
-Boolean LiveRange::HasColorAvailable()
+Boolean LiveRange::HasColorAvailable() const
 {
   return (!VectorSet_Full(forbidden));
 }
@@ -609,7 +584,7 @@ Boolean LiveRange::HasColorAvailable()
  * returns true if the live range is uncolorable
  *
  ***/
-Boolean LiveRange::IsEntirelyUnColorable()
+Boolean LiveRange::IsEntirelyUnColorable() const
 {
   //a live range is uncolorable when all registers have been used
   //throughout the entire length of the live range (i.e. each live
@@ -655,7 +630,7 @@ Boolean LiveRange::IsEntirelyUnColorable()
  ***/
 LiveRange* LiveRange::Split()
 {
-  chowstats.cSplits++;
+  Stats::chowstats.cSplits++;
 
   //create a new live range and initialize values
   LiveRange* newlr = LiveRange_SplitFrom(this);
@@ -704,30 +679,33 @@ LiveRange* LiveRange::Split()
   return newlr;
 }
 
-/*------------------INTERNAL MODULE FUNCTIONS--------------------*/
-namespace {
-
 /*
- *=============================
- * LiveRange_AddLiveUnitBlock()
- *=============================
+ *==================================
+ * LiveRange::AddLiveUnitForBlock()
+ *==================================
  *
  ***/
-LiveUnit* LiveRange_AddLiveUnitBlock(LiveRange* lr, Block* b)
+LiveUnit* 
+LiveRange::AddLiveUnitForBlock(Block* b, 
+                               Variable orig_name, 
+                               const Stats::BBStats& stat)
 {
   LiveUnit* unit = LiveUnit_Alloc(LiveRange::arena);
 
   //assign initial values
   unit->block = b;
-  BB_Stat stat = bb_stats[id(b)][lr->id];
   unit->uses = stat.uses;
   unit->defs = stat.defs;
   unit->start_with_def = stat.start_with_def;
   unit->internal_store = FALSE;
+  unit->orig_name = orig_name;
   
-  LiveRange_AddLiveUnit(lr, unit);
+  LiveRange_AddLiveUnit(this, unit);
   return unit;
 }
+
+/*------------------INTERNAL MODULE FUNCTIONS--------------------*/
+namespace {
 
 /*
  *=============================
@@ -1064,9 +1042,7 @@ void LiveRange_AddBlock(LiveRange* lr, Block* b)
 {
   VectorSet_Insert(lr->bb_list, id(b));
   VectorSet vsUsed = Coloring::UsedColors(lr->rc, b);
-  VectorSet_Union(lr->forbidden, 
-                  lr->forbidden,
-                  vsUsed);
+  VectorSet_Union(lr->forbidden, lr->forbidden, vsUsed);
 }
 
 

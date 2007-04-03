@@ -9,6 +9,8 @@
 #include "shared_globals.h" 
 #include "rc.h" //RegisterClass definitions 
 #include "dot_dump.h"
+#include "stats.h"
+#include "mapping.h"
 
 /*------------------MODULE LOCAL DEFINITIONS-------------------*/
 /*#### module types ####*/
@@ -419,6 +421,7 @@ void DumpParams()
  ***/
 static void DumpChowStats()
 {
+  using Stats::chowstats;
   fprintf(stderr, "***** ALLOCATION STATISTICS *****\n");
   fprintf(stderr, " Inital  LiveRange Count: %d\n",
                                            chowstats.clrInitial);
@@ -441,7 +444,7 @@ void DumpInitialLiveRanges()
   for(i = 0; i < SSA_def_count; i++)
   {
     debug("SSA_map: %d ==> %d", i, SSA_name_map[i]);
-    SSA_name_map[i] = SSAName2LRID(i);
+    SSA_name_map[i] = Mapping::SSAName2LRID(i);
   }
   SSA_Restore();   
   Output();

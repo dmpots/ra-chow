@@ -9,7 +9,7 @@
 #define __GUARD_UNION_FIND_H
 
 #include <Shared.h>
-#include "live_range.h"
+#include "types.h"
 
 /* types */
 struct uf_set
@@ -30,6 +30,9 @@ UFSet* UFSet_Find(UFSet* elem);
 UFSet* UFSet_Union(UFSet* s1, UFSet* s2);
 UFSet* UFSet_Alloc();
 void UFSets_Init(Arena, Unsigned_Int);
+
+//helper function to allow easy lookup of variables
+UFSet* Find_Set(Variable v);
 
 #endif
 

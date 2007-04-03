@@ -123,4 +123,15 @@ UFSet* UFSet_Union(UFSet* set1, UFSet* set2)
   return top;
 }
 
+/*
+ *===================
+ * Find_Set()
+ *===================
+ * Returns pointer to the UFSet structure for the given variable
+ **/
+UFSet* Find_Set(Variable v)
+{
+  return UFSet_Find(uf_sets[v]);
+}
+
 

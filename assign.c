@@ -14,6 +14,7 @@
 #include "assign.h"
 #include "types.h"
 #include "spill.h"
+#include "stats.h"
 
 static Register bullshitReg = 1000;
 
@@ -388,7 +389,7 @@ get_free_tmp_reg(LRID lrid, Block* blk, Inst* inst, Operation* op,
   //fix it up if it is too slow. we should not be evicting registers
   //often so hopefully its not too bad
   LRID evictedLRID;
-  for(evictedLRID = 0; evictedLRID < chowstats.clrFinal; evictedLRID++)
+  for(evictedLRID = 0; evictedLRID < Stats::chowstats.clrFinal; evictedLRID++)
   {
     if(GetMachineRegAssignment(blk, evictedLRID) == tmpReg->machineReg)
       break;

@@ -16,6 +16,7 @@
 #include "rc.h"
 #include "assign.h"
 #include "debug.h"
+#include "mapping.h"
 
 /* global variabls */
 Unsigned_Int cRegisterClass = -1u;
@@ -215,10 +216,10 @@ RegisterClass RegisterClass_InitialRegisterClassForLRID(LRID lrid)
  *========================
  * Makes a mapping from live range id to def type
  */
-void RegisterClass_CreateLiveRangeTypeMap(Arena arena, 
-                                          Unsigned_Int lr_count,
-                                          LRID* mSSAName_LRID)
+void RegisterClass_CreateLiveRangeTypeMap(Arena arena, Unsigned_Int lr_count)
+                             
 {
+  using Mapping::SSAName2LRID;
   mLrId_DefType = (Def_Type*)
         Arena_GetMemClear(arena,sizeof(Def_Type) * lr_count);
   for(LOOPVAR i = 1; i < SSA_def_count; i++)
@@ -233,8 +234,8 @@ void RegisterClass_CreateLiveRangeTypeMap(Arena arena,
     {
       def_type = Operation_Def_Type(c.op_pointer.operation, i);
     }
-    debug("LRID: %3d ==> Type: %d", mSSAName_LRID[i], def_type);
-    mLrId_DefType[mSSAName_LRID[i]] = def_type;
+    debug("LRID: %3d ==> Type: %d", SSAName2LRID(i), def_type);
+    mLrId_DefType[SSAName2LRID(i)] = def_type;
   }
 }
 
