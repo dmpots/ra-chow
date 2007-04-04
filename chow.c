@@ -61,7 +61,7 @@ void Chow::Run()
     InitCleaver(arena, Params::Algorithm::bb_max_insts);
     CleaveBlocks();
   }
-  InitRegisterClasses(arena, 
+  RegisterClass::Init(arena, 
                       Params::Machine::num_registers,
                       Params::Machine::enable_register_classes,
                       Params::Algorithm::num_reserved_registers);
@@ -293,11 +293,11 @@ void BuildInitialLiveRanges(Arena chow_arena)
   Mapping::ConvertLiveInNamespaceSSAToLiveRange();
   if(Params::Machine::enable_register_classes)
   {
-    RegisterClass_CreateLiveRangeTypeMap(uf_arena, clrInitial);
+    RegisterClass::CreateLiveRangeTypeMap(uf_arena, clrInitial);
   }
 
   //initialize coloring structures based on number of register classes
-  Coloring::Init(chow_arena, cRegisterClass, clrInitial);
+  Coloring::Init(chow_arena, clrInitial);
 
   //now that we know how many live ranges we start with allocate them
   Stats::ComputeBBStats(uf_arena, SSA_def_count);
@@ -423,7 +423,7 @@ void AllocLiveRanges(Arena arena, Unsigned_Int num_lrs)
   for(unsigned int i = 0; i < num_lrs; i++) //allocate each live range
   {
     live_ranges[i] = 
-      new LiveRange(RegisterClass_InitialRegisterClassForLRID(i), i);
+      new LiveRange(RegisterClass::InitialRegisterClassForLRID(i), i);
   }
 }
 

@@ -8,6 +8,7 @@
 #include "types.h"
 #include "debug.h"
 #include "stats.h"
+#include "rc.h"
 
 /*--------------------------FORWARD DEFS--------------------------*/
 /* forward definition of a comparison object used by the std::set
@@ -32,7 +33,7 @@ struct LiveRange
   static unsigned int counter;
 
   /* constructor */
-  LiveRange(RegisterClass rc, LRID lrid);
+  LiveRange(RegisterClass::RC rc, LRID lrid);
 
   /* fields */
   VectorSet bb_list;  /* basic blocks making up this LR */ 
@@ -46,7 +47,7 @@ struct LiveRange
   Priority priority; /* priority for this to be in a live range */
   Boolean is_candidate; /* is possible to store this in a register */
   Def_Type type;
-  RegisterClass rc;
+  RegisterClass::RC rc;
 
   /* methods */
   void AddInterference(LiveRange* other);

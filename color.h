@@ -7,6 +7,7 @@
 #include <Shared.h>
 #include "types.h"
 #include "debug.h"
+#include "rc.h"
 
 
 namespace Coloring {
@@ -14,8 +15,8 @@ namespace Coloring {
   extern const Color NO_COLOR;
 
   /* functions */
-  void Init(Arena, unsigned int num_reg_classes, unsigned int num_live_ranges);
-  VectorSet UsedColors(RegisterClass rc, Block* b);
+  void Init(Arena, unsigned int num_live_ranges);
+  VectorSet UsedColors(RegisterClass::RC rc, Block* b);
   void SetColor(Block* blk, LRID lrid, Color color);
   Color GetColor(Block* blk, LRID lrid);
 }

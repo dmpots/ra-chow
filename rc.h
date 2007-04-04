@@ -4,41 +4,35 @@
 #include <Shared.h>
 #include "types.h"
 
-/* types */
-//this struct holds information about the registers reserved for a
-//given class. these reserved registers are used during register
-//assignment to provide machine registers to any variable that was
-//spilled
-typedef struct reserved_regs_info
-{
-  Register* regs;         /* array of temporary registers */
-  Unsigned_Int cReserved; /* count of number reserved */
-} ReservedRegsInfo;
+namespace RegisterClass {
+  /* types */
+  enum RC {INT, FLOAT};
+  //this struct holds information about the registers reserved for a
+  //given class. these reserved registers are used during register
+  //assignment to provide machine registers to any variable that was
+  //spilled
+  struct ReservedRegsInfo
+  {
+    Register* regs;         /* array of temporary registers */
+    Unsigned_Int cReserved; /* count of number reserved */
+  }; 
 
-/* globals */
-extern Unsigned_Int cRegisterClass;
+  /* variables */
+  extern std::vector<RC> all_classes;
 
-/* exported functions */
-RegisterClass RegisterClass_InitialRegisterClassForLRID(LRID lrid);
-void RegisterClass_CreateLiveRangeTypeMap(Arena arena,
-                                          Unsigned_Int lr_count);
-Unsigned_Int RegisterClass_NumMachineReg(RegisterClass);
-Register RegisterClass_MachineRegForColor(RegisterClass, Color);
-void InitRegisterClasses(Arena arena, 
-                         Unsigned_Int cReg,
-                         Boolean fEnableClasses,
-                         Unsigned_Int cReserved);
-VectorSet RegisterClass_TmpVectorSet(RegisterClass rc);
+  /* functions */
+  const ReservedRegsInfo& GetReservedRegInfo(RC rc);
 
-//TODO: HERE construct the RegisterContents* for each register class
-struct register_contents;
-struct register_contents* 
-  RegisterClass_GetRegisterContentsForLRID(LRID);
-struct register_contents*
-  RegisterClass_GetRegisterContentsForRegisterClass(RegisterClass);
-/*RegisterContents* 
-  RegisterClass_GetRegisterContentsForLRID(LRID);
-RegisterContents*
-  RegisterClass_GetRegisterContentsForRegisterClass(RegisterClass);
-*/
+  void Init(Arena arena, 
+            Unsigned_Int cReg,
+            Boolean fEnableClasses,
+            Unsigned_Int cReserved);
+  RC InitialRegisterClassForLRID(LRID lrid);
+  void CreateLiveRangeTypeMap(Arena arena, Unsigned_Int lr_count);
+  unsigned int NumMachineReg(RC);
+  Register MachineRegForColor(RC, Color);
+  VectorSet TmpVectorSet(RC rc);
+  Register FirstRegister(RegisterClass::RC);
+}
+
 #endif

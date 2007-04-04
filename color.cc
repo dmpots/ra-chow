@@ -14,23 +14,23 @@ namespace {
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
 const Color Coloring::NO_COLOR = -1u;
-void Coloring::Init(Arena arena, 
-                    unsigned int num_reg_classes,
-                    unsigned int num_live_ranges)
+void Coloring::Init(Arena arena, unsigned int num_live_ranges)
 {
   //allocate a mapping from blocks to a set of used colors
+  int num_reg_classes = RegisterClass::all_classes.size();
   mRcBlkId_VsUsedColor = (VectorSet**)
        Arena_GetMemClear(arena,sizeof(VectorSet*)*(num_reg_classes));
 
-  for(RegisterClass rc = 0; rc < num_reg_classes; rc++)
+  for(unsigned int i = 0; i < RegisterClass::all_classes.size(); i++)
   {
+    RegisterClass::RC rc = RegisterClass::all_classes[i];
     mRcBlkId_VsUsedColor[rc] = (VectorSet*)
         Arena_GetMemClear(arena,sizeof(VectorSet)*(block_count+1));
     Block* b;
     ForAllBlocks(b)
     {
       Unsigned_Int bid = id(b);
-      Unsigned_Int cReg = RegisterClass_NumMachineReg(rc);
+      Unsigned_Int cReg = RegisterClass::NumMachineReg(rc);
       mRcBlkId_VsUsedColor[rc][bid] = VectorSet_Create(arena, cReg);
       VectorSet_Clear(mRcBlkId_VsUsedColor[rc][bid]);
     } 
@@ -53,7 +53,7 @@ void Coloring::Init(Arena arena,
   }
 }
 
-VectorSet Coloring::UsedColors(RegisterClass rc, Block* blk)
+VectorSet Coloring::UsedColors(RegisterClass::RC rc, Block* blk)
 {
   return mRcBlkId_VsUsedColor[rc][id(blk)];
 }

@@ -22,8 +22,37 @@
 #include "color.h"
 
 /*------------------MODULE LOCAL DECLARATIONS------------------*/
-/* local functions */
 namespace {
+/* local types */
+struct ReservedReg
+{
+  Register machineReg;
+  Inst* forInst;
+  RegPurpose forPurpose;
+  LRID forLRID;
+  Boolean free;
+};
+
+typedef std::map<LRID,ReservedReg*> ReservedRegMap;
+struct RegisterContents
+{
+  //why is evicted a list you ask? it is because it is the only
+  //structure which we may remove things and add things in the middle
+  //of the collection on a regular basis and we want that to be efficent
+  std::list< std::pair<LRID,Register> >* evicted;
+  std::vector<ReservedReg*>* all;
+  ReservedRegMap* regMap;
+  std::vector<ReservedReg*>* reserved; 
+}; 
+typedef const std::vector<ReservedReg*>::iterator ReservedIterator;
+typedef std::map<LRID, ReservedReg*>::iterator RegMapIterator;
+typedef std::list<std::pair<LRID, Register> > EvictedList;
+typedef std::vector<ReservedReg*> ReservedList;
+
+/* local variables */
+std::vector<RegisterContents> assign_infos; 
+
+/* local functions */
 std::pair<Register,bool>
 GetFreeTmpReg(LRID lrid, 
                  Block* blk,
@@ -33,8 +62,7 @@ GetFreeTmpReg(LRID lrid,
                  const RegisterList& instUses,
                  const RegisterList& instDefs);
 
-ReservedReg* FindUsableReg(
-                            const std::vector<ReservedReg*>* reserved,
+ReservedReg* FindUsableReg( const std::vector<ReservedReg*>* reserved,
                             Inst* inst,
                             RegPurpose purpose,
                             const RegisterList& instUses);
@@ -48,6 +76,7 @@ void RemoveUnusableReg(std::list<ReservedReg*>& potentials,
                          Register ssaName, Block* blk );
 
 Boolean HasBeenEvicted(LRID lrid, Register reg);
+RegisterContents* AssignInfoForLRID(LRID lrid);
 
 /* used as predicates for seaching reg lists */
 Boolean isFree(const ReservedReg* reserved);
@@ -67,8 +96,58 @@ const Register REG_UNALLOCATED = 666;
  *=========
  * Initialize structures need for assignment
  **/
-void Init(Arena)
+void Init(Arena arena)
 {
+  using RegisterClass::all_classes;
+
+  //make space for the number of register classes we are using
+  assign_infos.resize(all_classes.size());
+
+  //allocate register_contents structs per register class. these are
+  //used during register assignment to find temporary registers when
+  //we need to evict a register if we don't have enough reserved
+  //registers to satisfy the needs of the instruction
+  for(unsigned int i = 0; i < all_classes.size(); i++)
+  {
+    RegisterClass::RC rc = all_classes[i];
+
+    assign_infos[rc].evicted = new EvictedList;
+    assign_infos[rc].all= new ReservedList;
+    assign_infos[rc].regMap = new ReservedRegMap;
+    assign_infos[rc].reserved= new ReservedList;
+
+    //first add the reserved registers
+    //actual reserved must be calculated in this way since we reserve
+    //an extra register for the frame pointer, but it is not available
+    //to be used as a temporary register so we must remember this when
+    //building the reserved regs list
+    RegisterClass::ReservedRegsInfo rri = RegisterClass::GetReservedRegInfo(rc);
+    int num_reserved = 
+      (rc == RegisterClass::INT ? rri.cReserved-1 : rri.cReserved);
+    for(int i = 0; i < num_reserved; i++)
+    {
+      ReservedReg* rr = (ReservedReg*)
+        Arena_GetMemClear(arena, sizeof(ReservedReg));
+      
+      rr->machineReg = rri.regs[i];
+      rr->free = TRUE; 
+      assign_infos[rc].reserved->push_back(rr);
+    }
+
+    //now build the list of all remaining machine registers for this
+    //register class.
+    Register base = FirstRegister(rc) + rri.cReserved;
+    unsigned int num_assignable = RegisterClass::NumMachineReg(rc);
+    for(unsigned int i = 0; i < num_assignable; i++)
+    {
+      ReservedReg* rr = (ReservedReg*)
+        Arena_GetMemClear(arena, sizeof(ReservedReg));
+      
+      rr->machineReg = base+i;
+      rr->free = TRUE; 
+      assign_infos[rc].all->push_back(rr);
+    }
+  }
 }
 
 
@@ -157,10 +236,10 @@ void ResetFreeTmpRegs(Inst* last_inst)
 
   debug("resetting free tmp regs");
   //take care of business for each register class
-  for(RegisterClass rc = 0; rc < cRegisterClass; rc++)
+  for(unsigned int i = 0; i < RegisterClass::all_classes.size(); i++)
   {
-    RegisterContents* regContents =
-      RegisterClass_GetRegisterContentsForRegisterClass(rc);
+    RegisterClass::RC rc = RegisterClass::all_classes[i];
+    RegisterContents* regContents = &assign_infos[rc];
 
     //1) anyone that was evicted needs to be loaded back in
     //TODO: this is bullshit!! (says tim).
@@ -217,8 +296,8 @@ Register GetMachineRegAssignment(Block* b, LRID lrid)
   if(color == NO_COLOR)
     return REG_UNALLOCATED;
 
-  RegisterClass rc = Chow::live_ranges[lrid]->rc;
-  return RegisterClass_MachineRegForColor(rc, color);
+  RegisterClass::RC rc = Chow::live_ranges[lrid]->rc;
+  return RegisterClass::MachineRegForColor(rc, color);
 }
 
 }//end Assign namespace
@@ -322,8 +401,7 @@ Boolean HasBeenEvicted(LRID lrid, Register reg)
 {
 
   //search evicted list for this machine register
-  RegisterContents* regContents = 
-    RegisterClass_GetRegisterContentsForLRID(lrid);
+  RegisterContents* regContents = AssignInfoForLRID(lrid);
   EvictedList::iterator it = find(regContents->evicted->begin(),
                                   regContents->evicted->end(),
                                   std::make_pair(lrid,reg));
@@ -379,8 +457,7 @@ GetFreeTmpReg(LRID lrid, Block* blk, Inst* inst, Operation* op,
   regXneedMem.second = true; //default is needs memory load/store
 
   //get the register contents struct for this lrid register class
-  RegisterContents* regContents =
-    RegisterClass_GetRegisterContentsForLRID(lrid);
+  RegisterContents* regContents = AssignInfoForLRID(lrid);
 
   //1) check to see if this lrid is already stored in one of our
   //temporary registers.
@@ -585,7 +662,14 @@ ReservedReg* FindUsableReg(const std::vector<ReservedReg*>* reserved,
 
   return usable;
 }
+
+
+RegisterContents* AssignInfoForLRID(LRID lrid)
+{
+  return &assign_infos[Chow::live_ranges[lrid]->rc];
 }
+
+}//end anonymous namespace
 
 
 

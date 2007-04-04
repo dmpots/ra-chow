@@ -113,7 +113,7 @@ void LiveRange::Init(Arena arena, unsigned int counter_start)
  *============================
  * Allocates and initializes a live range 
  ***/
-LiveRange::LiveRange(RegisterClass reg_class, LRID lrid)
+LiveRange::LiveRange(RegisterClass::RC reg_class, LRID lrid)
 {
   orig_lrid = lrid;
   id = lrid;
@@ -124,7 +124,7 @@ LiveRange::LiveRange(RegisterClass reg_class, LRID lrid)
   fear_list = new std::set<LiveRange*, LRcmp>;
   units = new std::list<LiveUnit*>;
   forbidden = 
-    VectorSet_Create(LiveRange::arena, RegisterClass_NumMachineReg(rc));
+    VectorSet_Create(LiveRange::arena, RegisterClass::NumMachineReg(rc));
   is_candidate  = TRUE;
   type = NO_DEFS; //type will be set later
 }
@@ -175,7 +175,7 @@ void LiveRange::AddInterference(LiveRange* lr2)
 bool LiveRange::IsConstrained() const
 {
   return 
-    (fear_list->size() >= RegisterClass_NumMachineReg(rc));
+    (fear_list->size() >= RegisterClass::NumMachineReg(rc));
 }
 
 /*
@@ -218,11 +218,11 @@ void LiveRange::AssignColor()
   //TODO: pick a better color, i.e. one that is used by neighbors
   //neighbors
   //for now just pick the first available color
-  VectorSet vsT = RegisterClass_TmpVectorSet(rc);
+  VectorSet vsT = RegisterClass::TmpVectorSet(rc);
   VectorSet_Complement(vsT, forbidden);
   Color chosen_color = VectorSet_ChooseMember(vsT);
   color = chosen_color;
-  assert(color < RegisterClass_NumMachineReg(rc));
+  assert(color < RegisterClass::NumMachineReg(rc));
   is_candidate = FALSE; //no longer need a color
   Stats::chowstats.clrColored++;
   debug("assigning color: %d to lr: %d", color, this->id);
@@ -1014,7 +1014,7 @@ LiveUnit* LiveRange_IncludeInSplit(LiveRange* newlr,
   //forbidden set
   VectorSet vsUsed = Coloring::UsedColors(origlr->rc, b);
   VectorSet vsT =
-    RegisterClass_TmpVectorSet(origlr->rc);
+    RegisterClass::TmpVectorSet(origlr->rc);
   VectorSet_Union(vsT,
                   newlr->forbidden, 
                   vsUsed);
