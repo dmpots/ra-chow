@@ -78,6 +78,7 @@ void Chow::Run()
   //compute loop nesting depth needed for computing priorities
   find_nesting_depths(arena); Globals::depths = depths;
   Spill::Init(arena);
+  Assign::Init(arena);
   if(Params::Algorithm::move_loads_and_stores)
   {
     //clear out edge extensions 

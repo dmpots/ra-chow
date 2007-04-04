@@ -23,8 +23,9 @@
 
 /*------------------MODULE LOCAL DECLARATIONS------------------*/
 /* local functions */
-static std::pair<Register,bool>
-get_free_tmp_reg(LRID lrid, 
+namespace {
+std::pair<Register,bool>
+GetFreeTmpReg(LRID lrid, 
                  Block* blk,
                  Inst* inst, 
                  Operation* op,
@@ -32,25 +33,44 @@ get_free_tmp_reg(LRID lrid,
                  const RegisterList& instUses,
                  const RegisterList& instDefs);
 
-static ReservedReg* find_usable_reg(
+ReservedReg* FindUsableReg(
                             const std::vector<ReservedReg*>* reserved,
                             Inst* inst,
                             RegPurpose purpose,
                             const RegisterList& instUses);
-static Register mark_register_used(ReservedReg* tmpReg, 
+Register MarkRegisterUsed(ReservedReg* tmpReg, 
                         Inst* inst, 
                         RegPurpose purpose,
                         LRID lrid,
                         ReservedRegMap& regMap);
 
-void remove_unusable_reg(std::list<ReservedReg*>& potentials, 
+void RemoveUnusableReg(std::list<ReservedReg*>& potentials, 
                          Register ssaName, Block* blk );
 
-Boolean has_been_evicted(LRID lrid, Register reg);
+Boolean HasBeenEvicted(LRID lrid, Register reg);
+
+/* used as predicates for seaching reg lists */
+Boolean isFree(const ReservedReg* reserved);
+class ReservedReg_Usable;
+class ReservedReg_MRegEq;
+class ReservedReg_InstEq;
+}
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
 namespace Assign {
+/* variables */
 const Register REG_UNALLOCATED = 666;
+
+/*
+ *=========
+ * Init()
+ *=========
+ * Initialize structures need for assignment
+ **/
+void Init(Arena)
+{
+}
+
 
 /*
  *===================
@@ -84,7 +104,7 @@ void EnsureReg(Register* reg,
     bool needMemAccess;
 
     //find a temporary register for this value
-    regXneedMem = get_free_tmp_reg(lrid, blk, origInst, op, purpose,
+    regXneedMem = GetFreeTmpReg(lrid, blk, origInst, op, purpose,
                                    instUses, instDefs);
 
     //get return values
@@ -116,7 +136,7 @@ void EnsureReg(Register* reg,
   {
     //check to see that it was not previously evicted and insert a
     //load if needed
-    if(has_been_evicted(lrid, *reg))
+    if(HasBeenEvicted(lrid, *reg))
     {
       InsertLoad(live_ranges[lrid], *updatedInst, *reg, Spill::REG_FP);
     }
@@ -201,12 +221,11 @@ Register GetMachineRegAssignment(Block* b, LRID lrid)
   return RegisterClass_MachineRegForColor(rc, color);
 }
 
-}
-
-
+}//end Assign namespace
 
 
 /*-------------------BEGIN LOCAL DEFINITIONS-------------------*/
+namespace {
 /* debug routines */
 void dump_map_contents(ReservedRegMap& regMap)
 {
@@ -299,7 +318,7 @@ class ReservedReg_InstEq : public std::unary_function<ReservedReg*, bool>
 };
 
 
-Boolean has_been_evicted(LRID lrid, Register reg)
+Boolean HasBeenEvicted(LRID lrid, Register reg)
 {
 
   //search evicted list for this machine register
@@ -340,13 +359,13 @@ Boolean has_been_evicted(LRID lrid, Register reg)
 
 /*
  *===================
- * get_free_tmp_reg()
+ * GetFreeTmpReg()
  *===================
  * gets the next available free tmp register from the pool of
  * available free temp registers
  **/
 std::pair<Register,bool>
-get_free_tmp_reg(LRID lrid, Block* blk, Inst* inst, Operation* op,
+GetFreeTmpReg(LRID lrid, Block* blk, Inst* inst, Operation* op,
                  RegPurpose purpose, 
                  const RegisterList& instUses, 
                  const RegisterList& instDefs)
@@ -387,7 +406,7 @@ get_free_tmp_reg(LRID lrid, Block* blk, Inst* inst, Operation* op,
     debug("found a reserved register that is available");
     ReservedReg* tmpReg = *freeReserved;
     regXneedMem.first = 
-      mark_register_used(tmpReg, inst, purpose, lrid, *regMap);
+      MarkRegisterUsed(tmpReg, inst, purpose, lrid, *regMap);
     return regXneedMem;
   }
 
@@ -400,12 +419,12 @@ get_free_tmp_reg(LRID lrid, Block* blk, Inst* inst, Operation* op,
   {
     ReservedReg* tmpReg;
     tmpReg = 
-      find_usable_reg(regContents->reserved, inst, purpose, instUses);
+      FindUsableReg(regContents->reserved, inst, purpose, instUses);
     if(tmpReg != NULL)
     {
       debug("found a reserved register that we can evict");
       regXneedMem.first = 
-        mark_register_used(tmpReg, inst, purpose, lrid, *regMap);
+        MarkRegisterUsed(tmpReg, inst, purpose, lrid, *regMap);
       return regXneedMem;
     }
   }
@@ -451,7 +470,7 @@ get_free_tmp_reg(LRID lrid, Block* blk, Inst* inst, Operation* op,
     for(it = instUses.begin(); it != instUses.end(); it++)
     {
       lridT = *it;
-      remove_unusable_reg(potentials, lridT, blk);
+      RemoveUnusableReg(potentials, lridT, blk);
     }
   }
   else
@@ -461,7 +480,7 @@ get_free_tmp_reg(LRID lrid, Block* blk, Inst* inst, Operation* op,
     for(it = instDefs.begin(); it != instDefs.end(); it++)
     {
       lridT = *it;
-      remove_unusable_reg(potentials, lridT, blk);
+      RemoveUnusableReg(potentials, lridT, blk);
     }
   }
 
@@ -503,11 +522,11 @@ get_free_tmp_reg(LRID lrid, Block* blk, Inst* inst, Operation* op,
       std::make_pair(evictedLRID,tmpReg->machineReg));
   }
   regXneedMem.first = 
-    mark_register_used(tmpReg, inst, purpose, lrid, *regMap);
+    MarkRegisterUsed(tmpReg, inst, purpose, lrid, *regMap);
   return regXneedMem;
 }
 
-Register mark_register_used(ReservedReg* tmpReg, 
+Register MarkRegisterUsed(ReservedReg* tmpReg, 
                         Inst* inst, 
                         RegPurpose purpose,
                         LRID lrid,
@@ -531,7 +550,7 @@ Register mark_register_used(ReservedReg* tmpReg,
   return tmpReg->machineReg;
 }
 
-void remove_unusable_reg(std::list<ReservedReg*>& potentials, 
+void RemoveUnusableReg(std::list<ReservedReg*>& potentials, 
                     LRID lridT, Block* blk )
 {
   Register mReg = Assign::GetMachineRegAssignment(blk, lridT);
@@ -548,7 +567,7 @@ void remove_unusable_reg(std::list<ReservedReg*>& potentials,
 }
 
 
-ReservedReg* find_usable_reg(const std::vector<ReservedReg*>* reserved,
+ReservedReg* FindUsableReg(const std::vector<ReservedReg*>* reserved,
                             Inst* inst,
                             RegPurpose purpose,
                             const RegisterList& instUses)
@@ -566,7 +585,7 @@ ReservedReg* find_usable_reg(const std::vector<ReservedReg*>* reserved,
 
   return usable;
 }
-
+}
 
 
 

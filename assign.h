@@ -42,6 +42,7 @@ namespace Assign {
   extern const Register REG_UNALLOCATED;
 
   /* exported functions */
+  void Init(Arena);
   Register GetMachineRegAssignment(Block* b, LRID lrid);
   void EnsureReg(Register* reg, 
                  LRID lrid, 
