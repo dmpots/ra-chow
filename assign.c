@@ -1,5 +1,10 @@
+/* contains code used for assigning machine registers to live ranges.
+ * if the live range has not been allocated a register then it is
+ * given a temporary register. all of the details of managing
+ * temporary registers are in this file.
+ */
 
-
+/*--------------------------INCLUDES---------------------------*/
 #include <list>
 #include <vector>
 #include <map>
@@ -8,19 +13,15 @@
 #include <utility>
 
 
-#include "debug.h"
+#include "assign.h"
 #include "chow.h"
 #include "live_range.h"
 #include "rc.h"
-#include "assign.h"
-#include "types.h"
 #include "spill.h"
 #include "stats.h"
 #include "color.h"
 
-/*------------------MODULE LOCAL DEFINITIONS-------------------*/
-static Register bullshitReg = 1000;
-
+/*------------------MODULE LOCAL DECLARATIONS------------------*/
 /* local functions */
 static std::pair<Register,bool>
 get_free_tmp_reg(LRID lrid, 
@@ -46,11 +47,21 @@ void remove_unusable_reg(std::list<ReservedReg*>& potentials,
                          Register ssaName, Block* blk );
 
 Boolean has_been_evicted(LRID lrid, Register reg);
-/* --- end functions --- */
+
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
 namespace Assign {
 const Register REG_UNALLOCATED = 666;
 
+/*
+ *===================
+ * EnsureReg()
+ *===================
+ * Makes sure that the given live range is in a machin register. 
+ * If the live range is not allocated to a register then it will be
+ * given an available temporary register.
+ *
+ * reg - this will be updated with the machine reg for the live range
+ **/
 void EnsureReg(Register* reg, 
                LRID lrid, 
                Block* blk,
@@ -114,7 +125,7 @@ void EnsureReg(Register* reg,
 
 /*
  *===================
- * reset_free_tmp_regs()
+ * ResetFreeTmpRegs()
  *===================
  * used to reset the count of which temporary registers are in use for
  * an instruction
@@ -195,7 +206,7 @@ Register GetMachineRegAssignment(Block* b, LRID lrid)
 
 
 
-/*-----------------INTERNAL MODULE FUNCTIONS-------------------*/
+/*-------------------BEGIN LOCAL DEFINITIONS-------------------*/
 /* debug routines */
 void dump_map_contents(ReservedRegMap& regMap)
 {
@@ -311,7 +322,6 @@ Boolean has_been_evicted(LRID lrid, Register reg)
     assert(rrIt != regContents->all->end());
     RegMapIterator rmIt = regContents->regMap->find((*rrIt)->forLRID);
     // ---- DEBUG ----->
-    //TODO: is our assertion assumption correct?
     if(rmIt == regContents->regMap->end())
     {
       debug("expected to find lrid: %d in reg: %d, but didn't",
@@ -419,10 +429,6 @@ get_free_tmp_reg(LRID lrid, Block* blk, Inst* inst, Operation* op,
          op->opcode == cJSRl ||
          op->opcode == qJSRl);
 
-  //TODO: just for testing
-  regXneedMem.first = bullshitReg++;
-  return regXneedMem;
-
   //evict a live range from a register and record the fact that the
   //register has been commandeered
   //to find a suitable register to evict we start with the list of all
@@ -478,14 +484,24 @@ get_free_tmp_reg(LRID lrid, Block* blk, Inst* inst, Operation* op,
   //fix it up if it is too slow. we should not be evicting registers
   //often so hopefully its not too bad
   LRID evictedLRID;
-  for(evictedLRID = 0; evictedLRID < Stats::chowstats.clrFinal; evictedLRID++)
+  for(evictedLRID = 0; evictedLRID < Chow::live_ranges.size(); evictedLRID++)
   {
     if(GetMachineRegAssignment(blk, evictedLRID) == tmpReg->machineReg)
       break;
   }
-  assert(GetMachineRegAssignment(blk, evictedLRID) == tmpReg->machineReg);
-  regContents->evicted->push_back(
-    std::make_pair(evictedLRID,tmpReg->machineReg));
+  // see if we found a live range that is going to be evicted. it may
+  // be the case that there is no live range to evict from the register
+  // if no live range was assigned to the tmpReg we are looking at.
+  // this can happen because it may not be worth it to keep a live
+  // range in this block if there is only a def (for example in a
+  // frame statement it is defined and you get no savings if there is
+  // no use in the block).
+  if(evictedLRID != Chow::live_ranges.size())
+  {
+    assert(GetMachineRegAssignment(blk, evictedLRID) == tmpReg->machineReg);
+    regContents->evicted->push_back(
+      std::make_pair(evictedLRID,tmpReg->machineReg));
+  }
   regXneedMem.first = 
     mark_register_used(tmpReg, inst, purpose, lrid, *regMap);
   return regXneedMem;

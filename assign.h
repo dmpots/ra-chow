@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "types.h"
+#include "debug.h"
 
 typedef struct reserved_reg
 {
@@ -21,8 +22,8 @@ typedef std::map<LRID,ReservedReg*> ReservedRegMap;
 typedef struct register_contents
 {
   //why is evicted a list you ask? it is because it is the only
-  //structure which we may remove things and add things to on a
-  //regular basis and we want that to be efficent
+  //structure which we may remove things and add things in the middle
+  //of the collection on a regular basis and we want that to be efficent
   std::list< std::pair<LRID,Register> >* evicted;
   std::vector<ReservedReg*>* all;
   ReservedRegMap* regMap;
