@@ -34,20 +34,21 @@ struct ReservedReg
 };
 
 typedef std::map<LRID,ReservedReg*> ReservedRegMap;
+typedef const std::vector<ReservedReg*>::iterator ReservedIterator;
+typedef std::map<LRID, ReservedReg*>::iterator RegMapIterator;
+typedef std::list<std::pair<LRID, ReservedReg*> > EvictedList;
+typedef std::vector<ReservedReg*> ReservedList;
+
 struct RegisterContents
 {
   //why is evicted a list you ask? it is because it is the only
   //structure which we may remove things and add things in the middle
   //of the collection on a regular basis and we want that to be efficent
-  std::list< std::pair<LRID,Register> >* evicted;
-  std::vector<ReservedReg*>* all;
+  EvictedList* evicted;
+  ReservedList* all;
   ReservedRegMap* regMap;
-  std::vector<ReservedReg*>* reserved; 
+  ReservedList* reserved; 
 }; 
-typedef const std::vector<ReservedReg*>::iterator ReservedIterator;
-typedef std::map<LRID, ReservedReg*>::iterator RegMapIterator;
-typedef std::list<std::pair<LRID, Register> > EvictedList;
-typedef std::vector<ReservedReg*> ReservedList;
 
 /* local variables */
 std::vector<RegisterContents> assign_infos; 
@@ -83,6 +84,7 @@ Boolean isFree(const ReservedReg* reserved);
 class ReservedReg_Usable;
 class ReservedReg_MRegEq;
 class ReservedReg_InstEq;
+class EvictedListElem_Eq;
 }
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
@@ -253,7 +255,14 @@ void ResetFreeTmpRegs(Inst* last_inst)
     {
       LRID evictedLRID = (*evIT).first;
       InsertLoad(live_ranges[evictedLRID], 
-                last_inst, (*evIT).second, Spill::REG_FP);
+                last_inst, (*evIT).second->machineReg, Spill::REG_FP);
+
+      //reset values on evicted reg. this is needed in case this
+      //register gets chosen for eviction again we don't want the old
+      //values hanging around in the ReservedReg*
+      (*evIT).second->free = TRUE;
+      (*evIT).second->forLRID = NO_LRID;
+      (*evIT).second->forInst = NULL;
     }
 
     //2) remove all evicted registers from evicted list
@@ -396,17 +405,46 @@ class ReservedReg_InstEq : public std::unary_function<ReservedReg*, bool>
   }
 };
 
+class EvictedListElem_Eq 
+: public std::unary_function<std::pair<LRID, ReservedReg*>, bool>
+{
+  Register mReg; 
+  LRID lrid; 
 
+  public:
+  EvictedListElem_Eq(Register mReg_, LRID lrid_) 
+    : mReg(mReg_), lrid(lrid_) {};
+  bool operator() (const std::pair<LRID,ReservedReg*> p) const 
+  {
+    return p.first == lrid && p.second->machineReg == mReg;
+  }
+};
+
+
+
+/*
+ *===================
+ * HasBeenEvicted()
+ *===================
+ * returns true if a live range has been evicted from its register.
+ *
+ * This will happen if a live range is evicted in a block where it was
+ * originally allocated for another live range that needs the register
+ * in a FRAME or JSR op. We automatically reload all evicted registers
+ * at the end of a block so if this returns true it means there is a
+ * use of the live range in the same block that it was evicted.
+ **/
 Boolean HasBeenEvicted(LRID lrid, Register reg)
 {
 
   //search evicted list for this machine register
   RegisterContents* regContents = AssignInfoForLRID(lrid);
-  EvictedList::iterator it = find(regContents->evicted->begin(),
-                                  regContents->evicted->end(),
-                                  std::make_pair(lrid,reg));
+  EvictedList::iterator it = 
+    find_if(regContents->evicted->begin(), regContents->evicted->end(),
+            EvictedListElem_Eq(lrid,reg));
   if(it != regContents->evicted->end())
   {
+    debug("lrid: %d was previously evicted", lrid);
     //remove from evicted list
     regContents->evicted->erase(it);
 
@@ -524,14 +562,19 @@ GetFreeTmpReg(LRID lrid, Block* blk, Inst* inst, Operation* op,
          op->opcode == dJSRl ||
          op->opcode == cJSRl ||
          op->opcode == qJSRl);
-
+//DROP >>>>
+//  static Register bullshitReg = 1000;
+//  regXneedMem.first = bullshitReg++;
+//  return regXneedMem;
+//DROP <<<<
+ 
   //evict a live range from a register and record the fact that the
   //register has been commandeered
   //to find a suitable register to evict we start with the list of all
   //machine registers. we go through the uses (or defs) in the op and
   //remove any machine reg that is in use in the current operation
   //from the list of potential register we can commandeer
-  
+ 
   //go through the list of all registers and remove any register that
   //is allocated for this operation
   std::list<ReservedReg*> potentials(regContents->all->size());
@@ -539,7 +582,7 @@ GetFreeTmpReg(LRID lrid, Block* blk, Inst* inst, Operation* op,
        regContents->all->end(),
        potentials.begin());
   debug("initial potential size: %d", (int)potentials.size());
-  debug("regContents->all size: %d", (int)regContents->all->size());
+  debug("trimming registers needed in this inst");
   if(purpose == FOR_USE)
   {
     LRID lridT;
@@ -563,6 +606,7 @@ GetFreeTmpReg(LRID lrid, Block* blk, Inst* inst, Operation* op,
 
   //from the remaining registers remove any register that has already
   //been evicted for another register in this operation
+  debug("trimming registers already evicted");
   potentials.erase(
       remove_if(potentials.begin(), potentials.end(), 
                 ReservedReg_InstEq(inst)),
@@ -574,6 +618,8 @@ GetFreeTmpReg(LRID lrid, Block* blk, Inst* inst, Operation* op,
   //it and use it now.
   assert(potentials.size() > 0);
   ReservedReg* tmpReg = potentials.front();
+  debug("trimmed potential size: %d", (int)potentials.size());
+  debug("evicting machine register: %d", tmpReg->machineReg);
   //TODO: this is a horrible way to find out which LRID corresponds to
   //the evicted machine register. we could keep a mapping, but that
   //seems kind of like a waste of space. I will try this for now and
@@ -594,27 +640,32 @@ GetFreeTmpReg(LRID lrid, Block* blk, Inst* inst, Operation* op,
   // no use in the block).
   if(evictedLRID != Chow::live_ranges.size())
   {
+    debug("lrid: %d kicked out of reg: %d", evictedLRID,tmpReg->machineReg);
     assert(GetMachineRegAssignment(blk, evictedLRID) == tmpReg->machineReg);
-    regContents->evicted->push_back(
-      std::make_pair(evictedLRID,tmpReg->machineReg));
+    regContents->evicted->push_back(std::make_pair(evictedLRID,tmpReg));
   }
+
   regXneedMem.first = 
     MarkRegisterUsed(tmpReg, inst, purpose, lrid, *regMap);
   return regXneedMem;
 }
 
 Register MarkRegisterUsed(ReservedReg* tmpReg, 
-                        Inst* inst, 
-                        RegPurpose purpose,
-                        LRID lrid,
-                        ReservedRegMap& regMap)
+                          Inst* inst, 
+                          RegPurpose purpose,
+                          LRID lrid,
+                          ReservedRegMap& regMap)
 {
   //remove any previous mapping that may exist for the live range in
   //this temporary register
   debug("marking reg: %d used for lrid: %d",tmpReg->machineReg, lrid);
   LRID prevLRID = tmpReg->forLRID;
   RegMapIterator rmIt = regMap.find(prevLRID);
-  if(rmIt != regMap.end()){regMap.erase(rmIt);}
+  if(rmIt != regMap.end()){
+    debug("removing previous mapping reg: %d for lrid: %d",
+          (*rmIt).second->machineReg, prevLRID);
+    regMap.erase(rmIt);
+  }
 
   //mark the temporary register as used
   tmpReg->free = FALSE;
