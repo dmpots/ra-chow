@@ -6,6 +6,7 @@
 #include <list>
 #include <vector>
 #include "types.h"
+#include "debug.h"
 #include "stats.h"
 
 /*--------------------------FORWARD DEFS--------------------------*/

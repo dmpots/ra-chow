@@ -1,5 +1,11 @@
 #ifndef __GUARD_ASSIGN_H
 #define __GUARD_ASSIGN_H
+
+#include <Shared.h>
+#include <list>
+#include <map>
+#include <vector>
+
 #include "types.h"
 
 typedef struct reserved_reg

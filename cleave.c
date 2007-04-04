@@ -24,7 +24,6 @@
 #include <assert.h>
 #include <list>
 #include "debug.h"
-#include "util.h"
 #include "cleave.h"
 #include "cfg_tools.h"
 

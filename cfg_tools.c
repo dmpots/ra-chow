@@ -8,7 +8,6 @@
 #include <Shared.h>
 #include "cfg_tools.h"
 #include "debug.h"
-#include "util.h"
 #include "assert.h"
 #include "string.h"
 

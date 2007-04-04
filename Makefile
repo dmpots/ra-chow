@@ -21,6 +21,7 @@ CPPSRCFILES=shared_globals.cc\
          color.cc\
          stats.cc\
          mapping.cc\
+         chow_extensions.cc\
 
 OBJS=${SRCFILES:.c=.o}
 OBJS+=${CPPSRCFILES:.cc=.o}

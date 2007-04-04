@@ -2,18 +2,13 @@
 /*-----------------------MODULE INCLUDES-----------------------*/
 #include <Shared.h>
 #include <SSA.h> 
-#include <assert.h>
+#include <cassert>
 #include <algorithm>
-#include <queue>
-#include <iterator>
-#include <stdlib.h>
-#include <math.h>
+#include <cmath>
 
 #include "live_range.h"
 #include "live_unit.h"
-#include "debug.h"
 #include "params.h"
-#include "util.h"
 #include "shared_globals.h" 
 #include "rc.h" //RegisterClass definitions 
 #include "cfg_tools.h" //control graph manipulation utilities

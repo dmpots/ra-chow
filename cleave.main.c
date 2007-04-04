@@ -10,7 +10,6 @@
 #include <string.h>
 #include <assert.h>
 #include "debug.h"
-#include "util.h"
 #include "cleave.h"
 
 

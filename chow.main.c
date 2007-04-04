@@ -5,10 +5,7 @@
 #include "params.h"
 #include "debug.h"
 #include "shared_globals.h" 
-#include "rc.h" //RegisterClass definitions 
-#include "dot_dump.h"
 #include "stats.h"
-#include "mapping.h"
 
 /*------------------MODULE LOCAL DEFINITIONS-------------------*/
 /*#### module types ####*/
@@ -282,22 +279,6 @@ int process_(Param_Details* param, char* arg)
 
 /*
  *===========
- * EnforceParameterConsistency()
- *===========
- * some paramerters should implicitly set other params, and this
- * function takse care of making sure our flags are consistent
- * 
- * For example: enhanced motion of loads and stores should make sure
- * that the move loads and stores flag is set.
- ***/
-void EnforceParameterConsistency()
-{
-  if(Params::Algorithm::enhanced_code_motion) 
-      Params::Algorithm::move_loads_and_stores = true;
-}
-
-/*
- *===========
  * usage()
  *===========
  *
@@ -386,6 +367,21 @@ void DumpParamTable()
   }
 }
 
+/*
+ *===========
+ * EnforceParameterConsistency()
+ *===========
+ * some paramerters should implicitly set other params, and this
+ * function takse care of making sure our flags are consistent
+ * 
+ * For example: enhanced motion of loads and stores should make sure
+ * that the move loads and stores flag is set.
+ ***/
+void EnforceParameterConsistency()
+{
+  if(Params::Algorithm::enhanced_code_motion) 
+      Params::Algorithm::move_loads_and_stores = true;
+}
 
 /*
  *====================================

@@ -4,6 +4,7 @@
 #include "spill.h"
 #include "live_range.h"
 #include "mapping.h"
+#include "cfg_tools.h"
 
 namespace {
   //local constants//
@@ -36,6 +37,11 @@ namespace {
                       Unsigned_Int offset,
                       Register base_reg,
                       Register val);
+
+  Inst* Inst_CreateCopy(Opcode_Names opcode,
+                             Comment_Val comment,
+                             Register src,
+                             Register dest);
 }
 
 /*--------------------MODULE IMPLEMENTATION---------------------*/
@@ -189,6 +195,36 @@ Inst* InsertStore(LiveRange* lr, Inst* around_inst, Register src,
     Block_Insert_Instruction(st_inst, around_inst);
 
   return st_inst;
+}
+
+/*
+ *===================
+ * InsertCopy()
+ *===================
+ * Inserts a copy from one live range to another, using the registers
+ * passed to the function.
+ */
+void InsertCopy(const LiveRange* lrSrc, const LiveRange* lrDest,
+                 Inst* around_inst, Register src, Register dest, 
+                 InstInsertLocation loc)
+{
+  //generate a comment
+  char str[64]; char lrname[32]; char lrname2[32]; 
+  LRName(lrSrc, lrname); LRName(lrDest, lrname2);
+  sprintf(str, "RR COPY for %s --> %s", lrname, lrname2);
+  Comment_Val comment = Comment_Install(str);
+
+  //get opcode and alignment for live range
+  Opcode_Names opcode = lrSrc->CopyOpcode();
+
+  //create a new store instruction
+  Inst* cp_inst = Inst_CreateCopy(opcode, comment, src, dest);
+
+  //insert the new instruction
+  if(loc == AFTER_INST)
+    InsertInstAfter(cp_inst, around_inst);
+  else
+    InsertInstBefore(cp_inst, around_inst);
 }
 
 
@@ -380,6 +416,48 @@ Inst* Inst_CreateStore(Opcode_Names opcode,
   st_op->arguments[6] = 0;
 
   return st_inst;
+}
+
+/*
+ *===================
+ * Inst_CreateCopy()
+ *===================
+ * Creates a new copy instruction based on the passed paramerters
+ * store instruction format:
+ * i2i src => dest
+ */
+Inst* Inst_CreateCopy(Opcode_Names opcode,
+                             Comment_Val comment,
+                             Register src,
+                             Register dest)
+{
+  const int CP_OPSIZE = 7;
+  //allocate a new instruction
+  Inst* cp_inst = (Inst*)Inst_Allocate(spill_arena, 1);
+  Operation* cp_op = (Operation*)Operation_Allocate(spill_arena, 
+                                                    CP_OPSIZE);
+  cp_inst->operations[0] = cp_op;
+  cp_inst->operations[1] = NULL;
+
+  //fill in struct
+  cp_op->opcode  = opcode;
+  cp_op->comment = comment;
+  cp_op->source_line_ref = Expr_Install_String("0");
+  cp_op->constants = 0;
+  cp_op->referenced = 1;
+  cp_op->defined = 2;
+  cp_op->critical = TRUE;
+
+  //fill in arguments array
+  cp_op->arguments[0] = src;
+  cp_op->arguments[1] = dest;
+  cp_op->arguments[2] = 0;
+  cp_op->arguments[3] = 0;
+  cp_op->arguments[4] = 0;
+  cp_op->arguments[5] = 0;
+  cp_op->arguments[6] = 0;
+
+  return cp_inst;
 }
 
 

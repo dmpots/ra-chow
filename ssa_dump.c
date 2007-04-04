@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <assert.h>
 #include "debug.h"
-#include "util.h"
 
 int
 main(Int argc, Char **argv)
