@@ -212,6 +212,13 @@ Unsigned_Int NumMachineReg(RC rc)
   return mRc_CReg[rc];
 }
 
+/*
+ *====================================
+ * RegisterClass::MachineRegForColor()
+ *====================================
+ * Returns the number of machine registers available for a given
+ * register class
+ */
 Register MachineRegForColor(RC rc, Color c)
 {
   //mRcColor_Reg[rc][c];
@@ -222,6 +229,20 @@ Register MachineRegForColor(RC rc, Color c)
                + (mRc_ReservedRegs[rc].cReserved);
   debug("MACHINE REG(rc,c):(%d,%d) = %d",rc,c,r);
   return  r;
+}
+
+/*
+ *====================================
+ * RegisterClass::ColorForMachineReg()
+ *====================================
+ * Returns the number of machine registers available for a given
+ * register class
+ */
+Color ColorForMachineReg(RC rc, Register r)
+{
+  Color c = r - (FirstRegister(rc)) - (mRc_ReservedRegs[rc].cReserved);
+  debug("Color (rc,r):(%d,%d) = %d",rc,r,c);
+  return  c;
 }
 
 VectorSet TmpVectorSet(RC rc)

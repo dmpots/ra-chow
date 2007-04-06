@@ -19,6 +19,7 @@ namespace Coloring {
   VectorSet UsedColors(RegisterClass::RC rc, Block* b);
   void SetColor(Block* blk, LRID lrid, Color color);
   Color GetColor(Block* blk, LRID lrid);
+  LRID GetLRID(Block* blk, RegisterClass::RC rc, Color color);
 }
 
 

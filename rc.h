@@ -33,6 +33,7 @@ namespace RegisterClass {
   Register MachineRegForColor(RC, Color);
   VectorSet TmpVectorSet(RC rc);
   Register FirstRegister(RegisterClass::RC);
+  Color ColorForMachineReg(RC rc, Register r);
 }
 
 #endif
