@@ -85,6 +85,8 @@ all: $(ALL)
 #==================================
 #             RULES
 #==================================
+vpath %.cc unit_test
+vpath %.cc util
 
 #
 # include dependency files which will be generated automatically
@@ -111,7 +113,7 @@ $(SPLIT): cfg_tools.o cfg_tools.main.o
 	@ $(CXX) -o $@ $(LDFLAGS) $^ $(LIBS)
 	@ echo " -- make $@ (Done)"
 
-$(VECTOR_TEST): unit_test/vector_test.o
+$(VECTOR_TEST): vector_test.o
 	@ $(CXX) -o $@ $(LDFLAGS) $^ $(LIBS)
 	@ echo " -- make $@ (Done)"
 
