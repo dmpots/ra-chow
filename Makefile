@@ -39,7 +39,8 @@ MAIN_OBJ= ${MAIN_SRC:.cc=.o}
 ##CXXFLAGS  =    -Wall -O3 
 ##CXXFLAGS =    -Wall -O3 -D__DEBUG 
 ##CXXFLAGS = -g -Wall     -D__DEBUG 
-CXXFLAGS = -g -Wall
+OPT=-O
+CXXFLAGS = -g -Wall $(OPT) $(DEFS)
 
 #
 # Flags to pass to the linker/loader
@@ -85,8 +86,6 @@ all: $(ALL)
 #==================================
 #             RULES
 #==================================
-vpath %.cc unit_test
-vpath %.cc util
 
 #
 # include dependency files which will be generated automatically
@@ -95,11 +94,25 @@ include $(SRCFILES:.cc=.d)
 include $(MAIN_SRC:.cc=.d)
 
 #
-# Executable targets
+# Chow Allocator
 #
-$(CHOW): $(OBJS) $(MAIN_OBJ)
+$(CHOW):$(OBJS) $(MAIN_OBJ) 
 	@ $(CXX) -o $@ $(LDFLAGS) $^ $(LIBS)
 	@ echo " -- make $@ (Done)"
+
+debug: DEFS += -D__DEBUG
+debug: OPT =
+debug: $(OBJS) $(MAIN_OBJ)
+	@ $(CXX) -o $@ $(LDFLAGS) $^ $(LIBS)
+	cp debug chow
+	@ echo " -- make $@ (Done)"
+
+#
+# Extra utility programs
+#
+# set search path to look in some subdirs
+vpath %.cc unit_test
+vpath %.cc util
 
 $(DOT_DUMP): dot_dump.o dot_dump.main.o $(OBJS)
 	@ $(CXX) -o $@ $(LDFLAGS) $^ $(LIBS)
@@ -128,6 +141,7 @@ clean:
 	@ rm -f *.o
 	@ rm -f *.d
 	@ rm -f $(CHOW)
+	@ rm -f debug
 	@ echo " -- make clean (Done)"
 
 clobber: clean
@@ -142,8 +156,8 @@ clobber: clean
 # build .o from .cc files
 #
 %.o : %.cc
-	@ $(CXX) $(CXXFLAGS) -o $@ -c $<
-	@ echo " -- make $@ (Done)"
+	 $(CXX) $(CXXFLAGS) -o $@ -c $<
+##	@ echo " -- make $@ (Done)"
 
 #
 # automatically generate dependencies for the .cc files to be included

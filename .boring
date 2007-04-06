@@ -48,4 +48,5 @@
 ^__testChow$
 ^dots$
 ^dotfiles$
+^debug$
 \.d$
