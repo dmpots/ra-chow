@@ -1,19 +1,22 @@
 # Chow Allocator Makefile
 #
 
-#my macros
-CC=g++
-SRCFILES=union_find.c\
-         live_range.c\
-         chow.c\
-         cleave.c\
-         depths.c\
-         rc.c\
-         assign.c\
-         cfg_tools.c\
-         dot_dump.c\
+#set c++ compiler
+CXX=g++
 
-CPPSRCFILES=shared_globals.cc\
+#
+# program sources
+#
+SRCFILES=union_find.cc\
+         live_range.cc\
+         chow.cc\
+         cleave.cc\
+         depths.cc\
+         rc.cc\
+         assign.cc\
+         cfg_tools.cc\
+         dot_dump.cc\
+         shared_globals.cc\
          params.cc\
          debug.cc\
          live_unit.cc\
@@ -23,28 +26,28 @@ CPPSRCFILES=shared_globals.cc\
          mapping.cc\
          chow_extensions.cc\
 
-OBJS=${SRCFILES:.c=.o}
-OBJS+=${CPPSRCFILES:.cc=.o}
-MAIN=chow.main.o
-
-#use different load flags depending on which compiler we use
-#LDFLAGS = -pg
-
 #
-# Define the flags used for cc and gcc.  The selection of which
-# compiler to use is made above.  For what we need here, the
-# CFLAGS are the same for both cc and gcc.
+# automatically infer the object files
 #
-#CFLAGS  =    -Wall -O3 
-#CFLAGS =    -Wall -O3 -D__DEBUG 
-#CFLAGS = -g -Wall     -D__DEBUG 
-CFLAGS = -g -Wall
-
+OBJS=${SRCFILES:.cc=.o}
+MAIN_OBJ=chow.main.o
 
 #
-# Add the names of any executable that you want to build
-# to the list below after "ALL = ".
+# CXXFLAGS will be passed to the c++ compiler
 #
+##CXXFLAGS  =    -Wall -O3 
+##CXXFLAGS =    -Wall -O3 -D__DEBUG 
+##CXXFLAGS = -g -Wall     -D__DEBUG 
+CXXFLAGS = -g -Wall
+
+#
+# Flags to pass to the linker/loader
+#
+##LDFLAGS = -pg
+
+# 
+# GENERATED EXECUTABLES
+# 
 CHOW=chow
 DOT_DUMP=dot_dump
 CLEAVE=cleave
@@ -54,89 +57,110 @@ SSA_DUMP=ssa_dump
 ALL = $(CHOW) $(DOT_DUMP) $(VECTOR_TEST) $(CLEAVE) $(SPLIT)
 
 
-#########################################
-# CS BUILD PARAMETERS
-#########################################
-DDIRCOMP=/home/compiler/installed/shared
-LDIRSCOMP=$(DDIRCOMP)/archive
-LIBSCOMP=$(LDIRSCOMP)/shared-g.a
-IDIRSCOMP=-I$(DDIRCOMP)/include
+#
+# LIBRARIES
+#
+SHARED_LIB=/home/compiler/installed/shared/archive/shared-g.a
+LIBS = $(SHARED_LIB)
 
-#########################################
-# OWLNET BUILD PARAMETERS
-#########################################
-O_DDIRCOMP=/home/comp512/iloc
-O_LDIRSCOMP=$(O_DDIRCOMP)/include
-O_LIBSCOMP=$(O_LDIRSCOMP)/shared-g.a
-O_IDIRSCOMP=-I$(O_DDIRCOMP)/include
+#
+# INCLUDES
+#
+#local Shared.h comes from cwd
+INCLUDES = -I.
+CXXFLAGS += $(INCLUDES)
 
 
-#########################################
-# OWLNET BUILD PARAMETERS
-#########################################
-L_IDIRSCOMP=-I. #local Shared.h comes from cwd
-
-
-# for building on CS
-INCLUDES = $(L_IDIRSCOMP)
-LIBS = $(LIBSCOMP)
-
-# for building on owlnet
-#INCLUDES = $(L_IDIRSCOMP)
-#LIBS = $(O_LIBSCOMP)
-
+#
+# DEFAULT TARGET
+#
 default: $(CHOW) 
 
 #top level target to build all programs
+.PHONEY: all clean clobber sync
 all: $(ALL)
 
 
-######################################
-#
-# RULES
-######################################
+#==================================
+#             RULES
+#==================================
 
-$(CHOW): $(OBJS) $(MAIN)
-	@ $(CC) -o $@ $(LDFLAGS) $^ $(LIBS)
+#
+# include dependency files which will be generated automatically
+#
+include $(SRCFILES:.cc=.d)
+
+#
+# Executable targets
+#
+$(CHOW): $(OBJS) $(MAIN_OBJ)
+	@ $(CXX) -o $@ $(LDFLAGS) $^ $(LIBS)
 	@ echo " -- make $@ (Done)"
 
-
 $(DOT_DUMP): dot_dump.o dot_dump.main.o $(OBJS)
-	@ $(CC) -o $@ $(LDFLAGS) $^ $(LIBS)
+	@ $(CXX) -o $@ $(LDFLAGS) $^ $(LIBS)
 	@ echo " -- make $@ (Done)"
 
 $(CLEAVE): cfg_tools.o cleave.o cleave.main.o
-	@ $(CC) -o $@ $(LDFLAGS) $^ $(LIBS)
+	@ $(CXX) -o $@ $(LDFLAGS) $^ $(LIBS)
 	@ echo " -- make $@ (Done)"
 
 $(SPLIT): cfg_tools.o cfg_tools.main.o
-	@ $(CC) -o $@ $(LDFLAGS) $^ $(LIBS)
+	@ $(CXX) -o $@ $(LDFLAGS) $^ $(LIBS)
 	@ echo " -- make $@ (Done)"
 
 $(VECTOR_TEST): unit_test/vector_test.o
-	@ $(CC) -o $@ $(LDFLAGS) $^ $(LIBS)
+	@ $(CXX) -o $@ $(LDFLAGS) $^ $(LIBS)
 	@ echo " -- make $@ (Done)"
 
 $(SSA_DUMP): ssa_dump.o
-	@ $(CC) -o $@ $(LDFLAGS) $^ $(LIBS)
+	@ $(CXX) -o $@ $(LDFLAGS) $^ $(LIBS)
 	@ echo " -- make $@ (Done)"
 
-.c.o: 
-	@ $(CC) $(CFLAGS) $(INCLUDES) -o $(<:c=o) -c $< 
-	@ echo " -- make $@ (Done)"
-
-%.o : %.cc
-	@ $(CC) $(CFLAGS) $(INCLUDES) -o $@ -c $<
-	@ echo " -- make $@ (Done)"
-
+#
+# Cleanup targets
+#
 clean:
 	@ rm -f *.o
-	@ rm -f $(ALL)
+	@ rm -f *.d
+	@ rm -f $(CHOW)
 	@ echo " -- make clean (Done)"
-#	@ rm -f $(OBJS) $(MAIN)
 
-sync:
-	@rsync -uv -essh --progress --exclude-from=.rsync-excludes \
-	boromir.cs.rice.edu:/home/dmp4866/research/compilers/regalloc/src/* .
-	@echo " -- make sync (Done)"
+clobber: clean
+	@ rm -f $(ALL)
+	@ echo " -- make clobber (Done)"
+
+#==================================
+#            PATTERNS 
+#==================================
+
+#
+# build .o from .cc files
+#
+%.o : %.cc
+	@ $(CXX) $(CXXFLAGS) -o $@ -c $<
+	@ echo " -- make $@ (Done)"
+
+#
+# automatically generate dependencies for the .cc files to be included
+# in the make file. each .cc file will have a .d file generated
+# that contains the dependencies determined by looking at the #include
+# directives
+#
+# this pattern taken from GNU Make book
+#
+%.d : %.cc
+	@ $(CXX) -MM $(CXXFLAGS) $< > $@.$$$$; \
+  sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
+  rm -f $@.$$$$
+	@ echo " -- make dependency file $@ (Done)"
+
+
+#
+# Sync target left for prosperity in case it is useful later
+#
+##sync:
+##	@rsync -uv -essh --progress --exclude-from=.rsync-excludes \
+##	boromir.cs.rice.edu:/home/dmp4866/research/compilers/regalloc/src/* .
+##	@echo " -- make sync (Done)"
 
