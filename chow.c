@@ -26,7 +26,6 @@
 #include "depths.h" //for computing loop nesting depth
 #include "shared_globals.h" //Global namespace for iloc Shared vars
 
-#include "/home/compiler/installed/parse/src/Inst.h"
 
 /*------------------MODULE LOCAL DEFINITIONS-------------------*/
 namespace {
