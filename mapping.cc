@@ -55,13 +55,13 @@ void Mapping::CreateLiveRangeNameMap(Arena arena)
 
 /*
  *===================
- * SSAName2LRID()
+ * SSAName2OrigLRID()
  *===================
  * Maps a variable to the initial live range id to which that variable
  * belongs. Once the splitting process starts this mapping may not be
  * valid and should not be used.
  **/
-LRID Mapping::SSAName2LRID(Variable v)
+LRID Mapping::SSAName2OrigLRID(Variable v)
 {
   assert(v < SSA_def_count);
   assert((ssa_name_to_lrid[v] != NO_LRID) || v == 0);
@@ -100,8 +100,8 @@ void Mapping::ConvertLiveInNamespaceSSAToLiveRange()
         continue;
       }
       //debug("Converting LIVE: %d to LRID: %d",vLive,
-      //       SSAName2LRID(vLive));
-      lrid = SSAName2LRID(vLive);
+      //       SSAName2OrigLRID(vLive));
+      lrid = SSAName2OrigLRID(vLive);
       info.names[j] = lrid;
     }
   }

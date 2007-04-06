@@ -29,7 +29,8 @@ void Init(Arena);
 Expr SpillTag(const LiveRange* lr);
 void RewriteFrameOp();
 Inst* InsertStore(LiveRange*,Inst*,Register,Register,InstInsertLocation);
-void InsertLoad(LiveRange*, Inst*, Register, Register);
+Inst* InsertLoad(LiveRange*, Inst*, Register, Register,
+                 InstInsertLocation = BEFORE_INST);
 void InsertCopy(const LiveRange* lrSrc, const LiveRange* lrDest,
                  Inst* around_inst, Register src, Register dest, 
                  InstInsertLocation loc);

@@ -69,7 +69,7 @@ void Init(Arena arena)
   //initialize the stack pointer so that we have a correct value when
   //we need to insert loads and stores
   frame.stack_pointer = Frame_GetStackSize(frame.op);
-  frame.lrid = Mapping::SSAName2LRID(frame.ssa_name);
+  frame.lrid = Mapping::SSAName2OrigLRID(frame.ssa_name);
 
   //keep arena for allocating new instructions
   spill_arena = arena;
@@ -129,8 +129,8 @@ void RewriteFrameOp()
  * Inserts a load instruction for the given live range before the
  * passed instruction.
  */
-void InsertLoad(LiveRange* lr, Inst* before_inst, Register dest, 
-                                               Register base)
+Inst* InsertLoad(LiveRange* lr, Inst* around_inst, Register dest, 
+                          Register base, InstInsertLocation loc)
 {
   //LiveRange* lr = Chow::live_ranges[lrid];
   Expr tag = Spill::SpillTag(lr);
@@ -140,7 +140,7 @@ void InsertLoad(LiveRange* lr, Inst* before_inst, Register dest,
   Unsigned_Int offset = Spill::SpillLocation(lr);
   //assert(offset != MEM_UNASSIGNED); //can happen with use b4 def
   debug("Inserting load for LR: %d, to reg: %d, from offset: %d,"
-         "base: %d", lrid, dest, offset, base);
+         "base: %d", lr->id, dest, offset, base);
 
   //generate a comment
   char str[64];
@@ -151,8 +151,12 @@ void InsertLoad(LiveRange* lr, Inst* before_inst, Register dest,
     Inst_CreateLoad(opcode, tag, alignment, comment, offset, base, dest);
 
   //finally insert the new instruction
-  Block_Insert_Instruction(ld_inst, before_inst);
+  if(loc == AFTER_INST)
+    Block_Insert_Instruction(ld_inst, around_inst->next_inst);
+  else
+    Block_Insert_Instruction(ld_inst, around_inst);
 
+  return ld_inst;
 }
 
 
@@ -173,7 +177,7 @@ Inst* InsertStore(LiveRange* lr, Inst* around_inst, Register src,
 
   MemoryLocation offset = Spill::SpillLocation(lr);
   debug("Inserting store for LR: %d, from reg: %d to offset: %d",
-         lrid, src, offset);
+         lr->id, src, offset);
 
   //generate a comment
   char str[64]; 

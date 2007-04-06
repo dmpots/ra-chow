@@ -29,7 +29,7 @@ ChowStats chowstats = {0};
  ***/
 void ComputeBBStats(Arena arena, Unsigned_Int variable_count)
 {
-  using Mapping::SSAName2LRID;
+  using Mapping::SSAName2OrigLRID;
 
   Block* b;
   Inst* inst;
@@ -57,13 +57,13 @@ void ComputeBBStats(Arena arena, Unsigned_Int variable_count)
       {
         Operation_ForAllUses(reg, *op)
         {
-          lrid = SSAName2LRID(*reg);
+          lrid = SSAName2OrigLRID(*reg);
           bstats[lrid].uses++;
         }
 
         Operation_ForAllDefs(reg, *op)
         {
-          lrid = SSAName2LRID(*reg);
+          lrid = SSAName2OrigLRID(*reg);
           bstats[lrid].defs++;
           if(bstats[lrid].uses == 0)
             bstats[lrid].start_with_def = TRUE;

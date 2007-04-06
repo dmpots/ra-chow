@@ -2,6 +2,8 @@
  * if the live range has not been allocated a register then it is
  * given a temporary register. all of the details of managing
  * temporary registers are in this file.
+ *
+ * if you want to peek into the bowles of hell then read on...
  */
 
 /*--------------------------INCLUDES---------------------------*/
@@ -16,10 +18,12 @@
 #include "assign.h"
 #include "chow.h"
 #include "live_range.h"
+#include "live_unit.h"
 #include "rc.h"
 #include "spill.h"
 #include "stats.h"
 #include "color.h"
+#include "mapping.h"
 
 /*------------------MODULE LOCAL DECLARATIONS------------------*/
 namespace {
@@ -57,7 +61,8 @@ std::vector<RegisterContents> assign_infos;
 std::pair<Register,bool>
 GetFreeTmpReg(LRID lrid, 
                  Block* blk,
-                 Inst* inst, 
+                 Inst* origInst, 
+                 Inst* updatedInst,
                  Operation* op,
                  RegPurpose purpose,
                  const RegisterList& instUses,
@@ -76,8 +81,14 @@ Register MarkRegisterUsed(ReservedReg* tmpReg,
 void RemoveUnusableReg(std::list<ReservedReg*>& potentials, 
                          Register ssaName, Block* blk );
 
-Boolean HasBeenEvicted(LRID lrid, Register reg);
 RegisterContents* AssignInfoForLRID(LRID lrid);
+void InsertEvictedStore(LRID evictedLRID, 
+                        RegisterContents* regContents, 
+                        ReservedReg* evictedReg, 
+                        Inst* origInst,
+                        Inst* updatedInst,
+                        Block* blk);
+
 
 /* used as predicates for seaching reg lists */
 Boolean isFree(const ReservedReg* reserved);
@@ -85,6 +96,9 @@ class ReservedReg_Usable;
 class ReservedReg_MRegEq;
 class ReservedReg_InstEq;
 class EvictedListElem_Eq;
+
+/* for debugging */
+void dump_map_contents(ReservedRegMap& regMap);
 }
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
@@ -164,7 +178,6 @@ void Init(Arena arena)
  * reg - this will be updated with the machine reg for the live range
  **/
 void EnsureReg(Register* reg, 
-               LRID lrid, 
                Block* blk,
                Inst*  origInst,
                Inst** updatedInst, 
@@ -177,16 +190,22 @@ void EnsureReg(Register* reg,
   using Spill::InsertStore;
   using Chow::live_ranges;
 
+  debug("ensuring reg: %d for inst: \n   %s",
+     *reg, Debug::StringOfInst(origInst));
+
+  LRID lrid = Mapping::SSAName2OrigLRID(*reg);
+  *reg = GetMachineRegAssignment(blk, lrid);
+
   //this live range is spilled. find a temporary register
-  if(*reg == Assign::REG_UNALLOCATED)
+  if(*reg == REG_UNALLOCATED)
   {
     std::pair<Register,bool> regXneedMem;
     Register tmpReg;
     bool needMemAccess;
 
     //find a temporary register for this value
-    regXneedMem = GetFreeTmpReg(lrid, blk, origInst, op, purpose,
-                                   instUses, instDefs);
+    regXneedMem = GetFreeTmpReg(lrid, blk, origInst, *updatedInst, 
+                                op, purpose, instUses, instDefs);
 
     //get return values
     tmpReg = regXneedMem.first;
@@ -211,16 +230,9 @@ void EnsureReg(Register* reg,
     }
     *reg = tmpReg;
   }
-  //this live range is allocated. make sure we have not previously
-  //evicted it for another purpose and reload it if we have
   else
   {
-    //check to see that it was not previously evicted and insert a
-    //load if needed
-    if(HasBeenEvicted(lrid, *reg))
-    {
-      InsertLoad(live_ranges[lrid], *updatedInst, *reg, Spill::REG_FP);
-    }
+    debug("reg: %d for lrid: %d is allocated", *reg, lrid);
   }
 }
 
@@ -242,31 +254,6 @@ void ResetFreeTmpRegs(Inst* last_inst)
   {
     RegisterClass::RC rc = RegisterClass::all_classes[i];
     RegisterContents* regContents = &assign_infos[rc];
-
-    //1) anyone that was evicted needs to be loaded back in
-    //TODO: this is bullshit!! (says tim).
-    //we can do better than just reloading the register because it is
-    //the end of the block. we could look down the path that leads
-    //from this block and see where the next use is and put the load
-    //right before it, but for now we just put the load here
-    EvictedList* evicted = regContents->evicted;
-    EvictedList::iterator evIT;
-    for(evIT = evicted->begin(); evIT != evicted->end(); evIT++)
-    {
-      LRID evictedLRID = (*evIT).first;
-      InsertLoad(live_ranges[evictedLRID], 
-                last_inst, (*evIT).second->machineReg, Spill::REG_FP);
-
-      //reset values on evicted reg. this is needed in case this
-      //register gets chosen for eviction again we don't want the old
-      //values hanging around in the ReservedReg*
-      (*evIT).second->free = TRUE;
-      (*evIT).second->forLRID = NO_LRID;
-      (*evIT).second->forInst = NULL;
-    }
-
-    //2) remove all evicted registers from evicted list
-    evicted->clear();
 
     //3) set all reserved registers to be FREE so they can be used in
     //the next block
@@ -308,6 +295,77 @@ Register GetMachineRegAssignment(Block* b, LRID lrid)
   RegisterClass::RC rc = Chow::live_ranges[lrid]->rc;
   return RegisterClass::MachineRegForColor(rc, color);
 }
+
+/*
+ *===================
+ * UnEvict()
+ *===================
+ * restores any allocted live ranges to their registers if they were
+ * evicted to make room for an unallocted live range involved in a
+ * function call.
+ **/
+void UnEvict(Inst** updatedInst)
+{
+  using RegisterClass::all_classes;
+  debug("checking for registers needing unevicting");
+
+  //look at each register classes evicted list
+  for(unsigned int i = 0; i < all_classes.size(); i++)
+  {
+    EvictedList* evicted = assign_infos[all_classes[i]].evicted;
+    if(evicted->size() > 0)
+    {
+      debug("some registers need unevicting");
+      ReservedRegMap* regMap = assign_infos[all_classes[i]].regMap;
+      //1) anyone that was evicted needs to be loaded back in
+      //TODO: this is bullshit!! (says tim).
+      //we can do better than just reloading the register because it is
+      //the end of the block. we could look down the path that leads
+      //from this block and see where the next use is and put the load
+      //right before it, but for now we just put the load here
+      EvictedList::iterator evIT;
+      for(evIT = evicted->begin(); evIT != evicted->end(); evIT++)
+      {
+        LRID evictedLRID = (*evIT).first;
+        ReservedReg* kicked = (*evIT).second;
+        debug("unevicting lrid: %d to reg: %d", evictedLRID,
+          kicked->machineReg);
+
+        //load the live range back into its register
+        *updatedInst = 
+          Spill::InsertLoad(Chow::live_ranges[evictedLRID], 
+                            *updatedInst, kicked->machineReg, 
+                            Spill::REG_FP, AFTER_INST);
+
+        //find the lrid that is in our register and remove it from map
+        RegMapIterator rmIt = regMap->find(kicked->forLRID);
+        // ---- DEBUG ----->
+        if(rmIt == regMap->end())
+        {
+          debug("expected to find lrid: %d in reg: %d, but didn't",
+                kicked->forLRID, kicked->machineReg);
+          dump_map_contents(*regMap);
+        }
+        // ---- DEBUG -----<
+        assert(rmIt != regMap->end());
+        regMap->erase(rmIt);
+
+        //reset values on evicted reg. this is needed in case this
+        //register gets chosen for eviction again we don't want the old
+        //values hanging around in the ReservedReg*
+        kicked->free = TRUE;
+        kicked->forLRID = NO_LRID;
+        kicked->forInst = NULL;
+      }
+
+      //2) remove all evicted registers from evicted list
+      evicted->clear();
+    }
+  }
+}
+
+
+
 
 }//end Assign namespace
 
@@ -420,59 +478,6 @@ class EvictedListElem_Eq
   }
 };
 
-
-
-/*
- *===================
- * HasBeenEvicted()
- *===================
- * returns true if a live range has been evicted from its register.
- *
- * This will happen if a live range is evicted in a block where it was
- * originally allocated for another live range that needs the register
- * in a FRAME or JSR op. We automatically reload all evicted registers
- * at the end of a block so if this returns true it means there is a
- * use of the live range in the same block that it was evicted.
- **/
-Boolean HasBeenEvicted(LRID lrid, Register reg)
-{
-
-  //search evicted list for this machine register
-  RegisterContents* regContents = AssignInfoForLRID(lrid);
-  EvictedList::iterator it = 
-    find_if(regContents->evicted->begin(), regContents->evicted->end(),
-            EvictedListElem_Eq(lrid,reg));
-  if(it != regContents->evicted->end())
-  {
-    debug("lrid: %d was previously evicted", lrid);
-    //remove from evicted list
-    regContents->evicted->erase(it);
-
-    //find the lrid that is in our register so we can remove 
-    //it from the regMap
-    ReservedList::iterator rrIt;
-    rrIt = find_if(regContents->all->begin(),
-                    regContents->all->end(),
-                    ReservedReg_MRegEq(reg));
-    assert(rrIt != regContents->all->end());
-    RegMapIterator rmIt = regContents->regMap->find((*rrIt)->forLRID);
-    // ---- DEBUG ----->
-    if(rmIt == regContents->regMap->end())
-    {
-      debug("expected to find lrid: %d in reg: %d, but didn't",
-            (*rrIt)->forLRID, reg);
-      dump_map_contents(*regContents->regMap);
-    }
-    // ---- DEBUG -----<
-    assert(rmIt != regContents->regMap->end());
-    regContents->regMap->erase(rmIt);
-    return TRUE;
-  }
-
-  //it was not previously evicted
-  return FALSE;
-}
-
 /*
  *===================
  * GetFreeTmpReg()
@@ -481,10 +486,14 @@ Boolean HasBeenEvicted(LRID lrid, Register reg)
  * available free temp registers
  **/
 std::pair<Register,bool>
-GetFreeTmpReg(LRID lrid, Block* blk, Inst* inst, Operation* op,
-                 RegPurpose purpose, 
-                 const RegisterList& instUses, 
-                 const RegisterList& instDefs)
+GetFreeTmpReg(LRID lrid, 
+              Block* blk, 
+              Inst* origInst, 
+              Inst* updatedInst,
+              Operation* op,
+              RegPurpose purpose, 
+              const RegisterList& instUses, 
+              const RegisterList& instDefs)
 {
   using Assign::GetMachineRegAssignment;
 
@@ -505,7 +514,7 @@ GetFreeTmpReg(LRID lrid, Block* blk, Inst* inst, Operation* op,
   {
     debug("found the live range already in a temporary register");
     ReservedReg* rReg  = ((*it).second);
-    rReg->forInst = inst;
+    rReg->forInst = origInst;
     rReg->forPurpose = purpose;
     regXneedMem.first  = rReg->machineReg;
     if(purpose == FOR_USE) {regXneedMem.second = false;}
@@ -521,7 +530,7 @@ GetFreeTmpReg(LRID lrid, Block* blk, Inst* inst, Operation* op,
     debug("found a reserved register that is available");
     ReservedReg* tmpReg = *freeReserved;
     regXneedMem.first = 
-      MarkRegisterUsed(tmpReg, inst, purpose, lrid, *regMap);
+      MarkRegisterUsed(tmpReg, origInst, purpose, lrid, *regMap);
     return regXneedMem;
   }
 
@@ -534,12 +543,12 @@ GetFreeTmpReg(LRID lrid, Block* blk, Inst* inst, Operation* op,
   {
     ReservedReg* tmpReg;
     tmpReg = 
-      FindUsableReg(regContents->reserved, inst, purpose, instUses);
+      FindUsableReg(regContents->reserved, origInst, purpose, instUses);
     if(tmpReg != NULL)
     {
       debug("found a reserved register that we can evict");
       regXneedMem.first = 
-        MarkRegisterUsed(tmpReg, inst, purpose, lrid, *regMap);
+        MarkRegisterUsed(tmpReg, origInst, purpose, lrid, *regMap);
       return regXneedMem;
     }
   }
@@ -563,11 +572,11 @@ GetFreeTmpReg(LRID lrid, Block* blk, Inst* inst, Operation* op,
          op->opcode == cJSRl ||
          op->opcode == qJSRl);
 //DROP >>>>
-//  static Register bullshitReg = 1000;
+// static Register bullshitReg = 1000;
 //  regXneedMem.first = bullshitReg++;
 //  return regXneedMem;
 //DROP <<<<
- 
+
   //evict a live range from a register and record the fact that the
   //register has been commandeered
   //to find a suitable register to evict we start with the list of all
@@ -609,7 +618,7 @@ GetFreeTmpReg(LRID lrid, Block* blk, Inst* inst, Operation* op,
   debug("trimming registers already evicted");
   potentials.erase(
       remove_if(potentials.begin(), potentials.end(), 
-                ReservedReg_InstEq(inst)),
+                ReservedReg_InstEq(origInst)),
       potentials.end()
   );
 
@@ -642,13 +651,101 @@ GetFreeTmpReg(LRID lrid, Block* blk, Inst* inst, Operation* op,
   {
     debug("lrid: %d kicked out of reg: %d", evictedLRID,tmpReg->machineReg);
     assert(GetMachineRegAssignment(blk, evictedLRID) == tmpReg->machineReg);
-    regContents->evicted->push_back(std::make_pair(evictedLRID,tmpReg));
+    
+    //store the register if this eviction is not for a FRAME statement
+    if(op->opcode != FRAME)
+    {
+      InsertEvictedStore(evictedLRID, regContents, tmpReg, 
+                         origInst, updatedInst, blk);
+    }
   }
 
   regXneedMem.first = 
-    MarkRegisterUsed(tmpReg, inst, purpose, lrid, *regMap);
+    MarkRegisterUsed(tmpReg, origInst, purpose, lrid, *regMap);
   return regXneedMem;
 }
+
+/*
+ *=====================
+ * InsertEvictedStore()
+ *=====================
+ * Inserts a store for an evicted live range if needed.
+ * 
+ * A store is needed if the live range is not killed before it is used
+ * in this block or if it reaches the end of the block with no uses or
+ * defs. This is to prevet storing a live range when its register is
+ * allocated for a def in the given block. If we always stored then we
+ * could possibly store incorrect values into memory so instead we
+ * must make sure that either there is no def in this block so the
+ * current value must be correct, or that the def has already
+ * happened.
+ **/
+void InsertEvictedStore(LRID evictedLRID, 
+                        RegisterContents* regContents, 
+                        ReservedReg* evictedReg, 
+                        Inst* origInst,
+                        Inst* updatedInst,
+                        Block* blk)
+{
+  debug("checking if we need a store for evicted: %d", evictedLRID);
+  using Mapping::SSAName2OrigLRID;
+
+  LiveRange* evictedLR = Chow::live_ranges[evictedLRID]; 
+  LiveUnit* lu = evictedLR->LiveUnitForBlock(blk);
+  bool need_store = true;
+
+  //if this live unit contains a def then the evicted live range may
+  //have been allocated the register just for this def. 
+  if(lu->defs > 0)
+  {
+    //look forward
+    //through the block to see if this live range is killed before
+    //it is used or the end of the block is reached. if it is killed
+    //then no store is needed and in fact it is incorrect to insert a
+    //store
+    for(Inst* runner = updatedInst->next_inst; 
+        runner != blk->inst; 
+        runner = runner->next_inst)
+    {
+      Operation** op;
+      Inst_ForAllOperations(op, runner)
+      {
+        Register* reg;
+        Operation_ForAllUses(reg, *op)
+        { 
+          //upward exposed use
+          if(SSAName2OrigLRID(*reg) == evictedLR->orig_lrid) 
+          {
+            goto stop_looking;
+          }
+        }
+
+        Operation_ForAllDefs(reg, *op)
+        {
+          //kill
+          if(SSAName2OrigLRID(*reg) == evictedLR->orig_lrid) 
+          {
+            debug("lr %d does not need store because it is killed "
+                  "before used", evictedLRID);
+            need_store = false;
+            goto stop_looking;
+          }
+        }
+      } 
+    }
+    stop_looking: ;
+  }
+
+
+  if(need_store)
+  {
+    debug("lr %d needs store because it is evicted", evictedLRID);
+    Spill::InsertStore(evictedLR, origInst, evictedReg->machineReg, 
+                       Spill::REG_FP, BEFORE_INST);
+    regContents->evicted->push_back(std::make_pair(evictedLRID,evictedReg));
+  }
+}
+
 
 Register MarkRegisterUsed(ReservedReg* tmpReg, 
                           Inst* inst, 

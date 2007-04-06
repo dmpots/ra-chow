@@ -242,7 +242,7 @@ void LiveRange::AssignColor()
     VectorSet vs = Coloring::UsedColors(this->rc, unit->block);
     assert(!VectorSet_Member(vs, color));
     VectorSet_Insert(vs, color);
-    Coloring::SetColor(unit->block, orig_lrid, color);
+    Coloring::SetColor(unit->block, this->id, color);
 
     // ----------------  LOAD STORE OPTIMIZATION -----------------
     if(Params::Algorithm::move_loads_and_stores)

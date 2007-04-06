@@ -13,7 +13,7 @@
 namespace Mapping {
 /*-------------------------FUNCTIONS---------------------------*/
 void CreateLiveRangeNameMap(Arena);
-LRID SSAName2LRID(Variable v);
+LRID SSAName2OrigLRID(Variable v);
 void ConvertLiveInNamespaceSSAToLiveRange();
 }
 

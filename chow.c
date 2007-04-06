@@ -26,6 +26,7 @@
 #include "depths.h" //for computing loop nesting depth
 #include "shared_globals.h" //Global namespace for iloc Shared vars
 
+#include "/home/compiler/installed/parse/src/Inst.h"
 
 /*------------------MODULE LOCAL DEFINITIONS-------------------*/
 namespace {
@@ -246,7 +247,7 @@ LiveRange* ComputePriorityAndChooseTop(LRSet* lrs)
 void BuildInitialLiveRanges(Arena chow_arena)
 {
   using Chow::live_ranges;
-  using Mapping::SSAName2LRID;
+  using Mapping::SSAName2OrigLRID;
 
   //build ssa
   Unsigned_Int ssa_options = 0;
@@ -339,7 +340,7 @@ void BuildInitialLiveRanges(Arena chow_arena)
         Operation_ForAllDefs(reg, *op)
         {
           debug("DEF: %d", *reg);
-          lrid = SSAName2LRID(*reg);
+          lrid = SSAName2OrigLRID(*reg);
           //better not have two definitions in the same block for the
           //same live range
           assert_same_orig_name(lrid, *reg, lrset, b); 
@@ -353,7 +354,7 @@ void BuildInitialLiveRanges(Arena chow_arena)
         Operation_ForAllUses(reg, *op)
         {
           debug("USE: %d", *reg);
-          lrid = SSAName2LRID(*reg);
+          lrid = SSAName2OrigLRID(*reg);
           AddLiveUnitOnce(lrid, b, lrset, *reg);
         }
       } 
@@ -365,9 +366,8 @@ void BuildInitialLiveRanges(Arena chow_arena)
     info = SSA_live_out[id(b)];
     for(unsigned int j = 0; j < info.size; j++)
     {
-      //debug("LIVE: %d is LRID: %d",info.names[j], SSAName2LRID(info.names[j]));
       //add block to each live range
-      lrid = SSAName2LRID(info.names[j]);
+      lrid = SSAName2OrigLRID(info.names[j]);
       //VectorSet_Insert(lrset, lrid);
       AddLiveUnitOnce(lrid, b, lrset, info.names[j]);
     }
@@ -604,10 +604,11 @@ void UpdateConstrainedLists(LiveRange* newlr,
  ***/
 void RenameRegisters()
 {
-  using Mapping::SSAName2LRID;
+  using Mapping::SSAName2OrigLRID;
   using Assign::GetMachineRegAssignment;
   using Assign::ResetFreeTmpRegs;
   using Assign::EnsureReg;
+  using Assign::UnEvict;
 
   debug("allocation complete. renaming registers...");
 
@@ -618,7 +619,6 @@ void RenameRegisters()
   Inst* inst;
   Operation** op;
   Unsigned_Int* reg;
-  LRID lrid;
   std::vector<Register> instUses;
   std::vector<Register> instDefs;
 
@@ -626,6 +626,7 @@ void RenameRegisters()
   {
     Block_ForAllInsts(inst, b)
     {
+      debug("renaming inst:\n%s", Debug::StringOfInst(inst));
       /* collect a list of uses and defs used in this regist that is
        * used in algorithms when deciding which registers can be
        * evicted for temporary uses */
@@ -635,13 +636,13 @@ void RenameRegisters()
       {
         Operation_ForAllUses(reg, *op)
         {
-          LRID lrid = SSAName2LRID(*reg);
+          LRID lrid = SSAName2OrigLRID(*reg);
           instUses.push_back(lrid);
         }
 
         Operation_ForAllDefs(reg, *op)
         {
-          LRID lrid = SSAName2LRID(*reg);
+          LRID lrid = SSAName2OrigLRID(*reg);
           instDefs.push_back(lrid);
         }
       } 
@@ -659,25 +660,21 @@ void RenameRegisters()
       {
         Operation_ForAllUses(reg, *op)
         {
-          lrid = SSAName2LRID(*reg);
-          *reg = GetMachineRegAssignment(b, lrid);
           //make sure the live range is in a register
-          EnsureReg(reg, lrid, b, origInst, updatedInst,
+          EnsureReg(reg, b, origInst, updatedInst,
                     *op, FOR_USE,
                     instUses, instDefs);
         }
 
         Operation_ForAllDefs(reg, *op)
         {
-          lrid = SSAName2LRID(*reg);
-          *reg = GetMachineRegAssignment(b, lrid); 
           //make sure the live range is in a register
-          EnsureReg(reg, lrid, b, origInst, updatedInst,
+          EnsureReg(reg, b, origInst, updatedInst,
                     *op, FOR_DEF,
                     instUses, instDefs);
         }
-
       } 
+      UnEvict(updatedInst);
     }
     //make available the tmp regs used in this instruction
     //pass in a pointer to the last instruction in the block so

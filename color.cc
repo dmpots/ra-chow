@@ -4,7 +4,9 @@
 
 /*-----------------------MODULE INCLUDES-----------------------*/
 #include "color.h"
+#include "chow.h"
 #include "rc.h"
+#include "live_range.h"
 
 /*------------------MODULE LOCAL DEFINITIONS-------------------*/
 namespace {
@@ -60,12 +62,14 @@ VectorSet Coloring::UsedColors(RegisterClass::RC rc, Block* blk)
 
 void Coloring::SetColor(Block* blk, LRID lrid, Color color)
 {
-  mBlkIdSSAName_Color[id(blk)][lrid] = color;
+  LRID orig_lrid = Chow::live_ranges[lrid]->orig_lrid;
+  mBlkIdSSAName_Color[id(blk)][orig_lrid] = color;
 }
 
 Color Coloring::GetColor(Block* blk, LRID lrid)
 {
-  return mBlkIdSSAName_Color[id(blk)][lrid];
+  LRID orig_lrid = Chow::live_ranges[lrid]->orig_lrid;
+  return mBlkIdSSAName_Color[id(blk)][orig_lrid];
 }
 
 /*------------------INTERNAL MODULE FUNCTIONS--------------------*/

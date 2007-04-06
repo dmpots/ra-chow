@@ -17,7 +17,6 @@ namespace Assign {
   void Init(Arena);
   Register GetMachineRegAssignment(Block* b, LRID lrid);
   void EnsureReg(Register* reg, 
-                 LRID lrid, 
                  Block* blk,
                  Inst*  origInst, 
                  Inst** updatedInst, 
@@ -26,5 +25,6 @@ namespace Assign {
                  const RegisterList& instUses,
                  const RegisterList& instDefs);
   void ResetFreeTmpRegs(Inst* last_inst);
+  void UnEvict(Inst** updatedInst);
 }
 #endif

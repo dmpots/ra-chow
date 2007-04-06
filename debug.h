@@ -46,6 +46,7 @@ namespace Debug {
 
   void DotDumpLR(LiveRange* lr, const char* tag);
   void DotDumpFinalLRs();
+  const char* StringOfInst(Inst* inst);
 }
 
 #endif /* __DEBUG_H */
