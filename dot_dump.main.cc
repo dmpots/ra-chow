@@ -1,7 +1,8 @@
 /*====================================================================
- * 
+ * dot_dump.c
  *====================================================================
- * $Id: dot_dump.c 155 2006-07-24 22:15:51Z dmp $
+ * main wrapper for running dot dump which dumps out the the call
+ * graph in a file for display by dot
  ********************************************************************/
 
 #include <Shared.h>
@@ -18,7 +19,7 @@ int main(Int argc, Char **argv)
   else
     Block_Init(NULL);
  
-  Dot::DotDump();
+  Dot::Dump();
   return 0;
 } /* main */
 

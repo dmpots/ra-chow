@@ -26,11 +26,12 @@ SRCFILES=union_find.cc\
          mapping.cc\
          chow_extensions.cc\
 
+MAIN_SRC=chow.main.cc
 #
 # automatically infer the object files
 #
 OBJS=${SRCFILES:.cc=.o}
-MAIN_OBJ=chow.main.o
+MAIN_OBJ= ${MAIN_SRC:.cc=.o}
 
 #
 # CXXFLAGS will be passed to the c++ compiler
@@ -89,6 +90,7 @@ all: $(ALL)
 # include dependency files which will be generated automatically
 #
 include $(SRCFILES:.cc=.d)
+include $(MAIN_SRC:.cc=.d)
 
 #
 # Executable targets

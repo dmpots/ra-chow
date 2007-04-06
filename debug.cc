@@ -12,7 +12,6 @@
 #include "live_unit.h"
 #include "mapping.h"
 #include "dot_dump.h"
-using std::vector;
 
 
 namespace {
@@ -44,7 +43,7 @@ namespace Debug {
 //keep track of all the lrids that are dumped throughout the program.
 //there can be multiple lrids if the original lrid indicated by
 //dot_dump_lr is split during allocation
-vector<LiveRange*> dot_dumped_lrs;
+std::vector<LiveRange*> dot_dumped_lrs;
 
 //used to control whether we dot dump a lr throughout the life of the
 //allocator. a non-zero value indicates the live range to watch

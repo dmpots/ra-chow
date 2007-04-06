@@ -1,8 +1,7 @@
 /*====================================================================
- * 
+ * union_find.cc
  *====================================================================
- * $Id: union_find.c 155 2006-07-24 22:15:51Z dmp $
- * $HeadURL: http://dmpots.com/svn/research/compilers/regalloc/src/union_find.c $
+ * contains an implemenation of the union find algorithm.
  ********************************************************************/
 
 #include "union_find.h"

@@ -6,10 +6,10 @@
  ********************************************************************/
 /*-----------------------MODULE INCLUDES-----------------------*/
 #include <Shared.h>
+#include <cassert>
+#include <cstring>
+
 #include "cfg_tools.h"
-#include "debug.h"
-#include "assert.h"
-#include "string.h"
 
 /*------------------MODULE LOCAL DEFINITIONS-------------------*/
 /* module types */

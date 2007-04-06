@@ -1,4 +1,6 @@
-/* contains functions and data for statistics used in chow allocator.
+/* stats.cc
+ * 
+ * contains functions and data for statistics used in chow allocator.
  * this includes statistics about the allocation itself as well as
  * static properties of the program text such as the number of uses
  * and defs of a variable in a given basic block.

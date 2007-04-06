@@ -1,4 +1,8 @@
-
+/* live_range.cc
+ *
+ * contains definition of live range functions. live ranges are the
+ * unit of allocation in a chow register allocator.
+ */
 /*-----------------------MODULE INCLUDES-----------------------*/
 #include <Shared.h>
 #include <SSA.h> 

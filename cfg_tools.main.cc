@@ -1,5 +1,6 @@
 /*====================================================================
- * 
+ * cfg_tools.main.c
+ * main program for testing some of the functions in cfg_tools.c
  *====================================================================
  ********************************************************************/
 
@@ -9,7 +10,6 @@
 #include <assert.h>
 #include <utility>
 #include <list>
-#include "debug.h"
 #include "cfg_tools.h"
 
 

@@ -2,6 +2,7 @@
 #define __GUARD_CFG_TOOLS_H
 
 #include <Shared.h>
+#include "debug.h"
 
 //call this before using functions below
 void InitCFGTools(Arena arena);

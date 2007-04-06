@@ -1,9 +1,8 @@
 /*====================================================================
  * rc.c (RegisterClass)
+ *====================================================================
  * Holds functions and definitions used for implementing multiple
  * register classes in the chow register allocator
- *====================================================================
- * 
  ********************************************************************/
 
 /*--------------------------INCLUDES---------------------------*/
@@ -16,7 +15,6 @@
 #include <SSA.h>
 #include "rc.h"
 #include "assign.h"
-#include "debug.h"
 #include "mapping.h"
 
 /*------------------MODULE LOCAL DECLARATIONS------------------*/

@@ -1,4 +1,8 @@
-
+/* spill.cc
+ *
+ * contains code for spilling live ranges. this mainly involves
+ * inserting loads, stores and copies.
+ */
 #include <map>
 
 #include "spill.h"

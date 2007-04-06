@@ -1,4 +1,6 @@
-/* contains functions and data for mappings between namespaces used in
+/* mapping.cc
+ * 
+ * contains functions and data for mappings between namespaces used in
  * the chow allocator.
  */
 

@@ -1,9 +1,13 @@
+/* chow.main.c
+ *
+ * entry point for chow register allocation. handle parsing command
+ * line paramerters before handing the work off to other functions.
+ */
 
 /*-----------------------MODULE INCLUDES-----------------------*/
 #include <Shared.h>
 #include "chow.h"
 #include "params.h"
-#include "debug.h"
 #include "shared_globals.h" 
 #include "stats.h"
 

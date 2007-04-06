@@ -1,3 +1,9 @@
+/* ssa_dump.cc
+ * 
+ * helper program that simply converts to ssa and dumps out the
+ * resulting code.
+ */
+
 #include <Shared.h>
 #include <SSA.h>
 #include <stdio.h>

@@ -1,4 +1,6 @@
-/* contains functions and data used to keep track of coloring info for
+/* color.cc
+ * 
+ * contains functions and data used to keep track of coloring info for
  * live ranges and blocks. 
  */
 

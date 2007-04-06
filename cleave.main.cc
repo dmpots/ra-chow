@@ -1,8 +1,7 @@
 /*====================================================================
- * 
+ * cleave.main.c 
  *====================================================================
- * $Id: cleave.main.c 157 2006-07-26 19:19:34Z dmp $
- * $HeadURL: http://dmpots.com/svn/research/compilers/regalloc/src/cleave.main.c $
+ * main program to test basic block cleaving.
  ********************************************************************/
 
 #include <Shared.h>

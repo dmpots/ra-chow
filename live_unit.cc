@@ -1,3 +1,9 @@
+/* live_unit.cc
+ * 
+ * contains definitions of live unit functions. each live range
+ * consists of a series of live units where each live unit represents
+ * the live range occupying a basic block. 
+ */
 
 /*-----------------------MODULE INCLUDES-----------------------*/
 #include <cmath>

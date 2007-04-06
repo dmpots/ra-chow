@@ -7,6 +7,7 @@
 
 #ifndef __GUARD_CLEAVE_H
 #define __GUARD_CLEAVE_H
+#include "debug.h"
 
 struct block_tuple
 {
