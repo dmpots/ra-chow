@@ -740,6 +740,8 @@ void RenameRegisters()
 void MoveLoadsAndStores()
 {
   using namespace std; //for list, pair
+  InitCFGTools(Chow::arena); //for adding edges
+
   typedef list<MovedSpillDescription>::iterator LI;
   //we should already have the loads and stores moved onto the
   //appropriate edge. all that remains is to walk the graph and
