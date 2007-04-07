@@ -282,7 +282,7 @@ int process_(Param_Details* param, char* arg)
         *((float*)(param->value)) = atof(arg);
         break;
       case BOOL_PARAM:
-        *((Boolean*)(param->value)) = TRUE;
+        *((Boolean*)(param->value)) = !(param->bdefault);
         break;
       default:
         error("unknown type");
