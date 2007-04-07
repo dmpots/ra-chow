@@ -33,12 +33,12 @@
 /*------------------MODULE LOCAL DEFINITIONS-------------------*/
 namespace {
   /* local functions */
-  void assert_same_orig_name(LRID,Variable,VectorSet,Block* b);
+  void assert_same_orig_name(LRID,Variable,SparseSet,Block* b);
   void MoveLoadsAndStores();
   void AllocLiveRanges(Arena arena, Unsigned_Int num_lrs);
   void SplitNeighbors(LiveRange*, LRSet*, LRSet*);
   void UpdateConstrainedLists(LiveRange* , LiveRange* , LRSet*, LRSet*);
-  LiveUnit* AddLiveUnitOnce(LRID, Block*, VectorSet, Variable);
+  LiveUnit* AddLiveUnitOnce(LRID, Block*, SparseSet, Variable);
   LiveRange* ComputePriorityAndChooseTop(LRSet* lrs);
   void BuildInitialLiveRanges(Arena);
   void BuildInterferences(Arena arena);
@@ -348,7 +348,7 @@ void BuildInterferences(Arena arena)
   Inst* inst;
   Operation** op;
   Unsigned_Int* reg;
-  VectorSet lrset = VectorSet_Create(arena, live_ranges.size());
+  SparseSet lrset = SparseSet_Create(arena, live_ranges.size());
   ForAllBlocks(blk)
   {
 
@@ -361,7 +361,7 @@ void BuildInterferences(Arena arena)
     //but will also be live out in those blocks under a different name
     //(the name defined by the phi-node for those definitions). as
     //long as we get the last definition in the block we should be ok
-    VectorSet_Clear(lrset);
+    SparseSet_Clear(lrset);
     Block_ForAllInstsReverse(inst, blk)
     {
       //go in reverse because we want the last def that we see to be
@@ -410,12 +410,12 @@ void BuildInterferences(Arena arena)
     //the interference graph
     Unsigned_Int v, i;
     debug("LIVE SIZE: %d\n", VectorSet_Size(lrset));
-    VectorSet_ForAll(v, lrset)
+    SparseSet_ForAll(v, lrset)
     {
       lr = live_ranges[v];
 
       //update the interference lists
-      VectorSet_ForAll(i, lrset)
+      SparseSet_ForAll(i, lrset)
       {
         if(v == i) continue; //skip yourself
         //add interference if in the same class
@@ -458,10 +458,10 @@ void AllocLiveRanges(Arena arena, Unsigned_Int num_lrs)
 //rewriting step, but this check does not need to be made when adding
 //from the live_out set since those names may be different but it is
 //ok because they occur in a different block
-void assert_same_orig_name(LRID lrid, Variable v, VectorSet set,
+void assert_same_orig_name(LRID lrid, Variable v, SparseSet set,
 Block* b)
 {
-  if(VectorSet_Member(set,lrid))
+  if(SparseSet_Member(set,lrid))
   {
     LiveUnit* unit =  Chow::live_ranges[lrid]->LiveUnitForBlock(b);
     //debug("already present: %d, orig_name: %d new_orig: %d  block: %s (%d)", 
@@ -480,14 +480,14 @@ Block* b)
  * returns the new LiveUnit or NULL if it is already in the live range
  ***/
 LiveUnit* 
-AddLiveUnitOnce(LRID lrid, Block* b, VectorSet lrset, Variable orig_name)
+AddLiveUnitOnce(LRID lrid, Block* b, SparseSet lrset, Variable orig_name)
 {
   //debug("ADDING: %d BLOCK: %s (%d)", lrid, bname(b), id(b));
   LiveUnit* new_unit = NULL;
-  if(!VectorSet_Member(lrset, lrid))
+  if(!SparseSet_Member(lrset, lrid))
   {
     LiveRange* lr = Chow::live_ranges[lrid];
-    VectorSet_Insert(lrset, lrid);
+    SparseSet_Insert(lrset, lrid);
     Stats::BBStats bbstat = Stats::GetStatsForBlock(b, lr->id);
     new_unit = lr->AddLiveUnitForBlock(b, orig_name, bbstat);
   }
