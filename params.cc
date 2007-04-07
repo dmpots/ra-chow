@@ -11,13 +11,13 @@
 
 /* machine parameters */
 int   Params::Machine::num_registers = 32;
-bool  Params::Machine::enable_register_classes = false;
+bool  Params::Machine::enable_register_classes = true;
 float Params::Machine::load_save_weight = 1.0;
 float Params::Machine::store_save_weight = 1.0;
 float Params::Machine::move_cost_weight = 1.0;
 
 /* algorithm parameters */
-int   Params::Algorithm::bb_max_insts = 10;
+int   Params::Algorithm::bb_max_insts = 0;
 int   Params::Algorithm::num_reserved_registers = 2;
 float Params::Algorithm::loop_depth_weight = 10.0;
 bool  Params::Algorithm::enhanced_code_motion = false;
@@ -25,4 +25,5 @@ bool  Params::Algorithm::move_loads_and_stores = false;
 
 /* program parameters */
 bool Params::Program::force_minimum_register_count = false;
+bool Params::Program::dump_params_only = false;
 

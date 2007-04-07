@@ -24,6 +24,7 @@ namespace Params {
   }
   namespace Program {
     extern bool force_minimum_register_count;
+    extern bool dump_params_only;
   }
 }
 

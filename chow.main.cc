@@ -34,7 +34,8 @@ typedef enum
   HELP_REGISTERCLASSES,
   HELP_LOADSTOREMOVEMENT,
   HELP_ENHANCEDCODEMOTION,
-  HELP_FORCEMINIMUMREGISTERCOUNT
+  HELP_FORCEMINIMUMREGISTERCOUNT,
+  HELP_DUMPPARAMSONLY
 } Param_Help;
 
 
@@ -94,25 +95,29 @@ using Params::Algorithm::loop_depth_weight;
 using Params::Algorithm::move_loads_and_stores;
 using Params::Algorithm::enhanced_code_motion;
 using Params::Program::force_minimum_register_count;
+using Params::Program::dump_params_only;
 static Param_Details param_table[] = 
 {
-  {'b', process_, 0,F,B, &bb_max_insts, INT_PARAM,
-                                                  HELP_BBMAXINSTS},
-  {'r', process_, 32,F,B, &num_registers, INT_PARAM,
-                                                  HELP_NUMREGISTERS},
-  {'d', process_, 0,10.0,B,&loop_depth_weight, FLOAT_PARAM, 
-                                                  HELP_LOOPDEPTH},
-  {'p', process_, I,F,FALSE,&enable_register_classes, BOOL_PARAM, 
-                                                  HELP_REGISTERCLASSES},
-  {'m', process_, I,F,FALSE,&move_loads_and_stores, BOOL_PARAM, 
-                                                  HELP_LOADSTOREMOVEMENT},
-  {'e', process_, I,F,FALSE,&enhanced_code_motion, BOOL_PARAM, 
-                                                 HELP_ENHANCEDCODEMOTION},
-  {'f', process_, I,F,FALSE,&force_minimum_register_count, BOOL_PARAM, 
-                                           HELP_FORCEMINIMUMREGISTERCOUNT}
+  {'b', process_, bb_max_insts,F,B, &bb_max_insts,
+         INT_PARAM, HELP_BBMAXINSTS},
+  {'r', process_, num_registers,F,B, &num_registers,
+         INT_PARAM, HELP_NUMREGISTERS},
+  {'d', process_, I,loop_depth_weight,B,&loop_depth_weight,
+         FLOAT_PARAM, HELP_LOOPDEPTH},
+  {'p', process_, I,F,enable_register_classes,&enable_register_classes,
+         BOOL_PARAM, HELP_REGISTERCLASSES},
+  {'m', process_, I,F,move_loads_and_stores,&move_loads_and_stores,
+         BOOL_PARAM, HELP_LOADSTOREMOVEMENT},
+  {'e', process_, I,F,enhanced_code_motion,&enhanced_code_motion,
+         BOOL_PARAM, HELP_ENHANCEDCODEMOTION},
+  {'f', process_,I,F,force_minimum_register_count,
+                    &force_minimum_register_count, 
+         BOOL_PARAM, HELP_FORCEMINIMUMREGISTERCOUNT},
+  {'y', process_, I,F,dump_params_only,&dump_params_only,
+         BOOL_PARAM, HELP_DUMPPARAMSONLY}
 };
 const unsigned int NPARAMS = (sizeof(param_table) / sizeof(param_table[0]));
-const char* PARAMETER_STRING  = ":b:r:d:mpef";
+const char* PARAMETER_STRING  = ":b:r:d:mpefy";
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
 /*
@@ -167,6 +172,11 @@ int main(Int argc, Char **argv)
 
   }
 
+  if(Params::Program::dump_params_only)
+  {
+    DumpParamTable();
+    exit(EXIT_SUCCESS);
+  }
 
   //assumes file is in first argument after the params
   Stats::program_timer.Start();
@@ -335,6 +345,14 @@ static const char* get_usage(Param_Help idx)
       "         connect live ranges with copy instead of load/store if\n" 
       "           possible. This flag automatically turns on -m to move\n"
       "           loads and stores";
+    case HELP_LOOPDEPTH:
+      return "         loop nesting depth weight";
+    case HELP_REGISTERCLASSES:
+      return "         disable partitioned register classes";
+    case HELP_FORCEMINIMUMREGISTERCOUNT:
+      return "         force allocation by increasing minimum register";
+    case HELP_DUMPPARAMSONLY:
+      return "         dump values of allocation params and exit";
     default:
       return " UNKNOWN PARAMETER\n";
   }
@@ -353,7 +371,7 @@ void DumpParamTable()
   for(i = 0; i < NPARAMS; i++)
   {
     param = param_table[i];
-    fprintf(stderr, "%c ==> ", param.name);
+    fprintf(stderr, "%c: ", param.name);
     switch(param.type)
     {
       case INT_PARAM:
@@ -363,7 +381,7 @@ void DumpParamTable()
         fprintf(stderr, "%f", *((float*)param.value));
         break;
       case BOOL_PARAM:
-        fprintf(stderr, "%s", *((Boolean*)param.value) ? "TRUE":"FALSE" );
+        fprintf(stderr, "%s", *((Boolean*)param.value) ? "true":"false" );
         break;
       default:
         error("unknown type");
