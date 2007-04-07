@@ -36,13 +36,38 @@ struct ChowStats
   Unsigned_Int cThwartedCopies;
 };
 
+class Timer
+{
+public:
+  typedef std::vector<std::pair<const char*, double> > SavedTimes;
+
+private:
+  double elapsed_time;
+  const char* section;
+  time_t tstart;
+  SavedTimes saved_times;
+
+public:
+  void Start(const char* = "");
+  double Stop();
+  const char*  ElapsedStr(); 
+  inline double Elapsed() {return elapsed_time;}
+  const SavedTimes GetSavedTimes(){return saved_times;}
+
+};
+
+
 /*-------------------------VARIABLES---------------------------*/
 extern ChowStats chowstats;
+extern Timer program_timer;
+extern Timer section_timer;
 
 /*-------------------------FUNCTIONS---------------------------*/
 void ComputeBBStats(Arena, Unsigned_Int);
 BBStats GetStatsForBlock(Block* blk, LRID lrid);
 void DumpAllocationStats();
+void Start(const char*); //timing functions
+void Stop();  //timing functions
 }
 
 #endif

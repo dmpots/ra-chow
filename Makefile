@@ -139,13 +139,13 @@ $(SSA_DUMP): ssa_dump.o
 #
 clean:
 	@ rm -f *.o
-	@ rm -f *.d
 	@ rm -f $(CHOW)
 	@ rm -f debug
 	@ echo " -- make clean (Done)"
 
 clobber: clean
 	@ rm -f $(ALL)
+	@ rm -f *.d
 	@ echo " -- make clobber (Done)"
 
 #==================================

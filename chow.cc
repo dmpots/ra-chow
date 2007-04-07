@@ -41,6 +41,7 @@ namespace {
   LiveUnit* AddLiveUnitOnce(LRID, Block*, VectorSet, Variable);
   LiveRange* ComputePriorityAndChooseTop(LRSet* lrs);
   void BuildInitialLiveRanges(Arena);
+  void BuildInterferences(Arena arena);
   void AllocateRegisters();
   void RenameRegisters();
 }
@@ -60,9 +61,11 @@ void Chow::Run()
   //--- Initialization for building live ranges ---//
   if(Params::Algorithm::bb_max_insts > 0)
   {
+    Stats::Start("Cleave Blocks");
     //split basic blocks to desired size
     InitCleaver(arena, Params::Algorithm::bb_max_insts);
     CleaveBlocks();
+    Stats::Stop();
   }
   RegisterClass::Init(arena, 
                       Params::Machine::num_registers,
@@ -95,8 +98,12 @@ void Chow::Run()
   }
 
   //--- Run the priority algorithm ---//
+    Stats::Start("Allocate Registers");
   AllocateRegisters();
+    Stats::Stop();
+    Stats::Start("Rename Registers");
   RenameRegisters();
+    Stats::Stop();
   if(Debug::dot_dump_lr) Debug::DotDumpFinalLRs(); 
 }
 
@@ -249,7 +256,6 @@ LiveRange* ComputePriorityAndChooseTop(LRSet* lrs)
 void BuildInitialLiveRanges(Arena chow_arena)
 {
   using Chow::live_ranges;
-  using Mapping::SSAName2OrigLRID;
 
   //build ssa
   Unsigned_Int ssa_options = 0;
@@ -306,6 +312,30 @@ void BuildInitialLiveRanges(Arena chow_arena)
   Stats::ComputeBBStats(uf_arena, SSA_def_count);
   AllocLiveRanges(chow_arena, clrInitial);
 
+  //find all interferenes for each live range
+    Stats::Start("Build Interferences");
+  BuildInterferences(chow_arena);
+    Stats::Stop();
+
+  //compute where the loads and stores need to go in the live range
+  for(LRVec::size_type i = 0; i < live_ranges.size(); i++)
+    live_ranges[i]->MarkLoadsAndStores();
+
+  Debug::LiveRange_DDumpAll(&live_ranges);
+}
+/*
+ *=============================
+ * BuildInterferences()
+ *=============================
+ * Construct the interferences for each live range
+ * 
+ */
+
+void BuildInterferences(Arena arena)
+{
+  using Chow::live_ranges;
+  using Mapping::SSAName2OrigLRID;
+
   //build the interference graph
   //find all live ranges that are referenced or live out in this
   //block. those are the live ranges that need to include this block.
@@ -314,11 +344,12 @@ void BuildInitialLiveRanges(Arena chow_arena)
   //to build the live ranges
   LiveRange* lr;
   LRID lrid;
+  Block* blk;
   Inst* inst;
   Operation** op;
   Unsigned_Int* reg;
-  VectorSet lrset = VectorSet_Create(uf_arena, clrInitial);
-  ForAllBlocks(b)
+  VectorSet lrset = VectorSet_Create(arena, live_ranges.size());
+  ForAllBlocks(blk)
   {
 
     //we need to acccount for any variable that is referenced in this
@@ -331,7 +362,7 @@ void BuildInitialLiveRanges(Arena chow_arena)
     //(the name defined by the phi-node for those definitions). as
     //long as we get the last definition in the block we should be ok
     VectorSet_Clear(lrset);
-    Block_ForAllInstsReverse(inst, b)
+    Block_ForAllInstsReverse(inst, blk)
     {
       //go in reverse because we want the last def that we see to be
       //the orig_name for the live range, this must be so because we
@@ -345,8 +376,8 @@ void BuildInitialLiveRanges(Arena chow_arena)
           lrid = SSAName2OrigLRID(*reg);
           //better not have two definitions in the same block for the
           //same live range
-          assert_same_orig_name(lrid, *reg, lrset, b); 
-          AddLiveUnitOnce(lrid, b, lrset, *reg);
+          assert_same_orig_name(lrid, *reg, lrset, blk); 
+          AddLiveUnitOnce(lrid, blk, lrset, *reg);
 
           //set the type of the live range according to the type
           //defined by this operation
@@ -357,7 +388,7 @@ void BuildInitialLiveRanges(Arena chow_arena)
         {
           debug("USE: %d", *reg);
           lrid = SSAName2OrigLRID(*reg);
-          AddLiveUnitOnce(lrid, b, lrset, *reg);
+          AddLiveUnitOnce(lrid, blk, lrset, *reg);
         }
       } 
     }
@@ -365,13 +396,13 @@ void BuildInitialLiveRanges(Arena chow_arena)
     //Now add in the live_out set to the variables that include this
     //block in their live range
     Liveness_Info info;
-    info = SSA_live_out[id(b)];
+    info = SSA_live_out[id(blk)];
     for(unsigned int j = 0; j < info.size; j++)
     {
       //add block to each live range
       lrid = SSAName2OrigLRID(info.names[j]);
       //VectorSet_Insert(lrset, lrid);
-      AddLiveUnitOnce(lrid, b, lrset, info.names[j]);
+      AddLiveUnitOnce(lrid, blk, lrset, info.names[j]);
     }
 
     //now that we have the full set of lrids that need to include this
@@ -397,13 +428,6 @@ void BuildInitialLiveRanges(Arena chow_arena)
       }
     }
   }
-
-
-  //compute where the loads and stores need to go in the live range
-  for(LRVec::size_type i = 0; i < live_ranges.size(); i++)
-    live_ranges[i]->MarkLoadsAndStores();
-
-  Debug::LiveRange_DDumpAll(&live_ranges);
 }
 
 /*

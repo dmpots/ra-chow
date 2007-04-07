@@ -169,6 +169,7 @@ int main(Int argc, Char **argv)
 
 
   //assumes file is in first argument after the params
+  Stats::program_timer.Start();
   if (optind < argc)
     Block_Init(argv[optind]);
   else
@@ -186,6 +187,7 @@ int main(Int argc, Char **argv)
   Output(); 
 
   //dump input paramerters and allocation stats
+  Stats::program_timer.Stop();
   DumpParamTable();
   Stats::DumpAllocationStats();
 
