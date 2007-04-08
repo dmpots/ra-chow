@@ -197,6 +197,8 @@ module RegressionTest
 
   class TestDescription
     attr_reader :test_id
+    attr_reader :path
+    attr_reader :args
     attr_accessor :result
 
     def initialize(id,vals)
