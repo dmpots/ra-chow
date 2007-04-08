@@ -112,6 +112,10 @@ if __FILE__ == $0 then
         "Print the benchmarks to run and exit") {
       options.print = true
     }
+    opt.on("-g", "--progress",
+        "Print progress bar to stdout") {
+      options.progress = true
+    }
     opt.on("-Q", "--quiet-ctest",
         "Run ctest in quiet mode") {
       options.ctest_args += "-Q"
@@ -129,6 +133,7 @@ if __FILE__ == $0 then
   begin
     opts.parse!
   rescue => e
+    puts "ERROR: #{e}"
     puts opts.help
     exit
   end
@@ -165,7 +170,16 @@ if __FILE__ == $0 then
   tmpdir = File.join(Dir::tmpdir,"chowbench_#{Process.pid}_#{rand(1024)}")
   bm_runner = 
     ChowBenchmark::Runner.new(tmpdir, options.output, options.ctest_args)
+  if options.progress then
+    n = 0
+    puts "running %s benchmarks" % tests.size
+  end
   tests.each do |t|
+    if options.progress then
+      print "#"; $stdout.flush
+      n += 1
+      puts " (#{n}/#{tests.size})" if n % 50  == 0 || n == tests.size
+    end
     FileUtils.mkdir(tmpdir)
     bm_runner.run(options.algorithm, t)
     FileUtils.rm_rf(tmpdir)

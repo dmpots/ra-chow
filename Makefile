@@ -79,7 +79,7 @@ CXXFLAGS += $(INCLUDES)
 default: $(CHOW) 
 
 #top level target to build all programs
-.PHONEY: all clean clobber sync
+.PHONEY: all clean clobber sync benchmark
 all: $(ALL)
 
 
@@ -106,6 +106,9 @@ debug: $(OBJS) $(MAIN_OBJ)
 	@ $(CXX) -o $@ $(LDFLAGS) $^ $(LIBS)
 	cp debug chow
 	@ echo " -- make $@ (Done)"
+
+benchmark: $(CHOW)
+	cp $(CHOW) chow-benchmark
 
 #
 # Extra utility programs
