@@ -12,7 +12,7 @@ module ChowBenchmark
     "CPROP" => "-c",
     "COALESCE" => "-s",
     "CLEAN" => "-n",
-    "GVAL" => "-g[-n]"
+    "GVAL" => "-g[-p]"
   }
   PRE_PASSES=%w(DEAD VALNUM GVAL LAZY CPROP COALESCE DEAD)
   POST_PASSES=%w(CLEAN)
@@ -25,31 +25,33 @@ module ChowBenchmark
     SEP = "%"
     BM_SEP = "%%"
 
-    def initialize(tmpdir, outfile, chow=CHOW, ra=RA, ctest=CTEST)
+    def initialize(tmpdir, outfile,ctest_args=nil,chow=CHOW)
       @tmpdir = tmpdir
       @outfile = outfile
-      @ctest=ctest
+      @ctest = CTEST
+      @ctest += " "+ctest_args if  ctest_args
+      @chow = chow
 
       @regalloc = {}
       @regalloc[:chow] = chow
-      @regalloc[:ra] = ra
+      @regalloc[:ra] = RA
     end
 
     def run(alg, bm)
       @outfile.puts bm.path
       @outfile.puts SEP
-      @outfile.puts PRE_PASSES.join(" ")
-      @outfile.puts SEP
-      @outfile.puts POST_PASSES.join(" ")
-      @outfile.puts SEP
       @outfile.puts alg
       @outfile.puts SEP
       @outfile.puts bm.args
       if alg == :chow then
-        #call to chow to get defaults
+        #call to chow to get detailed paramerter values
+        @outfile.puts `#{@chow} #{bm.args} -y`
       end
       @outfile.puts SEP
-
+      @outfile.puts PRE_PASSES.join(" ")
+      @outfile.puts SEP
+      @outfile.puts POST_PASSES.join(" ")
+      @outfile.puts SEP
       #run ctest to gather instruction count
       FileUtils.cd(@tmpdir) do |dir|
         #run ctest here
@@ -58,13 +60,13 @@ module ChowBenchmark
         rega = @regalloc[alg]
         ctest = %Q[#{@ctest} #{bm.path} -I -i #{prepasses} ] + 
                     %Q[-"{#{rega} #{bm.args}}" #{postpasses}]
-        puts ctest
-        ##`#{ctest}`
+        ##puts ctest
+        `#{ctest}`
 
         #extract runtime stats
         statfiles = File.join(@tmpdir, "**", "*.stats")
         Dir.glob(statfiles).each do |f|
-          @outfile.puts `cat #{f}`
+          @outfile.puts File.read(f)
         end
       end
       @outfile.puts BM_SEP
@@ -92,10 +94,9 @@ if __FILE__ == $0 then
   opts = 
   OptionParser.new do |opt|
     opt.banner = 
-      "usage: benchmark [options] -a<algorithm> -f<file> [-f<file2> ...] \n"
+      "usage: benchmark [options] -f<file>\n"
       "Run benchmarks tests for chow allocator" 
     opt.separator ""
-    #arguments passed to the chow allocator
     opt.on("-f","--file T1,T2,T3", Array, "Use tests from file(s)") {|t|
       options.bmfiles = t
     }
@@ -113,11 +114,11 @@ if __FILE__ == $0 then
     }
     opt.on("-Q", "--quiet-ctest",
         "Run ctest in quiet mode") {
-      options[:ctest_args] += "--quiet-ctest"
+      options.ctest_args += "-Q"
     }
-    opt.on("-o", "--output=OUTPUT_FILE",
+    opt.on("-o", "--output OUTPUT_FILE",
         "Set the output file for the benchmarks") {|f|
-      if File.exists(f) then
+      if File.exist?(f) then
         puts "output file: #{f} already exists. I will not overwrite it"
         exit RegressionTest::EXIT_FAILURE
       else
@@ -127,7 +128,7 @@ if __FILE__ == $0 then
   end
   begin
     opts.parse!
-  rescue 
+  rescue => e
     puts opts.help
     exit
   end
@@ -135,15 +136,11 @@ if __FILE__ == $0 then
   #
   # CHECK FOR REQUIRED ARGUMENTS
   #
-  tests = []
-  options.bmfiles.each do |f|
-    tests.concat(RegressionTest::TestDSL.load(f))
-  end
-  if options.print then
-    tests.each do |t|
-      puts "%s %s %s" % [options.algorithm,t.args,t.path]
-    end
-    exit RegressionTest::EXIT_SUCCESS
+  #check for required arguments
+  if options.bmfiles.empty? then
+    $stderr.puts "ERROR:  must have -f flag"
+    $stderr.puts opts.help
+    exit
   end
 
   #
@@ -166,7 +163,8 @@ if __FILE__ == $0 then
   #
   begin
   tmpdir = File.join(Dir::tmpdir,"chowbench_#{Process.pid}_#{rand(1024)}")
-  bm_runner = ChowBenchmark::Runner.new(tmpdir, options.output)
+  bm_runner = 
+    ChowBenchmark::Runner.new(tmpdir, options.output, options.ctest_args)
   tests.each do |t|
     FileUtils.mkdir(tmpdir)
     bm_runner.run(options.algorithm, t)

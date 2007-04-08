@@ -60,7 +60,7 @@ static int process_(Param_Details*, char*);
 static const char* get_usage(Param_Help idx);
 static void usage(Boolean);
 static void Param_InitDefaults(void);
-static void DumpParamTable(void);
+static void DumpParamTable(FILE* =stderr);
 static void Output(void);
 static void EnforceParameterConsistency();
 static void CheckRegisterLimitFeasibility(void);
@@ -174,7 +174,7 @@ int main(Int argc, Char **argv)
 
   if(Params::Program::dump_params_only)
   {
-    DumpParamTable();
+    DumpParamTable(stdout);
     exit(EXIT_SUCCESS);
   }
 
@@ -364,30 +364,30 @@ static const char* get_usage(Param_Help idx)
  *==================
  *
  ***/
-void DumpParamTable()
+void DumpParamTable(FILE* outfile)
 {
   LOOPVAR i;
   Param_Details param;
   for(i = 0; i < NPARAMS; i++)
   {
     param = param_table[i];
-    fprintf(stderr, "%c: ", param.name);
+    fprintf(outfile, "%c: ", param.name);
     switch(param.type)
     {
       case INT_PARAM:
-        fprintf(stderr, "%d", *((int*)param.value));
+        fprintf(outfile, "%d", *((int*)param.value));
         break;
       case FLOAT_PARAM:
-        fprintf(stderr, "%f", *((float*)param.value));
+        fprintf(outfile, "%f", *((float*)param.value));
         break;
       case BOOL_PARAM:
-        fprintf(stderr, "%s", *((Boolean*)param.value) ? "true":"false" );
+        fprintf(outfile, "%s", *((Boolean*)param.value) ? "true":"false" );
         break;
       default:
         error("unknown type");
         abort();
     }
-    fprintf(stderr, "\n");
+    fprintf(outfile, "\n");
   }
 }
 
