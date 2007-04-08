@@ -1100,3 +1100,16 @@ However urand lost its profit to be equal with normal code motion. So
 obviously this has an effect and we should look at how this parameter
 effects other benchmarks.
 
+
+========================================================
+List of Chow Improvments
+Fri Mar 23 01:22:13 CDT 2007
+========================================================
+1) Live Range coalescing
+2) Enhanced Code Motion
+3) Rematerialization
+4) Smarter splitting - don't add useless blocks
+5) Load directly into a register rather than load and then copy
+
+
+
