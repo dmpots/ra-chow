@@ -143,6 +143,7 @@ $(SSA_DUMP): ssa_dump.o
 clean:
 	@ rm -f *.o
 	@ rm -f $(CHOW)
+	@ rm -f chow-benchmark
 	@ rm -f debug
 	@ echo " -- make clean (Done)"
 

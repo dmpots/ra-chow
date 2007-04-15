@@ -115,6 +115,7 @@ if __FILE__ == $0 then
     opt.on("-g", "--progress",
         "Print progress bar to stdout") {
       options.progress = true
+      options.ctest_args += "-Q"
     }
     opt.on("-Q", "--quiet-ctest",
         "Run ctest in quiet mode") {
@@ -175,14 +176,15 @@ if __FILE__ == $0 then
     puts "running %s benchmarks" % tests.size
   end
   tests.each do |t|
+    FileUtils.mkdir(tmpdir)
+    bm_runner.run(options.algorithm, t)
+    FileUtils.rm_rf(tmpdir)
+
     if options.progress then
       print "#"; $stdout.flush
       n += 1
       puts " (#{n}/#{tests.size})" if n % 50  == 0 || n == tests.size
     end
-    FileUtils.mkdir(tmpdir)
-    bm_runner.run(options.algorithm, t)
-    FileUtils.rm_rf(tmpdir)
   end
   rescue => e
     $stderr.puts "!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
