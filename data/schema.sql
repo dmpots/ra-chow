@@ -1,7 +1,7 @@
 --chow run data
 --sqlite3 -init schema.sql chow.db 
 
-CREATE TABLE benchmarks(
+CREATE TABLE ra_benchmarks(
   id                     INTEGER PRIMARY KEY,
   program                VARCHAR,
   family                 VARCHAR,
@@ -34,7 +34,8 @@ CREATE TABLE timings(
   function_name                  VARCHAR,
   instruction_count              INTEGER,
   calls                          INTEGER,
-  benchmark_id                   INTEGER --foreign key
+  position                       INTEGER,
+  ra_benchmark_id                INTEGER --foreign key
 );
 
 

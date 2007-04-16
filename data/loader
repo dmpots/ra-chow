@@ -20,7 +20,7 @@ module ChowBenchmark
     #
     # ActiveRecord Database classes
     #
-    class Benchmark < ActiveRecord::Base
+    class RaBenchmark < ActiveRecord::Base
       has_many :timings
       belongs_to :allocation_detail
       belongs_to :optimization
@@ -35,6 +35,7 @@ module ChowBenchmark
     end
     class Timing < ActiveRecord::Base
       belongs_to :benchmark
+      acts_as_list :scope => :ra_benchmark_id
     end
   end
 
@@ -231,12 +232,12 @@ File.open(options.bmfile) do |f|
     DB.new(options.database)
 
     begin
-    DB::Benchmark.transaction do
+    DB::RaBenchmark.transaction do
       results.each do |r|
         #
         # Create Benchmark
         #
-        bm = DB::Benchmark.new({
+        bm = DB::RaBenchmark.new({
           :program => r.program,
           :family  => r.family
         })
