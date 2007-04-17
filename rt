@@ -21,7 +21,7 @@ DEBUG_TESTS=["fmm/fmin"]
 #DEBUG_TESTS=["spec/doduc"]
 
 #PARSE COMMAND LINE ARGUMENTS
-chow_args = "-r32 -p"
+chow_args = "-r32"
 ctest_args = ""
 selected_tests = QUICK_TESTS
 exit_on_failure= false
