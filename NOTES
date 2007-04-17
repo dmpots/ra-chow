@@ -945,6 +945,70 @@ So the majority of this entry was mostly a bunch of random jibberish.
 I have kept it around in case it helps jog my memory at some point.
 The "final" solution is right below
 
+Briggs, Cooper, Torczan talk about
+splitting live ranges by inserting a copy so that the rematerializable
+can be spilled separately. For example the following code is in SSA
+form
+
+
+                  x <-  7          y <- ?
+                    \              /
+                     \            /
+                      \          /
+                       \        /
+                        \      /
+                         \   /
+                       z <- phi(x,y)
+                           |
+                           |
+                           |
+                           |
+                         <- z
+
+Is converted to the form below.  A copy is inserted at (A) and the phi
+node result (z) and the paramerter (y) are unioned together. The copy
+is inserted because (x) can not be unioned with (z) since they have
+different tags. This copy is what allows the live range to be split.
+If the resulting live range will not be spilled, then they will
+coalesce the copy back so that it is only one live range.
+
+ 
+                  x <-  7          z <- ?
+                    \              /
+                     \            /
+                      \          /
+                       \        /
+                        \      /
+                (A)   z <- x  /
+                         \   /
+                           |
+                           |
+                           |
+                           |
+                          <- z
+ 
+Inserting copies like this will cause problems for chow. For one thing
+chow does not do copy coalescing. Another reason is that you would
+have to represent the live ranges as two separate live ranges, not as
+a single live range that has been split. The reason is that a basic
+block can only belong to one part of the split live range not to both
+parts. Tim suggested trying something like t <- x, z <- t in order to
+connect the live ranges where t > #machine_regs. This might work but
+you have to rely on peep to do the cleanup and may have to create new
+blocks to split the copies around which would increase processing
+time.
+
+A more natural way to implement rematerialization in chow is to
+leverage the splitting mechanism already built into chow. This means
+that we find the tags as normal and then when building the live ranges
+if we are unioning together at a phi node two live ranges that have
+different tags we would instead note that the live ranges should be
+split. We create the initial live range and then split out the part
+that is rematerializable. We then run the allocation as normal. We
+rely on dead code elimination to get rid of useless stores. Also, if
+both live ranges are given a register then we replace the load,store
+pair with a register to register copy (enhanced code motion).
+
 The core observation is that even if we mark part of the live range as
 rematerializable we have to keep the stores at the live range
 boundaries and if it is spilled. This is true because we don't know if
