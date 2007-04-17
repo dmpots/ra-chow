@@ -107,7 +107,7 @@ debug: $(OBJS) $(MAIN_OBJ)
 	cp debug chow
 	@ echo " -- make $@ (Done)"
 
-benchmark: $(CHOW)
+chow-benchmark: $(CHOW) 
 	cp $(CHOW) chow-benchmark
 
 #

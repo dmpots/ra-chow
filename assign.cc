@@ -654,17 +654,20 @@ GetFreeTmpReg(LRID lrid,
   {
     debug("lrid: %d kicked out of reg: %d", evictedLRID,tmpReg->machineReg);
     assert(GetMachineRegAssignment(blk, evictedLRID) == tmpReg->machineReg);
+    bool inserted_store = false;
     
     //store the register if this eviction is not for a FRAME statement
     if(op->opcode != FRAME)
     {
-      //if we did not need a store then note that no live range was
-      //evicted so that we don't insert a load when we unevict
-      if(!InsertEvictedStore(evictedLRID, regContents, tmpReg, 
-                            origInst, updatedInst, blk))
-      {
-        evictedLRID = NO_LRID;
-      }
+      inserted_store = 
+        InsertEvictedStore(evictedLRID, regContents, tmpReg, 
+                            origInst, updatedInst, blk);
+    }
+    //if we did not need a store then note that no live range was
+    //evicted so that we don't insert a load when we unevict
+    if(!inserted_store || op->opcode == FRAME)
+    {
+      evictedLRID = NO_LRID;
     }
   }
   regContents->evicted->push_back(std::make_pair(evictedLRID,tmpReg));
