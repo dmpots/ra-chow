@@ -57,6 +57,8 @@ struct RegisterContents
   AssignedRegMap* regMap;     //map from lrid -> AssignedReg*
   AssignedRegList* reserved;  //all reserved registers
   RegisterClass::RC rc;       //register class for these contents
+  //iterator for using reserved regs in a round robin fashion
+  AssignedRegList::iterator roundRobinIt;  
 }; 
 
 /* local variables */
@@ -73,7 +75,7 @@ GetFreeTmpReg(LRID lrid,
                  const RegisterList& instUses,
                  const RegisterList& instDefs);
 
-AssignedReg* FindUsableReg( const std::vector<AssignedReg*>* reserved,
+AssignedReg* FindUsableReg( RegisterContents* reg_contents,
                             Inst* inst,
                             RegPurpose purpose,
                             const RegisterList& instUses);
@@ -155,6 +157,8 @@ void Init(Arena arena)
       rr->free = TRUE; 
       reg_contents[rc].reserved->push_back(rr);
     }
+    //set starting point for round robin usage
+    reg_contents[rc].roundRobinIt = reg_contents[rc].reserved->begin();
 
     //now build the list of all remaining machine registers for this
     //register class.
@@ -550,7 +554,7 @@ GetFreeTmpReg(LRID lrid,
   //register so now is the time to do it.
   {
     AssignedReg* tmpReg;
-    tmpReg = FindUsableReg(reserved, origInst, purpose, instUses);
+    tmpReg = FindUsableReg(regContents, origInst, purpose, instUses);
     if(tmpReg != NULL)
     {
       debug("found a reserved register that we can evict");
@@ -808,25 +812,67 @@ void RemoveUnusableReg(std::list<AssignedReg*>& potentials,
 }
 
 
-AssignedReg* FindUsableReg(const std::vector<AssignedReg*>* reserved,
+/*
+ *=====================
+ * FindUsableReg()
+ *=====================
+ * Attempts to find a register among the reserved registers that can
+ * be used as a temporary register in this instruction. A reserved
+ * register can be used if it is not currently in use for this
+ * instruction. See AssignedReg_Usable for the actual predicate used.
+ *
+ * We attempt to do a round robin eviction pattern of reserved
+ * registers. That is we try evicting all other reserved registers
+ * before evicting the same reserved register again. The round
+ * robinness is not precise since we just keep a pointer to the last
+ * one evicted and start a linear search from there. This should catch
+ * most common cases so we are not evicting a register we just used
+ * previously and need again shortly. We might be able to improve on
+ * this by doing a real round robin, or even better using belady's
+ * algorithm to kick out the guy used fartherst in the future.
+ */
+AssignedReg* FindUsableReg(RegisterContents* regContents,
                             Inst* inst,
                             RegPurpose purpose,
                             const RegisterList& instUses)
 {
   AssignedReg* usable = NULL;
- // ReservedIterator reservedIt;
-  std::vector<AssignedReg*>::const_iterator reservedIt;
-  reservedIt = find_if(reserved->begin(),
+  AssignedRegList* reserved = regContents->reserved;
+  AssignedRegList::iterator last_chosen = regContents->roundRobinIt;
+  AssignedRegList::iterator reservedIt;
+
+  //search from last reg chosen to end of list
+  reservedIt = find_if(++last_chosen,
                        reserved->end(),
                        AssignedReg_Usable(inst, purpose, instUses));
-  if(reservedIt != reserved->end())
+
+  bool found = false;
+  if(reservedIt != reserved->end()) 
+  {
+    debug("found usable reg in [last chosen, end)");
+    found = true;
+  }
+  else //seach from beginning of list to last chosen
+  {
+    //include last chosen in the search. taken care of by ++ op above
+    reservedIt = find_if(reserved->begin(),
+                         last_chosen,
+                         AssignedReg_Usable(inst, purpose, instUses));
+    if(reservedIt != last_chosen)
+    {
+      debug("found usable reg in [begin, last chosen+1)");
+      found = true;
+    }
+  }
+  if(found)
   {
     usable = *reservedIt;
+    regContents->roundRobinIt = reservedIt;
+    debug("setting last chosen to: %d", (*reservedIt)->machineReg);
   }
 
   return usable;
 }
-
 
 RegisterContents* RegContentsForLRID(LRID lrid)
 {
