@@ -35,6 +35,10 @@ module ChowBenchmark
       @regalloc = {}
       @regalloc[:chow] = chow
       @regalloc[:ra] = RA
+
+      #write current time in header
+      outfile.puts "@@ #{Time.now}"
+      outfile.puts BM_SEP
     end
 
     def run(alg, bm)
