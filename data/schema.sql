@@ -5,8 +5,7 @@ CREATE TABLE ra_benchmarks(
   id                     INTEGER PRIMARY KEY,
   program                VARCHAR,
   family                 VARCHAR,
-  optimization_id        INTEGER, --foreign key
-  allocation_detail_id   INTEGER, --foriegn key
+  configuration_id       INTEGER, --foreign key
   created_on   datetime
 );
 
@@ -36,6 +35,20 @@ CREATE TABLE timings(
   calls                          INTEGER,
   position                       INTEGER,
   ra_benchmark_id                INTEGER --foreign key
+);
+
+CREATE TABLE uploads(
+  id                             INTEGER PRIMARY KEY,
+  filename                       VARCHAR,
+  rundate                        datetime,
+  created_on                     datetime
+);
+
+CREATE TABLE configurations(
+  id                     INTEGER PRIMARY KEY,
+  optimization_id        INTEGER, --foreign key
+  allocation_detail_id   INTEGER, --foriegn key
+  upload_id              INTEGER --foriegn key
 );
 
 

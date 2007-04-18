@@ -22,20 +22,27 @@ module ChowBenchmark
     #
     class RaBenchmark < ActiveRecord::Base
       has_many :timings
-      belongs_to :allocation_detail
-      belongs_to :optimization
+      belongs_to :configuration
 
-      validates_presence_of :allocation_detail_id, :optimization_id
+      validates_presence_of :configuration_id
     end
     class Optimization < ActiveRecord::Base
-      has_many :benchmarks
+      has_many :configurations
     end
     class AllocationDetail < ActiveRecord::Base
-      has_many :benchmarks
+      has_many :configurations
     end
     class Timing < ActiveRecord::Base
-      belongs_to :benchmark
+      belongs_to :ra_benchmark
       acts_as_list :scope => :ra_benchmark_id
+    end
+    class Upload < ActiveRecord::Base
+      has_many :configurations
+    end
+    class Configuration < ActiveRecord::Base
+      belongs_to :allocation_detail
+      belongs_to :optimization
+      belongs_to :upload
     end
   end
 
@@ -44,12 +51,16 @@ module ChowBenchmark
   #
   class OutputParser
     def self.parse(inputfile, sep="%%")
+      rundate = Time.now
       results = []
       inputfile.read.split(/^#{sep}/).each do |sec|
         next if sec ==  "\n" || sec == ""
-        results << BenchmarkResult.new(sec)
+        if sec =~ /^@@/ then rundate = Time.parse(sec[2..-1])
+        else
+          results << BenchmarkResult.new(sec)
+        end
       end
-      results
+      [rundate,results]
     end
   end
 
@@ -219,7 +230,7 @@ end
 #
 File.open(options.bmfile) do |f|
   puts "parsing file"
-  results = ChowBenchmark::OutputParser.parse(f)
+  rundate,results = ChowBenchmark::OutputParser.parse(f)
   if options.print then 
     results.each do |r| 
       puts "-----------------------------------------"
@@ -233,13 +244,18 @@ File.open(options.bmfile) do |f|
 
     begin
     DB::RaBenchmark.transaction do
+      #
+      # Create Upload Row 
+      #
+      upload = DB::Upload.create(:filename => options.bmfile,
+                                 :rundate => rundate)
       results.each do |r|
         #
         # Create Benchmark
         #
         bm = DB::RaBenchmark.new({
           :program => r.program,
-          :family  => r.family
+          :family  => r.family,
         })
 
         #
@@ -254,7 +270,7 @@ File.open(options.bmfile) do |f|
             :post_passes => r.post_pass
           })
         end
-        bm.optimization = optimization
+        ##bm.optimization = optimization
         ##bm.optimization_id = optimization.id
 
         #
@@ -297,8 +313,26 @@ File.open(options.bmfile) do |f|
             })
           end
         end
-        bm.allocation_detail = detail 
+        ##bm.allocation_detail = detail 
         ##bm.allocation_detail_id = detail.id
+
+        #
+        # Create or find Configuration
+        #
+        configuration = 
+          DB::Configuration.find(:first,
+            :conditions => ['allocation_detail_id = ? AND optimization_id = ?
+            AND upload_id = ?', detail.id, optimization.id, upload.id]
+          )
+        if configuration.nil? then
+        configuration = 
+          DB::Configuration.create(
+            :allocation_detail => detail,
+            :optimization => optimization,
+            :upload  => upload
+          )
+        end
+        bm.configuration = configuration
 
         #
         # Create BenchmarkData
