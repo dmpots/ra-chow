@@ -591,21 +591,21 @@ Fri Jan 19 11:27:22 CST 2007
 ========================================================
 In simp.i we see the following code
 
-_main:	0	FRAME	36 => r555 r1  [ i i ] 	# function prologue
-	0	iSSTor	@SPILL_1_1 4 12 r555 r1 
-	3	iLDI	1 => r3 
-	3	i2i	r3 => r4 
-	4	iADDI	0 r555 => r5 	# get address of main_k
-	4	iLDI	0 => r6 
-	4	iSSTor	@main_k_0 4 0 r5 r6 
-	7	i2i	r4 => r7 
-	7	iLDI	0 => r2 
-	0	iSSTor	@SPILL_7_7 4 16 r555 r2 
-	0	iSLDor	@SPILL_7_7 4 16 r555 => r1 
-	7	iCMPne	r7 r1 => r1 
-	0	iSSTor	@SPILL_8_8 4 20 r555 r1 
-	0	iSLDor	@SPILL_8_8 4 20 r555 => r1 
-	7	BR	L1_main L4_main r1 
+_main:  0 FRAME 36 => r555 r1  [ i i ]  # function prologue
+  0 iSSTor  @SPILL_1_1 4 12 r555 r1 
+  3 iLDI  1 => r3 
+  3 i2i r3 => r4 
+  4 iADDI 0 r555 => r5  # get address of main_k
+  4 iLDI  0 => r6 
+  4 iSSTor  @main_k_0 4 0 r5 r6 
+  7 i2i r4 => r7 
+  7 iLDI  0 => r2 
+  0 iSSTor  @SPILL_7_7 4 16 r555 r2 
+  0 iSLDor  @SPILL_7_7 4 16 r555 => r1 
+  7 iCMPne  r7 r1 => r1 
+  0 iSSTor  @SPILL_8_8 4 20 r555 r1 
+  0 iSLDor  @SPILL_8_8 4 20 r555 => r1 
+  7 BR  L1_main L4_main r1 
 
 The store/load in the middle and end should not exist. we are storing
 and then loading from the same location. if we know we have that lr in
@@ -1175,5 +1175,47 @@ Fri Mar 23 01:22:13 CDT 2007
 4) Smarter splitting - don't add useless blocks
 5) Load directly into a register rather than load and then copy
 
+
+========================================================
+Interesting newsgroup post
+Tue Apr 17 11:41:21 CDT 2007
+========================================================
+http://compilers.iecc.com/comparch/article/89-11-053
+...
+I think the Chow .VS. Chatin could be summarized as: Chow:
+pre-generation(color on intermedite, partitioned register set) goal
+directed allocation uses range splitting Chatin: post-generation
+(color on instructions, uniform register usage) goal directed
+spilling.  range is true live range, but no other splitting done.  And
+the questions become:
+  Which method has better information to do the cost analysis?
+  Which method deals best with the "registers affect the code, code
+    affects the registers" probem?
+  When does spilling give sub-optimial results?
+  What is the effect of range splitting?
+
+========================================================
+Chow generates dead code
+Tue Apr 17 12:18:47 CDT 2007
+========================================================
+Chow does generate some dead code due to spill code for unallocated
+local variables. If a live range is a local variable that gets spilled
+and it is used before it needs to be loaded then the spill will be
+dead. The code below shows this (from spline.i:202). The stores to
+136,144 are never loaded anywhere. Dead code elimination deletes them
+
+	66	dMUL	r130 r131 => r100 
+  0 dSSTor  @SPILL_137(128) 8 128 r555 r100   #STORE 137_137
+  66  dSUB  r103 r104 => r100 
+  0 dSSTor  @SPILL_138(136) 8 136 r555 r100   #STORE 138_138
+  0 dSLDor  @SPILL_137(128) 8 128 r555 => r101  #LOAD 137_137
+  66  dDIV  r101 r100 => r100 
+  0 dSSTor  @SPILL_139(144) 8 144 r555 r100   #STORE 139_139
+  66  dSTor @*c 4 0 r6 r100 
+  0 JMPl  LL0003 
+
+One question about this why does the dSUB use r100 again? It should
+choose r101 and in that case it would not need the load for 137_137
+and the store to 137_137 would be dead as well.
 
 
