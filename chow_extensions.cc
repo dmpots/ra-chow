@@ -116,12 +116,16 @@ void EnhancedCodeMotion(Edge* edg, Block* blkLD)
           cdIT != ordered_copies.end();
           cdIT++)
       {
-        //better than the other.
         //insert the copy in the newly created block right
         //before the last instruction. this will ensure that the
         //copies are sandwiched between the loads and stores in
         //this block (when they are inserted below) which is 
-        //necessary for correct code
+        //necessary for correct code since with enhanced code motion
+        //we always move loads and stores onto edges. if there is
+        //only one edge between the blocks then the loads move to the
+        //top block and the stores move to the bottom block which will
+        //cause problems when you load and store from same register
+        //but for different live ranges.
         Spill::InsertCopy(cdIT->src_lr, cdIT->dest_lr,
                           Block_LastInst(blkLD),
                           cdIT->src_reg, cdIT->dest_reg, BEFORE_INST);

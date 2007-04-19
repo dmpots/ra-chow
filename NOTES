@@ -923,7 +923,7 @@ x => y
 y => z
 z => x
 
-In cases (II),(III) there is no ordering of the copies that will
+In cases (I),(III) there is no ordering of the copies that will
 preserve the meaning of the code (that it had in terms of load
 stores). This is because we must always write at least one value
 before it is used. This could be prevented by using temporaries, but
@@ -932,7 +932,7 @@ and revert to just insterting loads and stores instead of inserting
 any copies. We could also improve by inserting load stores only for
 the registers involved in a cyclic copy.
 
-Case (I) can be solved by ordering the copies so that values are used
+Case (II) can be solved by ordering the copies so that values are used
 before they get overwritten. In this case we would order y => z before
 x => y.
 
@@ -1218,4 +1218,69 @@ One question about this why does the dSUB use r100 again? It should
 choose r101 and in that case it would not need the load for 137_137
 and the store to 137_137 would be dead as well.
 
+========================================================
+The problem with heat.i
+Thu Apr 19 00:44:06 CDT 2007
+========================================================
+Two actually:
+  1) there are SSA variables with no use-def chain entries. this makes
+  my code unhappy. i put in a test to detect it. It looks like the
+  variables are converted to NOPs but the SSA_def_count is never
+  updated. blech.
+
+  2) It uses a JMPT (jump table) which causes some problems with my
+  enhanced code motion. When using enhanced code motion and moving a
+  load onto the edge it will add a buffer block in between the JMPT
+  and dest block. The JMPT instruction gets updated correctly, but the
+  actual table (just some static data identified by a label) does not.
+  This code shows what is happening.
+
+                  L_TABLE:
+                    L_BLK_1
+                    L_BLK_2
+                    L_BLK_3
+
+                  SOME_BLOCK:
+                    LD   x => r1 #index into the table
+                    JMPT L_TABLE r1 [L_BLK_1 NEW_BLK L_BLK_3]
+
+                  NEW_BLK:
+                    LD
+                    JMP L_BLK_2
+
+                  L_BLK_2:
+                    code code code ...
+
+========================================================
+Why we always split edges for EnhancedCodeMotion
+Thu Apr 19 01:33:50 CDT 2007
+========================================================
+Ok, so why exactly must you always split edges when doing enhanced
+code motion?  The reason is because with enhanced code motion we move
+loads and stores onto edges even if there is just one successor in
+order to catch pairs that can be converted to copies. So we
+have code like
+
+
+        L1:                       L1:
+          .                         .
+          .                         .
+          .                         .
+          ST Y, r2                  JMP L2
+          JMP L2
+                                  LD X, r2
+            |                       |
+            |         =====>        |
+            |                       |
+            v                       v
+                                  ST Y, r2
+           
+          L2:                     L2:
+            LD X, r2                .
+            .                       .
+            .                       .
+            
+Then we must create a new block on the edge. Otherwse the ST would
+store r2 after LD loads a new value to r2 which is clearly incorrect
+code.
 
