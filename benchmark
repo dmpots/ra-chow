@@ -15,7 +15,7 @@ module ChowBenchmark
     "GVAL" => "-g[-p]"
   }
   PRE_PASSES=%w(DEAD VALNUM GVAL LAZY CPROP COALESCE DEAD)
-  POST_PASSES=%w(CLEAN)
+  POST_PASSES=%w(DEAD CLEAN)
 
   RA="/home/compiler/bin/ra"
   CTEST="/home/compiler/bin/ctest"
