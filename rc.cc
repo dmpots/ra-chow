@@ -187,13 +187,19 @@ void CreateLiveRangeTypeMap(Arena arena, Unsigned_Int lr_count)
     {
       def_type = c.op_pointer.phi_node->def_type;
     }
-    else
+    else if(c.op_pointer.operation != NULL)
     {
       def_type = Operation_Def_Type(c.op_pointer.operation, i);
+    }
+    else
+    {
+      error("no use def chain for SSA name: %d", i);
+      def_type = NO_DEFS;
     }
     debug("LRID: %3d ==> Type: %d", SSAName2OrigLRID(i), def_type);
     mLrId_DefType[SSAName2OrigLRID(i)] = def_type;
   }
+  debug("done creating type map");
 }
 
 

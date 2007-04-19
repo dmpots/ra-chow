@@ -409,7 +409,7 @@ void BuildInterferences(Arena arena)
     //block we can add the live units to the live ranges and update
     //the interference graph
     Unsigned_Int v, i;
-    debug("LIVE SIZE: %d\n", VectorSet_Size(lrset));
+    debug("LIVE SIZE: %d\n", SparseSet_Size(lrset));
     SparseSet_ForAll(v, lrset)
     {
       lr = live_ranges[v];
