@@ -3,62 +3,49 @@ require 'tests/paths'
 
 #---------------------- REG=32 ---------------------------#
 expand HCT do |path|
-  #agressive basic block splittin
-##  test path, :args => '-r32 -b3 -p'
-  test path, :args => '-r32 -b3 -pm'
+  #single register set
+  test path, :args => '-r32 -p'
 
-  #one more basic block length
-##  test path, :args => '-r32 -b10 -pm'
-  test path, :args => '-r32 -b10 -pm'
+  #agressive basic block splitting
+  test path, :args => '-r32 -b3 -m'
+
+  #easier basic block length
+  test path, :args => '-r32 -b10 -m'
+
+  #enhanced code motion
+  test path, :args => '-r32 -b5 -e'
 end
 
 #---------------------- REG=16 ---------------------------#
-#doduc and fpppp do not have enough registers to pass
 expand HCT do |path|
-  #easiest set of options
-##  test path, :args => '-r16 -b3 -p',
-##       :skip => [:doduc, :fpppp, :rkf45, :wave5X]
-  test path, :args => '-r16 -b3 -pm',
+  #agressive basic block splitting
+  test path, :args => '-r16 -b3 -m',
        :skip => [:doduc, :fpppp, :rkf45, :wave5X]
 
-##  test path, :args => '-r16 -b10 -p',
-##       :skip => [:doduc, :fpppp, :rkf45, :wave5X]
-  test path, :args => '-r16 -b10 -pm',
+  #easier basic block length
+  test path, :args => '-r16 -b10 -m',
        :skip => [:doduc, :fpppp, :rkf45, :wave5X]
-end
 
-#----------------------- REG=1 ----------------------------#
-#stress test by allocating using the minimum number of registers
-expand HCT do |path|
-  test path, :args => '-r1 -b5 -pm -f'
+  #enhanced code motion
+  test path, :args => '-r16 -b5 -ef'
 end
 
 #------------------ MINIMUM REG (>16) ---------------------#
-['-b3 -pm', '-b10 -pm'].each do |a|
+['-b3 -m', '-b10 -m'].each do |a|
   test DODUC,  :args => '-r19 '+a, :comment => 'lowest reg < 32'
   test FPPPP,  :args => '-r27 '+a, :comment => 'lowest reg < 32'
   test RKF45,  :args => '-r24 '+a, :comment => 'lowest reg < 32'
   test WAVE5X, :args => '-r25 '+a, :comment => 'lowest reg < 32'
 end
-##test DODUC,  :args => '-r19 -b3 -p', :comment => 'lowest reg < 32'
-##test FPPPP,  :args => '-r27 -b3 -p', :comment => 'lowest reg < 32'
-##test RKF45,  :args => '-r24 -b3 -p', :comment => 'lowest reg < 32'
-##test WAVE5X, :args => '-r25 -b3 -p', :comment => 'lowest reg < 32'
 
-##test DODUC,  :args => '-r19 -b3 -pm', :comment => 'lowest reg < 32'
-##test FPPPP,  :args => '-r27 -b3 -pm', :comment => 'lowest reg < 32'
-##test RKF45,  :args => '-r24 -b3 -pm', :comment => 'lowest reg < 32'
-##test WAVE5X, :args => '-r25 -b3 -pm', :comment => 'lowest reg < 32'
+#----------------------- REG=1 ----------------------------#
+expand HCT do |path|
+  #stress test by allocating using the minimum number of registers
+  test path, :args => '-r1 -b2 -e -f'
+end
 
-#bb = 10
-##test DODUC,  :args => '-r19 -b10 -p', :comment => 'lowest reg < 32'
-##test FPPPP,  :args => '-r27 -b10 -p', :comment => 'lowest reg < 32'
-##test RKF45,  :args => '-r24 -b10 -p', :comment => 'lowest reg < 32'
-##test WAVE5X, :args => '-r25 -b10 -p', :comment => 'lowest reg < 32'
-
-##test DODUC,  :args => '-r19 -b10 -pm', :comment => 'lowest reg < 32'
-##test FPPPP,  :args => '-r27 -b10 -pm', :comment => 'lowest reg < 32'
-##test RKF45,  :args => '-r24 -b10 -pm', :comment => 'lowest reg < 32'
-##test WAVE5X, :args => '-r25 -b10 -pm', :comment => 'lowest reg < 32'
-
+#----------------- EXPECTED FAILURES  ---------------------#
+test DODUC, :args => '-r32 -b3 -pm', 
+            :expected => :XFAIL,
+            :comment => 'i2c failure for phi node with two types'
 
