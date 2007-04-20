@@ -141,7 +141,6 @@ RewriteControlFlow(Block* blkPred, Block* blkSucc, Block* blkOldSucc)
         } 
       i++; 
     }
-
   }
   else //look in the constants of the instruction
   {
@@ -169,10 +168,50 @@ RewriteControlFlow(Block* blkPred, Block* blkSucc, Block* blkOldSucc)
     }
   }
   assert(found_label);
-  //save the new label
+  //save the new label in the instruction
+  Expr old_label = op->arguments[label_indx];
   op->arguments[label_indx] = new_label;
   debug("found label for cloned block, overwriting with: %s" ,
          Label_Get_String(new_label));
+
+  //if using a jump table we must fix the label in the static data
+  //area as well
+  if(op->opcode == JMPT)
+  {
+    debug("opcode is JMPT - fixing static data area");
+    assert(static_code_list); //must have it if there is a JMPT
+
+    Expr jmptab_label = op->arguments[0];
+    debug("jump table lable is: %s", Label_Get_String(jmptab_label));
+    Static_Code_List* scl = static_code_list;
+    do
+    {
+      debug("looking at static label: %s",
+            Label_Get_String(scl->label->label));
+      if(scl->label->label == jmptab_label)
+      {
+        debug("found jmp table label");
+        debug("attempting to replace iDATA label: %s",
+                  Label_Get_String(old_label));
+        Static_Code_Node* scn = scl->operation_list;
+        do
+        {
+          debug("looking at iDATA label: %s",
+                  Label_Get_String(scn->expression));
+          if(scn->expression == old_label)
+          {
+            debug("found old label in jump table, replacing with: %s", 
+                  Label_Get_String(new_label));
+            scn->expression = new_label;
+          }
+          scn = scn->next_operation;
+        }while(scn != scl->operation_list);
+        break;
+      }
+
+      scl = scl->next_list;
+    } while (scl != static_code_list);
+  }
 
   debug("control flow fixed");
 }
