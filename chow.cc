@@ -287,7 +287,10 @@ void BuildInitialLiveRanges(Arena chow_arena)
       Phi_Node_ForAllParms(v, phi)
       {
         if(*v != 0)
+        {
           set = UFSet_Union(set, Find_Set(*v));
+          debug("union: %d U %d = %d(setid)", phi->new_name, *v, set->id);
+        }
       }
     }
   }
@@ -368,12 +371,13 @@ void BuildInterferences(Arena arena)
       //the orig_name for the live range, this must be so because we
       //use that name in the use-def chains to decide where to put a
       //store for the defs of a live range
+      debug("processing inst:\n%s", Debug::StringOfInst(inst));
       Inst_ForAllOperations(op, inst)
       {
         Operation_ForAllDefs(reg, *op)
         {
-          debug("DEF: %d", *reg);
           lrid = SSAName2OrigLRID(*reg);
+          debug("r%d --> %d (lrid)", *reg, lrid);
           //better not have two definitions in the same block for the
           //same live range
           assert_same_orig_name(lrid, *reg, lrset, blk); 
@@ -386,7 +390,6 @@ void BuildInterferences(Arena arena)
 
         Operation_ForAllUses(reg, *op)
         {
-          debug("USE: %d", *reg);
           lrid = SSAName2OrigLRID(*reg);
           AddLiveUnitOnce(lrid, blk, lrset, *reg);
         }

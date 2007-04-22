@@ -1284,3 +1284,36 @@ Then we must create a new block on the edge. Otherwse the ST would
 store r2 after LD loads a new value to r2 which is clearly incorrect
 code.
 
+========================================================
+Why we can't just union live ranges at a copy
+Sat Apr 21 23:03:27 CDT 2007
+========================================================
+This is probably really obvious, but I thought that we might be able
+to just union live ranges at copy operations. Turns out this is not a
+good idea. I got the idea after reading Briggs,Cooper,Torczan on
+rematerialization where they say you can union copies if they are
+defined by the same inst type. This does not run into problems because
+it selectivly unions live ranges at phi nodes. If you are not
+selective about it then you will run into bad times as the following
+code shows:
+
+                             x <- 
+                            / \
+                           /   \
+                          /     \
+                         /       \
+                        /         \
+                     y <- x      y <- z
+                        \         /
+                         \       /
+                          \     /
+                           \   /
+                            \ /
+                           y <- phi(y,y)
+                           <- y
+                           <- x
+                           <- z
+
+In this case we do not want to union x,y,z as they are not all part of
+the same live range.
+ 
