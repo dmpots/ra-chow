@@ -21,6 +21,7 @@ namespace Params {
     extern float loop_depth_weight;
     extern bool enhanced_code_motion;
     extern bool move_loads_and_stores;
+    extern bool rematerialize;
   }
   namespace Program {
     extern bool force_minimum_register_count;

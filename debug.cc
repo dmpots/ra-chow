@@ -245,6 +245,13 @@ const char* StringOfInst(Inst* inst)
   return inst_s.c_str();
 }
 
+const char* StringOfOp(Operation* op)
+{
+  static std::string op_s;
+  op_s = string_of_op(op);
+  return op_s.c_str();
+}
+
 }//end Debug namespace
 
 namespace {

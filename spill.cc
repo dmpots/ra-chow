@@ -21,7 +21,6 @@ namespace {
   Arena spill_arena;
 
   //local functions//
-  Operation* get_frame_operation();
   MemoryLocation Frame_GetStackSize(Operation* frame_op);
   void Frame_SetStackSize(Operation* frame_op, MemoryLocation sp);
   void Frame_SetRegFP(Operation* frame_op, Register reg);
@@ -67,7 +66,7 @@ Frame frame;
 void Init(Arena arena)
 {
   //get and keep a reference to the frame operation
-  frame.op = get_frame_operation();
+  frame.op = GetFrameOperation();
   frame.ssa_name = Frame_GetRegFP(frame.op);
 
   //initialize the stack pointer so that we have a correct value when
@@ -235,7 +234,6 @@ void InsertCopy(const LiveRange* lrSrc, const LiveRange* lrDest,
     InsertInstBefore(cp_inst, around_inst);
 }
 
-
 }//end Spill namespace 
 
 /*------------------INTERNAL MODULE FUNCTIONS--------------------*/
@@ -298,43 +296,6 @@ Variable Frame_GetRegFP(Operation* frame_op)
   return frame_op->arguments[(frame_op)->referenced];
 }
 
-
-/*
- *==========================
- * get_frame_operation()
- *==========================
- * Gets the operation corresponding to the FRAME statement in the iloc
- * code
- **/
-Operation* get_frame_operation()
-{
-  //cache the frame operation so we only have to do the lookup once
-  static Operation* frame_op = NULL;
-  if(frame_op) return frame_op;
-
-  Block* b;
-  Inst* inst;
-  Operation** op;
-  ForAllBlocks(b)
-  {
-    Block_ForAllInsts(inst, b)
-    {
-
-      Inst_ForAllOperations(op, inst)
-      {
-        //grab some info from the frame instruction
-        if((*op)->opcode == FRAME)
-        {
-          frame_op = *op;
-          return frame_op;
-        }
-      }
-    }
-  }
-
-  assert(FALSE); //should not get here
-  return NULL;
-}
 
 /*
  *===================
@@ -467,9 +428,6 @@ Inst* Inst_CreateCopy(Opcode_Names opcode,
 
   return cp_inst;
 }
-
-
-
 
 }//end anonymous namespace 
 

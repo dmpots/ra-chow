@@ -452,4 +452,41 @@ bool Block_IsLoopHeader(Block* blk)
   return  false;
 }
 
+/*
+ *==========================
+ * GetFrameOperation()
+ *==========================
+ * Gets the operation corresponding to the FRAME statement in the iloc
+ * code
+ **/
+Operation* GetFrameOperation()
+{
+  //cache the frame operation so we only have to do the lookup once
+  static Operation* frame_op = NULL;
+  if(frame_op) return frame_op;
+
+  Block* b;
+  Inst* inst;
+  Operation** op;
+  ForAllBlocks(b)
+  {
+    Block_ForAllInsts(inst, b)
+    {
+
+      Inst_ForAllOperations(op, inst)
+      {
+        //grab some info from the frame instruction
+        if((*op)->opcode == FRAME)
+        {
+          frame_op = *op;
+          return frame_op;
+        }
+      }
+    }
+  }
+
+  assert(FALSE); //should not get here
+  return NULL;
+}
+
 

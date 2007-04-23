@@ -36,6 +36,7 @@
 #for chow allocator
 ^scratch
 ^chow$
+^chow-benchmark$
 ^ssa_dump$
 ^cleave$
 ^dot_dump$
@@ -49,4 +50,7 @@
 ^dots$
 ^dotfiles$
 ^debug$
+^stats/chow
+^stats/ra
+^data/bm
 \.d$

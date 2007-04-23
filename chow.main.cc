@@ -35,7 +35,8 @@ typedef enum
   HELP_LOADSTOREMOVEMENT,
   HELP_ENHANCEDCODEMOTION,
   HELP_FORCEMINIMUMREGISTERCOUNT,
-  HELP_DUMPPARAMSONLY
+  HELP_DUMPPARAMSONLY,
+  HELP_REMATERIALIZE
 } Param_Help;
 
 
@@ -94,6 +95,7 @@ using Params::Algorithm::bb_max_insts;
 using Params::Algorithm::loop_depth_weight;
 using Params::Algorithm::move_loads_and_stores;
 using Params::Algorithm::enhanced_code_motion;
+using Params::Algorithm::rematerialize;
 using Params::Program::force_minimum_register_count;
 using Params::Program::dump_params_only;
 static Param_Details param_table[] = 
@@ -114,10 +116,12 @@ static Param_Details param_table[] =
                     &force_minimum_register_count, 
          BOOL_PARAM, HELP_FORCEMINIMUMREGISTERCOUNT},
   {'y', process_, I,F,dump_params_only,&dump_params_only,
+         BOOL_PARAM, HELP_DUMPPARAMSONLY},
+  {'z', process_, I,F,rematerialize,&rematerialize,
          BOOL_PARAM, HELP_DUMPPARAMSONLY}
 };
 const unsigned int NPARAMS = (sizeof(param_table) / sizeof(param_table[0]));
-const char* PARAMETER_STRING  = ":b:r:d:mpefy";
+const char* PARAMETER_STRING  = ":b:r:d:mpefyz";
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
 /*
@@ -353,6 +357,9 @@ static const char* get_usage(Param_Help idx)
       return "         force allocation by increasing minimum register";
     case HELP_DUMPPARAMSONLY:
       return "         dump values of allocation params and exit";
+    case HELP_REMATERIALIZE:
+      return "         rematerialize values instead of spilling";
+
     default:
       return " UNKNOWN PARAMETER\n";
   }

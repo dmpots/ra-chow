@@ -28,6 +28,7 @@
 #include "cleave.h"
 #include "depths.h" //for computing loop nesting depth
 #include "shared_globals.h" //Global namespace for iloc Shared vars
+#include "rematerialize.h" //Global namespace for iloc Shared vars
 
 
 /*------------------MODULE LOCAL DEFINITIONS-------------------*/
@@ -266,7 +267,11 @@ void BuildInitialLiveRanges(Arena chow_arena)
   ssa_options |= SSA_CONSERVE_LIVE_OUT_INFO;
   ssa_options |= SSA_IGNORE_TAGS;
   SSA_Build(ssa_options);
-  //Dump();
+
+  if(Params::Algorithm::rematerialize)
+  {
+    Remat::ComputeTags();
+  }
 
   Arena uf_arena = Arena_Create();
   UFSets_Init(uf_arena, SSA_def_count);

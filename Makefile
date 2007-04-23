@@ -25,6 +25,7 @@ SRCFILES=union_find.cc\
          stats.cc\
          mapping.cc\
          chow_extensions.cc\
+         rematerialize.cc\
 
 MAIN_SRC=chow.main.cc
 #
