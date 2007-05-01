@@ -1317,3 +1317,74 @@ code shows:
 In this case we do not want to union x,y,z as they are not all part of
 the same live range.
  
+========================================================
+Why we can't just union copies that have the same tag
+Fri Apr 27 09:42:42 CDT 2007
+========================================================
+So even if we restrict unioning copies to be the same live range that
+have the same tag we still run into problems. The issue is as follows:
+
+
+B1:
+  LD 1 -> r15
+  CP r15 -> r16
+  LD 2 -> r17
+
+B2:
+  r18 <- phi(r16, r19)
+  DIV r18, r17, -> r19
+  ADD r19, r15 -> ...
+  .
+  .
+  BRANCH B2 B3
+
+B3:
+  .
+  . 
+
+
+If we try to union r15 and r16 to be the same live range then we get
+trouble. The reason is that when we examine the phi node we see that
+we should split out r16 from r18 so they are not the same live range.
+But this means that any mention of r15 in B2 will put a live unit for
+r16 in B2. But mentions of r18 will put a live unit for r18. This
+means that we have a split live range that both have live units in the
+same block. This causes problems with the way that we assign registers
+since we assume that split live ranges are not overlapping.
+Programatically we store based on orig_lrid -> reg. This means that lr
+for r16 will think it is assigned a register in B2 that is the same as
+the register for r18, even if we wanted to spill r16 in B2. This
+causes incorrect code.
+
+========================================================
+Rematerialization status
+Tue May  1 09:49:08 CDT 2007
+========================================================
+A first stab at rematerialization has been implemented, but it is not
+working correctly. Need to figure out why. Some tests are giving
+incorrect answers.
+
++ implement rematerialization
+  new
+  X run scc to get tags for each ssa name
+  X examine each copy instruction, if the source and dest values have
+    idential tags union them and remove the copy
+  X examine operands of each phi-node. if an operand value has the
+    same tag as the result value, union the values otherwise mark the
+    result and phi node param as a split live range
+
+  modify
+  X modify Mapping::CreateLiveRangeMap
+    so that live ranges that are split both map to the same orig live
+    range (which should be the ufset of the phi node result) - this
+    should not be done, actually
+  X modify Chow::BuildInital to run through the split live ranges and
+    and record the orig_lrid in the live range that was split out (the
+    rematerializable part). do this right after AllocLiveRanges
+  X mark the rematerilazble live ranges as such
+  X modify spilling to load rematerialiazible values using loadI
+  + modify the priority function to give less weight to
+    rematerializable live ranges
+  + tie rematerilize to enhanced code motion (paramerters)
+ 
+

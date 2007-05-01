@@ -106,6 +106,8 @@ void LiveRange_Dump(LiveRange* lr)
   fprintf(stderr,"color: %d\n", lr->color);
   fprintf(stderr,"orig_lrid: %d\n", lr->orig_lrid);
   fprintf(stderr,"candidate?: %c\n", lr->is_candidate ? 'T' : 'F');
+  fprintf(stderr,"rematerializable?: %c\n", lr->rematerializable 
+                                            ? 'T' : 'F');
   fprintf(stderr,"forbidden colors: \n");
     VectorSet_Dump(lr->forbidden);
   fprintf(stderr, "BB LIST:\n");

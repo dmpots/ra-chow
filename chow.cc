@@ -36,7 +36,8 @@ namespace {
   /* local functions */
   void assert_same_orig_name(LRID,Variable,SparseSet,Block* b);
   void MoveLoadsAndStores();
-  void AllocLiveRanges(Arena arena, Unsigned_Int num_lrs);
+  void FindLiveRanges(Arena uf_arena);
+  void CreateLiveRanges(Arena arena, Unsigned_Int num_lrs);
   void SplitNeighbors(LiveRange*, LRSet*, LRSet*);
   void UpdateConstrainedLists(LiveRange* , LiveRange* , LRSet*, LRSet*);
   LiveUnit* AddLiveUnitOnce(LRID, Block*, SparseSet, Variable);
@@ -268,37 +269,8 @@ void BuildInitialLiveRanges(Arena chow_arena)
   ssa_options |= SSA_IGNORE_TAGS;
   SSA_Build(ssa_options);
 
-  if(Params::Algorithm::rematerialize)
-  {
-    Remat::ComputeTags();
-  }
-
-  Arena uf_arena = Arena_Create();
-  UFSets_Init(uf_arena, SSA_def_count);
-
-  //visit each phi node and union the parameters and destination
-  //register together since they should all be part of the same live
-  //range
-  Block* b;
-  Phi_Node* phi;
-  UFSet* set;
-  Unsigned_Int* v;
-  ForAllBlocks(b)
-  {
-    Block_ForAllPhiNodes(phi, b)
-    {
-      debug("process phi: %d at %s (%d)", phi->new_name, bname(b), id(b));
-      set = Find_Set(phi->new_name);
-      Phi_Node_ForAllParms(v, phi)
-      {
-        if(*v != 0)
-        {
-          set = UFSet_Union(set, Find_Set(*v));
-          debug("union: %d U %d = %d(setid)", phi->new_name, *v, set->id);
-        }
-      }
-    }
-  }
+  //run union find over phi nodes to get initial live ranges
+  FindLiveRanges(chow_arena);
 
   unsigned int clrInitial = uf_set_count - 1; //no lr for SSA name 0
   debug("SSA NAMES: %d", SSA_def_count);
@@ -306,19 +278,16 @@ void BuildInitialLiveRanges(Arena chow_arena)
   Stats::chowstats.clrInitial = clrInitial;
 
   //create a mapping from ssa names to live range ids
-  Mapping::CreateLiveRangeNameMap(uf_arena);
+  Mapping::CreateLiveRangeNameMap(chow_arena);
+  Mapping::CreateLiveRangeTypeMap(chow_arena, clrInitial);
   Mapping::ConvertLiveInNamespaceSSAToLiveRange();
-  if(Params::Machine::enable_register_classes)
-  {
-    RegisterClass::CreateLiveRangeTypeMap(uf_arena, clrInitial);
-  }
 
   //initialize coloring structures based on number of register classes
   Coloring::Init(chow_arena, clrInitial);
 
   //now that we know how many live ranges we start with allocate them
-  Stats::ComputeBBStats(uf_arena, SSA_def_count);
-  AllocLiveRanges(chow_arena, clrInitial);
+  Stats::ComputeBBStats(chow_arena, SSA_def_count);
+  CreateLiveRanges(chow_arena, clrInitial);
 
   //find all interferenes for each live range
     Stats::Start("Build Interferences");
@@ -331,6 +300,103 @@ void BuildInitialLiveRanges(Arena chow_arena)
 
   Debug::LiveRange_DDumpAll(&live_ranges);
 }
+
+/*
+ *=============================
+ * FindLiveRanges()
+ *=============================
+ * Uses a fast union find algorithm to union phi-params to find out
+ * which values belong in the same live range
+ * 
+ */
+void FindLiveRanges(Arena uf_arena)
+{
+  UFSets_Init(uf_arena, SSA_def_count);
+
+  if(Params::Algorithm::rematerialize)
+  {
+    Remat::ComputeTags();
+  }
+
+  Block* b;
+  Phi_Node* phi;
+  UFSet* set;
+  ForAllBlocks(b)
+  {
+    //visit each phi node and union the parameters and destination
+    //register together since they should all be part of the same live
+    //range
+    Block_ForAllPhiNodes(phi, b)
+    {
+      debug("process phi: %d at %s (%d)", phi->new_name, bname(b), id(b));
+      Variable* v_ptr;
+      set = Find_Set(phi->new_name);
+      Phi_Node_ForAllParms(v_ptr, phi)
+      {
+        Variable v = *v_ptr;
+        if(v != 0)
+        {
+          //selectively union if using rematerialization
+          if(Params::Algorithm::rematerialize)
+          {
+            if(   Remat::tags[v].val == Remat::tags[phi->new_name].val
+               && Remat::tags[v].op == Remat::tags[phi->new_name].op)
+            {
+              debug("live range union ok by remat: %d",v);
+              set = UFSet_Union(set, Find_Set(v));
+            }
+            else //split live ranges
+            {
+              debug("live range split by remat: %d",v);
+              Remat::AddSplit(phi->new_name, v);
+            }
+          }
+          //no rematerialization, union at will
+          else
+          {
+            set = UFSet_Union(set, Find_Set(v));
+            debug("union: %d U %d = %d(setid)", phi->new_name, v, set->id);
+          }
+        }
+      }
+    }
+/*** NO COPY COALESCING
+    if(Params::Algorithm::rematerialize)
+    {
+      //go through copy instructions and union the src and dest if
+      //they are defined by the same inst
+      Inst* inst; Operation** op_ptr;
+      Block_ForAllInsts(inst, b)
+      {
+        Inst_ForAllOperations(op_ptr, inst)
+        {
+          Operation *op = *op_ptr;
+          unsigned int details = opcode_specs[op->opcode].details;
+
+          //look for all copies
+          if(details & COPY)
+          {
+            Variable src  = op->arguments[0];
+            Variable dest = op->arguments[1];
+            if(  Remat::tags[src].val == Remat::CONST
+              && Remat::tags[src].val == Remat::tags[dest].val
+              && Remat::tags[src].op == Remat::tags[dest].op)
+            {
+              UFSet* set = Find_Set(src);
+              set = UFSet_Union(set, Find_Set(dest)); 
+              debug("copy union opportunity: %s", Debug::StringOfOp(op));
+              //delete copy 
+              inst->prev_inst->next_inst = inst->next_inst;
+              inst->next_inst->prev_inst = inst->prev_inst;
+            }
+          }
+        }
+      }
+    }
+NO COPY COALESCING****/
+  }
+}
+
 /*
  *=============================
  * BuildInterferences()
@@ -359,6 +425,7 @@ void BuildInterferences(Arena arena)
   SparseSet lrset = SparseSet_Create(arena, live_ranges.size());
   ForAllBlocks(blk)
   {
+    debug("processing blk:%s (%d)", bname(blk), id(blk));
 
     //we need to acccount for any variable that is referenced in this
     //block as it may not be in the live_out set, but should still be
@@ -382,21 +449,18 @@ void BuildInterferences(Arena arena)
         Operation_ForAllDefs(reg, *op)
         {
           lrid = SSAName2OrigLRID(*reg);
-          debug("r%d --> %d (lrid)", *reg, lrid);
           //better not have two definitions in the same block for the
           //same live range
           assert_same_orig_name(lrid, *reg, lrset, blk); 
           AddLiveUnitOnce(lrid, blk, lrset, *reg);
-
-          //set the type of the live range according to the type
-          //defined by this operation
-          live_ranges[lrid]->type = Operation_Def_Type(*op, *reg);
+          debug("(def) %d (lrid) as r%d", lrid,*reg);
         }
 
         Operation_ForAllUses(reg, *op)
         {
           lrid = SSAName2OrigLRID(*reg);
           AddLiveUnitOnce(lrid, blk, lrset, *reg);
+          debug("(use) %d (lrid) as r%d", lrid,*reg);
         }
       } 
     }
@@ -411,6 +475,7 @@ void BuildInterferences(Arena arena)
       lrid = SSAName2OrigLRID(info.names[j]);
       //VectorSet_Insert(lrset, lrid);
       AddLiveUnitOnce(lrid, blk, lrset, info.names[j]);
+      debug("(liveout) %d (lrid) as r%d", lrid, info.names[j]);
     }
 
     //now that we have the full set of lrids that need to include this
@@ -440,12 +505,12 @@ void BuildInterferences(Arena arena)
 
 /*
  *============================
- * AllocLiveRanges()
+ * CreateLiveRanges()
  *============================
  * Allocates space for initial live ranges and sets default values.
  *
  ***/
-void AllocLiveRanges(Arena arena, Unsigned_Int num_lrs)
+void CreateLiveRanges(Arena arena, Unsigned_Int num_lrs)
 {
   using Chow::live_ranges;
 
@@ -453,11 +518,49 @@ void AllocLiveRanges(Arena arena, Unsigned_Int num_lrs)
   LiveRange::Init(arena, num_lrs);
 
   //create initial live ranges
-  live_ranges.resize(num_lrs, NULL); //allocate space
-  for(unsigned int i = 0; i < num_lrs; i++) //allocate each live range
+  live_ranges.resize(num_lrs, NULL); //allocate space for live ranges
+  for(unsigned int lrid = 0; lrid < num_lrs; lrid++) 
   {
-    live_ranges[i] = 
-      new LiveRange(RegisterClass::InitialRegisterClassForLRID(i), i);
+    live_ranges[lrid] = 
+      new LiveRange(RegisterClass::InitialRegisterClassForLRID(lrid), 
+                    lrid,
+                    Mapping::LiveRangeDefType(lrid));
+  }
+
+  //take care of rematerialization settings if needed by setting the
+  //orig_lrid of the split live range to the live range from which it
+  //was split
+  if(Params::Algorithm::rematerialize)
+  {
+    const Remat::SplitList splits = Remat::GetSplits();
+    for(Remat::SplitList::const_iterator i = splits.begin();
+        i != splits.end();
+        i++)
+    {
+      Variable ssa_orig = (*i).first;
+      Variable ssa_split = (*i).second;
+      LRID lrid_orig  = Mapping::SSAName2OrigLRID(ssa_orig);
+      LRID lrid_split = Mapping::SSAName2OrigLRID(ssa_split);
+
+      LiveRange* lr_split = live_ranges[lrid_split];
+      lr_split->orig_lrid = lrid_orig;
+
+      debug("lr: %d split from: %d", lrid_split, lrid_orig);
+    }
+
+    //run through and find the live ranges that are rematerializable
+    //and set the appropriate flags. these may exist separately from
+    //the split live ranges if the entire live range is
+    //rematerialiazible. so we set them all in this loop
+    for(unsigned int ssa_name = 0; ssa_name < SSA_def_count; ssa_name++)
+    {
+      if(Remat::tags[ssa_name].val == Remat::CONST)
+      {
+        LRID lrid = Mapping::SSAName2OrigLRID(ssa_name);
+        live_ranges[lrid]->rematerializable = true;
+        live_ranges[lrid]->remat_op = Remat::tags[ssa_name].op;
+      }
+    }
   }
 }
 

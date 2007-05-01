@@ -19,6 +19,7 @@ struct LatticeElem
   LatticeVal val;
   Operation* op;
 };
+typedef std::vector<std::pair<Variable,Variable> > SplitList;
 
 /*-------------------------VARIABLES---------------------------*/
 extern std::vector<LatticeElem> tags;
@@ -26,6 +27,8 @@ extern std::vector<LatticeElem> tags;
 /*-------------------------FUNCTIONS---------------------------*/
 void ComputeTags();
 void DumpTags();
+void AddSplit(Variable parent_ssa_name, Variable child_ssa_name);
+const SplitList& GetSplits(void);
 }
 
 #endif

@@ -22,7 +22,6 @@ namespace {
 /* local functions */
 
 /* local variables */
-Def_Type* mLrId_DefType;
 unsigned int* mRc_CReg;
 Boolean fEnableMultipleClasses = FALSE;
 VectorSet* mRc_VsTmp; 
@@ -148,7 +147,7 @@ RC InitialRegisterClassForLRID(LRID lrid)
 
   //for now just switch on type
   RC rc;
-  Def_Type def_type = mLrId_DefType[lrid];
+  Def_Type def_type = Mapping::LiveRangeDefType(lrid);
   switch(def_type)
   {
     case INT_DEF: 
@@ -166,43 +165,6 @@ RC InitialRegisterClassForLRID(LRID lrid)
 
   return rc;
 }
-
-/*
- *========================
- * RegisterClass::CreateLiveRangTypeMap
- *========================
- * Makes a mapping from live range id to def type
- */
-void CreateLiveRangeTypeMap(Arena arena, Unsigned_Int lr_count)
-                             
-{
-  using Mapping::SSAName2OrigLRID;
-  mLrId_DefType = (Def_Type*)
-        Arena_GetMemClear(arena,sizeof(Def_Type) * lr_count);
-  for(LOOPVAR i = 1; i < SSA_def_count; i++)
-  {
-    Def_Type def_type;
-    Chain c = SSA_use_def_chains[i];
-    if(c.is_phi_node)
-    {
-      def_type = c.op_pointer.phi_node->def_type;
-    }
-    else if(c.op_pointer.operation != NULL)
-    {
-      def_type = Operation_Def_Type(c.op_pointer.operation, i);
-    }
-    else
-    {
-      error("no use def chain for SSA name: %d", i);
-      def_type = NO_DEFS;
-    }
-    debug("LRID: %3d ==> Type: %d", SSAName2OrigLRID(i), def_type);
-    mLrId_DefType[SSAName2OrigLRID(i)] = def_type;
-  }
-  debug("done creating type map");
-}
-
-
 
 /*
  *========================

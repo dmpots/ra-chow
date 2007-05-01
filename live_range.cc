@@ -117,7 +117,9 @@ void LiveRange::Init(Arena arena, unsigned int counter_start)
  *============================
  * Allocates and initializes a live range 
  ***/
-LiveRange::LiveRange(RegisterClass::RC reg_class, LRID lrid)
+LiveRange::LiveRange(RegisterClass::RC reg_class, 
+                     LRID lrid, 
+                     Def_Type def_type)
 {
   orig_lrid = lrid;
   id = lrid;
@@ -130,7 +132,11 @@ LiveRange::LiveRange(RegisterClass::RC reg_class, LRID lrid)
   forbidden = 
     VectorSet_Create(LiveRange::arena, RegisterClass::NumMachineReg(rc));
   is_candidate  = TRUE;
-  type = NO_DEFS; //type will be set later
+  type = def_type; 
+
+  //fields for rematerialization
+  rematerializable = false;
+  remat_op = false;
 }
 
 /*
@@ -854,7 +860,7 @@ void LiveRange_InsertStore(LiveRange*lr, LiveUnit* unit)
  */
 LiveRange* LiveRange_SplitFrom(LiveRange* origlr)
 {
-  LiveRange* newlr = new LiveRange(origlr->rc, NO_LRID);
+  LiveRange* newlr = new LiveRange(origlr->rc, NO_LRID, origlr->type);
   newlr->orig_lrid = origlr->orig_lrid;
   newlr->id = LiveRange::counter++;
   newlr->is_candidate = TRUE;

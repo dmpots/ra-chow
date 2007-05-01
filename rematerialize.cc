@@ -13,6 +13,7 @@
 /*--------------------------INCLUDES---------------------------*/
 #include <SSA.h>
 #include <list>
+#include <utility>
 #include "rematerialize.h"
 #include "cfg_tools.h"
 
@@ -22,6 +23,9 @@ using Remat::LatticeVal;
 using Remat::LatticeElem;
 using std::vector;
 using std::list;
+
+//variables
+vector<std::pair<Variable,Variable> > splits;
 
 //functions
 void InitializeTagsAndWorklist(vector<LatticeElem>&,list<Variable>&);
@@ -34,8 +38,15 @@ bool OpersAllEqual(Operation* oper1, Operation* oper2);
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
 namespace Remat{
 using std::vector;
+using std::pair;
 vector<LatticeElem> tags;
 
+/*
+ *=============================
+ * ComputeTags()
+ *=============================
+ * Find the initial tag values for all SSA Names
+ */
 void ComputeTags()
 {
   //save space for all the tags and initailize to TOP
@@ -110,17 +121,43 @@ void ComputeTags()
   DumpTags();
 }
 
+/*
+ *=============================
+ * DumpTags()
+ *=============================
+ */
 void DumpTags()
 {
   #ifdef __DEBUG
   for(unsigned int i = 0; i < tags.size(); i++)
   {
     LatticeElem lv = tags[i];
-    const char* val = lv.val == CONST ? "CONST" : "NON-CONST";
+    const char* val =  lv.val == CONST ? "CONST" : 
+                      (lv.val == TOP ? "TOP" : "BOTTOM");
     const char* op  = lv.val == CONST ? Debug::StringOfOp(lv.op) : "";
-    debug("%s %s", val, op);
+    debug("r%d - %s %s", i, val, op);
   }
   #endif
+}
+/*
+ *=============================
+ * GetSplits()
+ *=============================
+ */
+const vector<std::pair<Variable,Variable> >& GetSplits(void)
+{
+  return splits;
+}
+
+
+/*
+ *=============================
+ * AddSplit()
+ *=============================
+ */
+void AddSplit(Variable parent_ssa_name, Variable child_ssa_name)
+{
+  splits.push_back(std::make_pair(parent_ssa_name, child_ssa_name));
 }
 
 }//end Rematerialize namespace

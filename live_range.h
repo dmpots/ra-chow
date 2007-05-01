@@ -33,7 +33,7 @@ struct LiveRange
   static unsigned int counter;
 
   /* constructor */
-  LiveRange(RegisterClass::RC rc, LRID lrid);
+  LiveRange(RegisterClass::RC rc, LRID lrid, Def_Type);
 
   /* fields */
   VectorSet bb_list;  /* basic blocks making up this LR */ 
@@ -48,6 +48,8 @@ struct LiveRange
   Boolean is_candidate; /* is possible to store this in a register */
   Def_Type type;
   RegisterClass::RC rc;
+  bool rematerializable;
+  Operation* remat_op;
 
   /* methods */
   void AddInterference(LiveRange* other);

@@ -9,6 +9,7 @@
 #include "live_range.h"
 #include "mapping.h"
 #include "cfg_tools.h"
+#include "params.h"
 
 namespace {
   //local constants//
@@ -45,6 +46,8 @@ namespace {
                              Comment_Val comment,
                              Register src,
                              Register dest);
+  Inst* CreateLightWeightLoad(LiveRange* lr, Register dest);
+  Inst* CreateHeavyWeightLoad(LiveRange*, Register, Register);
 }
 
 /*--------------------MODULE IMPLEMENTATION---------------------*/
@@ -135,25 +138,18 @@ void RewriteFrameOp()
 Inst* InsertLoad(LiveRange* lr, Inst* around_inst, Register dest, 
                           Register base, InstInsertLocation loc)
 {
-  //LiveRange* lr = Chow::live_ranges[lrid];
-  Expr tag = Spill::SpillTag(lr);
+  Inst* ld_inst = NULL;
+  if(Params::Algorithm::rematerialize && lr->rematerializable)
+  {
+    ld_inst = CreateLightWeightLoad(lr, dest);
+  }
+  else
+  {
+    ld_inst = CreateHeavyWeightLoad(lr, dest, base);
+  }
+  assert(ld_inst != NULL);
 
-  Opcode_Names opcode = lr->LoadOpcode();
-  Unsigned_Int alignment = lr->Alignment();
-  Unsigned_Int offset = Spill::SpillLocation(lr);
-  //assert(offset != MEM_UNASSIGNED); //can happen with use b4 def
-  debug("Inserting load for LR: %d, to reg: %d, from offset: %d,"
-         "base: %d", lr->id, dest, offset, base);
-
-  //generate a comment
-  char str[64];
-  sprintf(str, "LOAD %d_%d", lr->orig_lrid, lr->id); 
-  Comment_Val comment = Comment_Install(str);
-
-  Inst* ld_inst = 
-    Inst_CreateLoad(opcode, tag, alignment, comment, offset, base, dest);
-
-  //finally insert the new instruction
+  //insert the new instruction in the blocks instruction list
   if(loc == AFTER_INST)
     Block_Insert_Instruction(ld_inst, around_inst->next_inst);
   else
@@ -238,6 +234,66 @@ void InsertCopy(const LiveRange* lrSrc, const LiveRange* lrDest,
 
 /*------------------INTERNAL MODULE FUNCTIONS--------------------*/
 namespace {
+
+/*
+ *=========================
+ * CreateHeavyWeightLoad()
+ *========================
+ * Creates load using heavyweight spilling (i.e. no rematerialization)
+ **/
+Inst* CreateHeavyWeightLoad(LiveRange* lr, Register dest, Register base)
+{
+  Expr tag = Spill::SpillTag(lr);
+
+  Opcode_Names opcode = lr->LoadOpcode();
+  Unsigned_Int alignment = lr->Alignment();
+  Unsigned_Int offset = Spill::SpillLocation(lr);
+  //assert(offset != MEM_UNASSIGNED); //can happen with use b4 def
+  debug("Inserting load for LR: %d, to reg: %d, from offset: %d,"
+         "base: %d", lr->id, dest, offset, base);
+
+  //generate a comment
+  char str[64];
+  sprintf(str, "LOAD %d_%d", lr->orig_lrid, lr->id); 
+  Comment_Val comment = Comment_Install(str);
+
+  return
+    Inst_CreateLoad(opcode, tag, alignment, comment, offset, base, dest);
+}
+
+/*
+ *=========================
+ * CreateLightWeightLoad()
+ *========================
+ * Creates load using lightweight spilling (i.e. using rematerialization)
+ **/
+Inst* CreateLightWeightLoad(LiveRange* lr, Register dest)
+{
+  debug("using rematerialization to insert load to: %d with op:\n%s",
+        dest, Debug::StringOfOp(lr->remat_op));
+  const int LDI_OPSIZE = 3;
+  Operation* ld_op = (Operation*)
+    Operation_Allocate(spill_arena, LDI_OPSIZE);
+
+  //comment
+  char str[64];
+  sprintf(str, "REMATERIALIZE %d_%d", lr->orig_lrid, lr->id); 
+  Comment_Val comment = Comment_Install(str);
+
+  //copy operation used for rematerialization
+  memcpy(ld_op, lr->remat_op, sizeof(Operation));
+  ld_op->comment = comment;
+  ld_op->source_line_ref = Expr_Install_String("0");
+  ld_op->arguments[ld_op->defined-1] = dest;
+
+  //create inst and set the load op
+  Inst* ld_inst = (Inst*)Inst_Allocate(spill_arena, 1);
+  ld_inst->operations[0] = ld_op;
+  ld_inst->operations[1] = NULL;
+
+  return ld_inst;
+}
+
 /*
  *=====================
  * ReserveStackSpace()

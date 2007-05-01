@@ -28,7 +28,6 @@ namespace RegisterClass {
             Boolean fEnableClasses,
             Unsigned_Int cReserved);
   RC InitialRegisterClassForLRID(LRID lrid);
-  void CreateLiveRangeTypeMap(Arena arena, Unsigned_Int lr_count);
   unsigned int NumMachineReg(RC);
   Register MachineRegForColor(RC, Color);
   VectorSet TmpVectorSet(RC rc);
