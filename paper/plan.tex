@@ -30,23 +30,20 @@ should prune the basic blocks that are included in the live range but
 are on a path along which there is never a use.
 
 \item Heuristics for splitting to improve allocation time.\\
-  Chow's 
-  \begin{enumerate}
-  \item (used after a color has been assigned to a live range and we
+  \begin{description}
+  \item[chow] (used after a color has been assigned to a live range and we
   are checking neighbors to see if they need to be split) 
   split a live range when the number of neighbors is greater than
   twice the number of remaining colors.
-  \item (used during splitting) do not add a basic block if it brings
+  \item[chow] (used during splitting) do not add a basic block if it brings
   in too many new neighbors. Chow uses the metric that the number of
   neighbors should be less than or equal to the number of colors left
   before the addition of the block.
-  \end{enumerate}
-  Ours
-  \begin{enumerate}
-  \item (used during splitting) Do not add a block if it makes the
+
+  \item[ours] (used during splitting) Do not add a block if it makes the
   number of forbidden colors to great (similar to heuristic (b)
   above).
-  \end{enumerate}
+  \end{description}
 
 
 
@@ -66,14 +63,22 @@ temporary and then copy.
 
 \item live range coalescing
 
-\item alternate splitting algorithm. 
+\item Alternate splitting algorithm. \\
+The idea is to extend Chow's splitting algorithm to allow for
+different choices to be made. Chow does not allow for choices to be
+made along the fringe of the BFS. One way to extend the splitting is
+to allow for different choices to be made for the blocks to include in
+the new live range
   \begin{enumerate}
   \item search both up the graph and down the graph for other blocks
   in the live range that can be added.
   \item search down the graph to include as many uses as possible with
   a def, do not include other defs unless they are ``harmless''
+  \item Use some kind of cost function to decide whether or not to
+  include a block. You could try including blocks that contain the
+  most uses (high spill cost), or try including blocks that pull in
+  the least amount of forbidden registers.
   \end{enumerate}
-
 \end{enumerate}
 
 \section{Experiments}
