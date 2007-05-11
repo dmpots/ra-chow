@@ -1,0 +1,165 @@
+\documentclass[11pt]{article}
+\usepackage{amssymb}
+
+\textwidth = 6.5 in
+\textheight = 9 in
+\oddsidemargin = 0.0 in
+\evensidemargin = 0.0 in
+\topmargin = 0.0 in
+\headheight = 0.0 in
+\headsep = 0.0 in
+\parskip = 0.2in
+\parindent = 0.0in
+
+
+\title{Thesis Plan}
+\author{Dave Peixotto}
+\begin{document}
+\maketitle
+
+
+%%
+% INTRODUCTION
+%%
+\section{Implementation Work}
+\begin{enumerate}
+\item get rematerialization working (in progress)
+
+\item implement smart splitting - after splitting a live range you
+should prune the basic blocks that are included in the live range but
+are on a path along which there is never a use.
+
+\item Heuristics for splitting to improve allocation time.\\
+  Chow's 
+  \begin{enumerate}
+  \item (used after a color has been assigned to a live range and we
+  are checking neighbors to see if they need to be split) 
+  split a live range when the number of neighbors is greater than
+  twice the number of remaining colors.
+  \item (used during splitting) do not add a basic block if it brings
+  in too many new neighbors. Chow uses the metric that the number of
+  neighbors should be less than or equal to the number of colors left
+  before the addition of the block.
+  \end{enumerate}
+  Ours
+  \begin{enumerate}
+  \item (used during splitting) Do not add a block if it makes the
+  number of forbidden colors to great (similar to heuristic (b)
+  above).
+  \end{enumerate}
+
+
+
+\item Don't flush temporary register contents when the basic block has
+only one successor and the successor has only one predecessor.
+
+\item select better color when assigning color
+  \begin{enumerate}
+  \item select color already in forbidden set of a neighbor
+  \item select color that has been assigned to a live range from which
+  we were split.
+  \end{enumerate}
+
+\item when loading a use that has been spilled for an instruction
+that is a copy then just load directly into the source instead of a
+temporary and then copy.
+
+\item live range coalescing
+
+\item alternate splitting algorithm. 
+  \begin{enumerate}
+  \item search both up the graph and down the graph for other blocks
+  in the live range that can be added.
+  \item search down the graph to include as many uses as possible with
+  a def, do not include other defs unless they are ``harmless''
+  \end{enumerate}
+
+\end{enumerate}
+
+\section{Experiments}
+\begin{enumerate}
+\item Gather numbers on how often splitting helps you. We would like to
+know when you split a live range whether you end up being able to
+color part of it when you would have had to spill the entire thing if
+you had not split.
+
+\item Gather statistics for how chow performs by varying different
+paramerters:
+\begin{enumerate}
+\item basic block length
+\item number of registers
+\item enhanced code motion
+\item rematerialization
+\item live range coalescing
+\end{enumerate}
+
+\item Run adaptive Chow and see if it can come up with a better
+allocation.
+
+\end{enumerate}
+
+\section{Adaptive Chow}
+Parameters
+\begin{enumerate}
+\item basic block length
+\item priority function: adjusting weights: \texttt{LOOP-DEPTH,
+LOAD-SAVE, STORE-SAVE, MOVE-SAVE}.
+\item split small priority live ranges (including possibly negative
+priority live ranges)
+\item number of temporary registers reserved
+\item decrease priority on clustered live ranges 
+\item use ``Enhanced Code Motion''
+\item only use ``Enhanced Code Motion'' on blocks with exactly one
+predecessor to catch exactly the case of a load/store pair.
+\item use rematerialization
+\item use enhanced splitting (prune useless live units)
+\item use alternate splitting (search agressively for uses)
+\item heuristics for improving allocation time ($\times 3$)
+\end{enumerate}
+
+
+\section{Our Practical Improvements}
+\begin{enumerate}
+\item (done) Enhanced Code Motion - replace a load/store pair with a register
+to register copy.
+\item (done) building inital live ranges with SSA
+\item better splitting
+\item rematerialization
+\item coalescing
+\end{enumerate}
+
+\section{Questions}
+\begin{enumerate}
+\item what about caller/callee save? can we say that we are doing
+machine independent register allocation?
+
+\item does ra say a double takes two float registes? (i hope not)
+\end{enumerate}
+
+\section{Writing}
+\subsection{Thesis}
+\begin{enumerate}
+\item Classic Chow
+\item Enhanced Chow
+\item Adaptive Chow
+\item Implementation Details
+\item Comparison with Chaitin
+\end{enumerate}
+
+\subsection{Papers}
+Possible places to submit results
+\begin{enumerate}
+\item SP\&E
+\item
+\item
+\end{enumerate}
+
+\section{Timeline}
+\begin{description}
+\item[3 weeks] (1 June)  Implementation items 1-7
+\item[1 weeks] (8 June)  Implemention item 8
+\item[2 weeks] (22 June) Adaptive compiler setup (not sure what to do)
+\item[1 weeks] (29 June) Experiments complete
+\item[5 weeks] (3 August) Thesis writing
+\end{description}
+\end{document} 
