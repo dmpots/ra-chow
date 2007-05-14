@@ -188,6 +188,7 @@ void DumpInitialLiveRanges()
   }
   SSA_Restore();   
   Block_Put_All(stdout);
+  fprintf(stderr,"DumpInitialLiveRanges -- exit early\n");
   exit(0);
 }
 
