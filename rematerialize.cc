@@ -160,6 +160,21 @@ void AddSplit(Variable parent_ssa_name, Variable child_ssa_name)
   splits.push_back(std::make_pair(parent_ssa_name, child_ssa_name));
 }
 
+/*
+ *=============================
+ * TagsAreEqual()
+ *=============================
+ */
+bool TagsAllEqual(Variable v1, Variable v2)
+{
+  return ((tags[v1].val == tags[v2].val) 
+          &&
+          (    tags[v1].val != Remat::CONST 
+            || OpersAllEqual(tags[v1].op, tags[v2].op)));
+}
+
+
+
 }//end Rematerialize namespace
 
 /*-------------------BEGIN LOCAL DEFINITIONS-------------------*/

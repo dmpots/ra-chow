@@ -29,6 +29,7 @@ void ComputeTags();
 void DumpTags();
 void AddSplit(Variable parent_ssa_name, Variable child_ssa_name);
 const SplitList& GetSplits(void);
+bool TagsAllEqual(Variable v1, Variable v2);
 }
 
 #endif
