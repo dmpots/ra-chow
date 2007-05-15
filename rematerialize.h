@@ -10,6 +10,8 @@
 #include <vector>
 #include "types.h"
 #include "debug.h"
+#include "union_find.h"
+
 
 namespace Remat {
 /*---------------------------TYPES-----------------------------*/
@@ -23,6 +25,7 @@ typedef std::vector<std::pair<Variable,Variable> > SplitList;
 
 /*-------------------------VARIABLES---------------------------*/
 extern std::vector<LatticeElem> tags;
+extern UFSet** remat_sets;
 
 /*-------------------------FUNCTIONS---------------------------*/
 void ComputeTags();
@@ -30,6 +33,7 @@ void DumpTags();
 void AddSplit(Variable parent_ssa_name, Variable child_ssa_name);
 const SplitList& GetSplits(void);
 bool TagsAllEqual(Variable v1, Variable v2);
+void SplitRematerializableLiveRanges();
 }
 
 #endif

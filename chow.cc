@@ -36,7 +36,7 @@ namespace {
   /* local functions */
   void assert_same_orig_name(LRID,Variable,SparseSet,Block* b);
   void MoveLoadsAndStores();
-  void FindLiveRanges(Arena uf_arena);
+  unsigned int FindLiveRanges(Arena uf_arena);
   void CreateLiveRanges(Arena arena, Unsigned_Int num_lrs);
   void SplitNeighbors(LiveRange*, LRSet*, LRSet*);
   void UpdateConstrainedLists(LiveRange* , LiveRange* , LRSet*, LRSet*);
@@ -270,9 +270,9 @@ void BuildInitialLiveRanges(Arena chow_arena)
   SSA_Build(ssa_options);
 
   //run union find over phi nodes to get initial live ranges
-  FindLiveRanges(chow_arena);
+  unsigned int clrInitial = FindLiveRanges(chow_arena);
+  --clrInitial; //no lr for SSA name 0
 
-  unsigned int clrInitial = uf_set_count - 1; //no lr for SSA name 0
   debug("SSA NAMES: %d", SSA_def_count);
   debug("UNIQUE LRs: %d", clrInitial);
   Stats::chowstats.clrInitial = clrInitial;
@@ -294,6 +294,13 @@ void BuildInitialLiveRanges(Arena chow_arena)
   BuildInterferences(chow_arena);
     Stats::Stop();
 
+  if(Params::Algorithm::rematerialize)
+  {
+    Stats::Start("Split Rematerializable");
+    Remat::SplitRematerializableLiveRanges();
+    Stats::Stop();
+  }
+
   //compute where the loads and stores need to go in the live range
   for(LRVec::size_type i = 0; i < live_ranges.size(); i++)
     live_ranges[i]->MarkLoadsAndStores();
@@ -309,18 +316,19 @@ void BuildInitialLiveRanges(Arena chow_arena)
  * which values belong in the same live range
  * 
  */
-void FindLiveRanges(Arena uf_arena)
+unsigned int FindLiveRanges(Arena uf_arena)
 {
   UFSets_Init(uf_arena, SSA_def_count);
-
   if(Params::Algorithm::rematerialize)
   {
     Remat::ComputeTags();
+    Remat::remat_sets = UFSet_Create(SSA_def_count);
   }
 
   Block* b;
   Phi_Node* phi;
   UFSet* set;
+  unsigned int liverange_count = SSA_def_count;
   ForAllBlocks(b)
   {
     //visit each phi node and union the parameters and destination
@@ -330,20 +338,32 @@ void FindLiveRanges(Arena uf_arena)
     {
       debug("process phi: %d at %s (%d)", phi->new_name, bname(b), id(b));
       Variable* v_ptr;
+      //find current sets for the phi node
       set = Find_Set(phi->new_name);
+
       Phi_Node_ForAllParms(v_ptr, phi)
       {
         Variable v = *v_ptr;
         if(v != 0)
         {
-          //selectively union if using rematerialization
+          //union sets together unless they are alredy part of the
+          //same live range
+          if(set != Find_Set(v))
+          {
+            set = UFSet_Union(set, Find_Set(v));
+            --liverange_count;
+            debug("union: %d U %d = %d(setid)", phi->new_name, v, set->id);
+          }
+
           if(Params::Algorithm::rematerialize)
           {
-            if(   Remat::tags[v].val == Remat::tags[phi->new_name].val
-               && Remat::tags[v].op == Remat::tags[phi->new_name].op)
+            UFSet* remat_set = Find_Set(phi->new_name, Remat::remat_sets);
+            //selectively union if using rematerialization
+            if(Remat::tags[v].val == Remat::tags[phi->new_name].val)
             {
               debug("live range union ok by remat: %d",v);
-              set = UFSet_Union(set, Find_Set(v));
+              remat_set = 
+                UFSet_Union(remat_set, Find_Set(v, Remat::remat_sets));
             }
             else //split live ranges
             {
@@ -351,50 +371,12 @@ void FindLiveRanges(Arena uf_arena)
               Remat::AddSplit(phi->new_name, v);
             }
           }
-          //no rematerialization, union at will
-          else
-          {
-            set = UFSet_Union(set, Find_Set(v));
-            debug("union: %d U %d = %d(setid)", phi->new_name, v, set->id);
-          }
         }
       }
     }
-/*** NO COPY COALESCING
-    if(Params::Algorithm::rematerialize)
-    {
-      //go through copy instructions and union the src and dest if
-      //they are defined by the same inst
-      Inst* inst; Operation** op_ptr;
-      Block_ForAllInsts(inst, b)
-      {
-        Inst_ForAllOperations(op_ptr, inst)
-        {
-          Operation *op = *op_ptr;
-          unsigned int details = opcode_specs[op->opcode].details;
-
-          //look for all copies
-          if(details & COPY)
-          {
-            Variable src  = op->arguments[0];
-            Variable dest = op->arguments[1];
-            if(  Remat::tags[src].val == Remat::CONST
-              && Remat::tags[src].val == Remat::tags[dest].val
-              && Remat::tags[src].op == Remat::tags[dest].op)
-            {
-              UFSet* set = Find_Set(src);
-              set = UFSet_Union(set, Find_Set(dest)); 
-              debug("copy union opportunity: %s", Debug::StringOfOp(op));
-              //delete copy 
-              inst->prev_inst->next_inst = inst->next_inst;
-              inst->next_inst->prev_inst = inst->prev_inst;
-            }
-          }
-        }
-      }
-    }
-NO COPY COALESCING****/
   }
+
+  return liverange_count;
 }
 
 /*
@@ -530,7 +512,8 @@ void CreateLiveRanges(Arena arena, Unsigned_Int num_lrs)
   //take care of rematerialization settings if needed by setting the
   //orig_lrid of the split live range to the live range from which it
   //was split
-  if(Params::Algorithm::rematerialize)
+  //FIXME: get rid of this or something
+  if(Params::Algorithm::rematerialize && false)
   {
     const Remat::SplitList splits = Remat::GetSplits();
     for(Remat::SplitList::const_iterator i = splits.begin();

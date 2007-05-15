@@ -52,8 +52,6 @@ void Mapping::CreateLiveRangeNameMap(Arena arena)
 
     debug("SSAName: %4d ==> LRID: %4d", i, ssa_name_to_lrid[i]);
   }
-
-  assert(idcnt == (uf_set_count -1)); //no lr for SSA name 0
 }
 
 /*

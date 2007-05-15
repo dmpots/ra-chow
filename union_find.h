@@ -22,17 +22,17 @@ typedef struct uf_set UFSet;
 
 /* globals */
 extern UFSet** uf_sets;
-extern Unsigned_Int uf_set_count;
 
 /* funcitons */
 UFSet* UFSet_Make(Variable v);
 UFSet* UFSet_Find(UFSet* elem);  
 UFSet* UFSet_Union(UFSet* s1, UFSet* s2);
 UFSet* UFSet_Alloc();
+UFSet** UFSet_Create(unsigned int);
 void UFSets_Init(Arena, Unsigned_Int);
 
 //helper function to allow easy lookup of variables
-UFSet* Find_Set(Variable v);
+UFSet* Find_Set(Variable v, UFSet** sets = uf_sets);
 
 #endif
 

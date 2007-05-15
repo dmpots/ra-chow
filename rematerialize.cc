@@ -16,6 +16,7 @@
 #include <utility>
 #include "rematerialize.h"
 #include "cfg_tools.h"
+#include "union_find.h"
 
 /*------------------MODULE LOCAL DECLARATIONS------------------*/
 namespace {
@@ -40,6 +41,7 @@ namespace Remat{
 using std::vector;
 using std::pair;
 vector<LatticeElem> tags;
+UFSet** remat_sets;
 
 /*
  *=============================
@@ -173,7 +175,14 @@ bool TagsAllEqual(Variable v1, Variable v2)
             || OpersAllEqual(tags[v1].op, tags[v2].op)));
 }
 
-
+/*
+ *===================================
+ * SplitRematerializableLiveRanges()
+ *===================================
+ */
+void SplitRematerializableLiveRanges()
+{
+}
 
 }//end Rematerialize namespace
 

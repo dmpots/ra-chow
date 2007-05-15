@@ -9,7 +9,6 @@
 
 //globals
 UFSet** uf_sets;
-Unsigned_Int uf_set_count = 0;
 
 //locals
 static Arena uf_arena;
@@ -23,16 +22,27 @@ static Arena uf_arena;
 void UFSets_Init(Arena arena, Unsigned_Int num_sets)
 {
   uf_arena = arena;
-  uf_sets = (UFSet**) 
+  uf_sets = UFSet_Create(num_sets);
+}
+
+/*
+ *===================
+ * UFSet_Init()
+ *===================
+ * Creates an array of UFSet structs that can be passed to Find_Set
+ ***/
+UFSet** UFSet_Create(unsigned int num_sets)
+{
+  UFSet** sets;
+  sets = (UFSet**) 
     Arena_GetMemClear(uf_arena, sizeof(UFSet*) * num_sets);
 
   Unsigned_Int i;
   for(i = 0; i < num_sets; i++)
-    uf_sets[i] = UFSet_Make(i); 
+    sets[i] = UFSet_Make(i); 
 
-  uf_set_count = num_sets;
+  return sets;
 }
-
 
 /*
  *===================
@@ -118,7 +128,6 @@ UFSet* UFSet_Union(UFSet* set1, UFSet* set2)
   }
 
   debug("union: %d v %d = %d", s1->id, s2->id, top->id);
-  --uf_set_count; //union removes a set
   return top;
 }
 
@@ -128,9 +137,9 @@ UFSet* UFSet_Union(UFSet* set1, UFSet* set2)
  *===================
  * Returns pointer to the UFSet structure for the given variable
  **/
-UFSet* Find_Set(Variable v)
+UFSet* Find_Set(Variable v, UFSet** sets)
 {
-  return UFSet_Find(uf_sets[v]);
+  return UFSet_Find(sets[v]);
 }
 
 
