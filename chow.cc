@@ -545,6 +545,7 @@ void CreateLiveRanges(Arena arena, Unsigned_Int num_lrs)
       LiveRange* lr_split = live_ranges[lrid_split];
       lr_split->orig_lrid = lrid_orig;
 
+      debug("processing ssa split (%d,%d)", ssa_orig, ssa_split);
       debug("lr: %d split from: %d", lrid_split, lrid_orig);
     }
 

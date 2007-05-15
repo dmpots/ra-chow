@@ -1388,3 +1388,43 @@ incorrect answers.
   + tie rematerilize to enhanced code motion (paramerters)
  
 
+========================================================
+Rematerialization redo
+Tue May 15 16:10:21 CDT 2007
+========================================================
+So I need to redo rematerialization becuase the current strategy is
+not working. The problem is that if a live range is initially split
+into three live ranges due to a rematerializable part on top and two
+not rematerializable legs on the bottom then the orig_lrid field can
+not be the same for all three live ranges. a more complicated
+procedure is needed.
+
++ run union find as normal to build live ranges
+  + keep an additional mapping for ssa_name --> setid which would be
+    built by running union find selectively over the lattice
+  + keep a set of live ranges to later be split (Splits())
+
++ build live ranges as normal through BuildInterferences()
++ split live ranges according to mapping made previously using the
+  alternate ssa --> setid mapping
+  - for each live range to be split
+      for each block in the live range
+        look up setid for ssa_name in the block
+        keep a map from setid --> list of blocks
+
+      choose the first element in the map (arbitrarily) to keep the
+        same lrid
+      for the other map elements create new live ranges using
+        SplitFrom()
+        if they are a constant then mark them as rematerializable
+      for each block in the list mapping setid -> blocks
+        TransferLiveUnit(origlr, newlr)
+
+      rebulid the interferences
+        for each fearlr in the interference list
+          for each newly created lrs
+            if fearlr interferes with newlr then AddInterference
+          if fearlr not interfere with origlr then RemoveInterference
+
+
+
