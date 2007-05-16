@@ -14,9 +14,14 @@
 #include <SSA.h>
 #include <list>
 #include <utility>
+#include <map>
 #include "rematerialize.h"
 #include "cfg_tools.h"
 #include "union_find.h"
+#include "chow.h"
+#include "mapping.h"
+#include "live_range.h"
+#include "live_unit.h"
 
 /*------------------MODULE LOCAL DECLARATIONS------------------*/
 namespace {
@@ -182,6 +187,137 @@ bool TagsAllEqual(Variable v1, Variable v2)
  */
 void SplitRematerializableLiveRanges()
 {
+  using Chow::live_ranges;
+  using Mapping::SSAName2OrigLRID;
+  typedef std::map<unsigned int, std::vector<LiveUnit*> > LUMap;
+
+  //find which live ranges are to be split
+  std::set<LiveRange*> splitset;
+  for(SplitList::const_iterator i = splits.begin();
+      i != splits.end();
+      i++) 
+  {
+    Variable ssa_orig = (*i).first;
+    splitset.insert(live_ranges[SSAName2OrigLRID(ssa_orig)]);
+    debug("phi split: %d", ssa_orig);
+  }
+
+  //process each live range that is to be split
+  for(std::set<LiveRange*>::iterator i = splitset.begin();
+      i != splitset.end();
+      i++)
+  {
+    LiveRange* lr = *i;
+    LUMap lu_map;
+    debug("splitting: %d (lrid)", lr->id);
+
+    //build the mapping from setid --> list of live units based on the
+    //earlier findings in the remat_sets. these mappings represent the
+    //new split live ranges
+    for(LiveRange::iterator i = lr->begin(); i != lr->end(); i++)
+    {
+      LiveUnit* lu = *i;
+      unsigned int setid = (Find_Set(lu->orig_name, remat_sets))->id;
+      debug("LiveUnit: %s(%d) is setid %d", bname(lu->block), 
+             id(lu->block), setid);
+      lu_map[setid].push_back(lu);
+    }
+
+    //now do the actual splitting. an arbitrary element is chosen to
+    //retain the original live range id. this element is removed from
+    //the live unit map since all remaning elements in the live unit
+    //map will have their units transferred away.
+    lu_map.erase(lu_map.begin());
+    std::vector<LiveRange*> new_lrs;
+    for(LUMap::iterator i = lu_map.begin(); i != lu_map.end(); i++)
+    {
+      //create a new live range
+      LiveRange* lr_new = lr->Mitosis();
+      live_ranges.push_back(lr_new);
+      new_lrs.push_back(lr_new);
+
+      //check if it is rematerializable
+      Variable ssa_name = (*i).second.back()->orig_name;
+      if(tags[ssa_name].val == CONST)
+      {
+        lr_new->rematerializable = true;
+        lr_new->remat_op = tags[ssa_name].op;
+      }
+      else
+      {
+        lr_new->rematerializable = false;
+      }
+
+      //transfer the live units
+      for(std::vector<LiveUnit*>::iterator luIT = (*i).second.begin();
+          luIT != (*i).second.end();
+          luIT++)
+      {
+        lr->TransferLiveUnitTo(lr_new, *luIT);
+      }
+
+    }
+
+    //rebuild interferences
+    for(LRSet::iterator fearIT = lr->fear_list->begin(); 
+        fearIT != lr->fear_list->end();)
+    {
+      LiveRange* fearlr = *fearIT;
+      //check each of the new lrs we split from us for interference
+      for(std::vector<LiveRange*>::iterator lrIT = new_lrs.begin();
+          lrIT != new_lrs.end();
+          lrIT++)
+      {
+        LiveRange* newlr = *lrIT;
+        //update newlr interference
+        if(newlr->InterferesWith(fearlr))
+        {
+          newlr->AddInterference(fearlr);
+        }
+      }
+
+      //update origlr interference
+      if(!lr->InterferesWith(fearlr))
+      {
+        //increment iterator before delete
+        LRSet::iterator del = fearIT++; 
+        fearlr->fear_list->erase(lr);
+        lr->fear_list->erase(del);
+      }
+      else //does not interfere increment iterator normally
+      {
+        fearIT++; 
+      }
+    }
+
+    //check to see whether our origlr is now rematerializable
+    Variable ssa_name = (*lr->begin())->orig_name;
+    if(tags[ssa_name].val == CONST)
+    {
+      lr->rematerializable = true;
+      lr->remat_op = tags[ssa_name].op;
+    }
+    else
+    {
+      lr->rematerializable = false;
+    }
+
+    //dump splits for dot
+    if(Debug::dot_dump_lr && Debug::dot_dump_lr == lr->orig_lrid)
+    {
+      //check each of the new lrs we split from us for interference
+      for(std::vector<LiveRange*>::iterator lrIT = new_lrs.begin();
+          lrIT != new_lrs.end();
+          lrIT++)
+      {
+        LiveRange* newlr = *lrIT;
+        Debug::DotDumpLR(newlr, "split");
+        Debug::dot_dumped_lrs.push_back(newlr);
+      }
+      Debug::DotDumpLR(lr, "split");
+      Debug::dot_dumped_lrs.push_back(lr);
+    }
+  }
 }
 
 }//end Rematerialize namespace

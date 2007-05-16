@@ -297,7 +297,23 @@ void BuildInitialLiveRanges(Arena chow_arena)
   if(Params::Algorithm::rematerialize)
   {
     Stats::Start("Split Rematerializable");
+    //run through and find the live ranges that are rematerializable
+    //and set the appropriate flags. these may exist separately from
+    //the split live ranges if the entire live range is
+    //rematerialiazible. so we set them all in this loop. if we split
+    //out part that is not rematerializable it will be set in th
+    //function below
+    for(unsigned int ssa_name = 0; ssa_name < SSA_def_count; ssa_name++)
+    {
+      if(Remat::tags[ssa_name].val == Remat::CONST)
+      {
+        LRID lrid = Mapping::SSAName2OrigLRID(ssa_name);
+        live_ranges[lrid]->rematerializable = true;
+        live_ranges[lrid]->remat_op = Remat::tags[ssa_name].op;
+      }
+    }
     Remat::SplitRematerializableLiveRanges();
+    Stats::chowstats.clrRemat = live_ranges.size();
     Stats::Stop();
   }
 
@@ -532,19 +548,7 @@ void CreateLiveRanges(Arena arena, Unsigned_Int num_lrs)
       debug("lr: %d split from: %d", lrid_split, lrid_orig);
     }
 
-    //run through and find the live ranges that are rematerializable
-    //and set the appropriate flags. these may exist separately from
-    //the split live ranges if the entire live range is
-    //rematerialiazible. so we set them all in this loop
-    for(unsigned int ssa_name = 0; ssa_name < SSA_def_count; ssa_name++)
-    {
-      if(Remat::tags[ssa_name].val == Remat::CONST)
-      {
-        LRID lrid = Mapping::SSAName2OrigLRID(ssa_name);
-        live_ranges[lrid]->rematerializable = true;
-        live_ranges[lrid]->remat_op = Remat::tags[ssa_name].op;
-      }
-    }
+    
   }
 }
 

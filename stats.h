@@ -26,6 +26,7 @@ struct BBStats
 struct ChowStats
 {
   Unsigned_Int clrInitial;
+  Unsigned_Int clrRemat;
   Unsigned_Int clrFinal;
   Unsigned_Int clrColored;
   Unsigned_Int cSplits;

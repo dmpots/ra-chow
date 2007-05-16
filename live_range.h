@@ -69,10 +69,12 @@ struct LiveRange
   Boolean InterferesWith(LiveRange* lr2) const;
   LiveUnit* AddLiveUnitForBlock(Block*, Variable, const Stats::BBStats& );
   Priority LiveRange::ComputePriority();
+  LiveRange* Mitosis();
+  void TransferLiveUnitTo(LiveRange* to, LiveUnit* unit);
 
   /* iterators */
   /* for live units in this live range */
-  typedef std::list<LiveUnit*>::const_iterator iterator;
+  typedef std::list<LiveUnit*>::iterator iterator;
   iterator begin() const;
   iterator end() const;
 };
@@ -92,6 +94,7 @@ inline void LRName(const LiveRange* lr, char* buf)
 {
   sprintf(buf, "%d_%d", lr->orig_lrid, lr->id);
 }
+
 
 /*-------------------SPILLING DATA STRUCTURES-----------------------*/
 /* for moving loads and stores onto edges so that we can do code

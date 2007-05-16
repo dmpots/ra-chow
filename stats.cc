@@ -102,6 +102,8 @@ void DumpAllocationStats()
                                            chowstats.clrInitial);
   fprintf(stderr, " Final   LiveRange Count: %d\n",
                                            chowstats.clrFinal);
+  fprintf(stderr, " Remat   LiveRange Count: %d\n",
+                                           chowstats.clrRemat);
   fprintf(stderr, " Colored LiveRange Count: %d\n",
                                            chowstats.clrColored+1);
   fprintf(stderr, " Spilled LiveRange Count: %d\n", 

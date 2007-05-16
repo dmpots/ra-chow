@@ -78,7 +78,6 @@ namespace {
   LiveUnit* LiveRange_AddLiveUnitBlock(LiveRange*, Block*);
   void LiveRange_RemoveLiveUnit(LiveRange* , LiveUnit* );
   void LiveRange_RemoveLiveUnitBlock(LiveRange* lr, Block* b);
-  void LiveRange_TransferLiveUnit(LiveRange*, LiveRange*, LiveUnit*);
   LiveUnit* LiveRange_ChooseSplitPoint(LiveRange*);
   LiveUnit* LiveRange_IncludeInSplit(LiveRange*, LiveRange*, Block*);
   void LiveRange_AddBlock(LiveRange* lr, Block* b);
@@ -88,7 +87,6 @@ namespace {
   void LiveRange_MarkStores(LiveRange* lr);
   void LiveRange_InsertLoad(LiveRange* lr, LiveUnit* unit);
   void LiveRange_InsertStore(LiveRange*lr, LiveUnit* unit);
-  LiveRange* LiveRange_SplitFrom(LiveRange* origlr);
   Priority LiveRange_OrigComputePriority(LiveRange* lr);
 }
 
@@ -541,7 +539,7 @@ LiveRange* LiveRange::Split()
   Stats::chowstats.cSplits++;
 
   //create a new live range and initialize values
-  LiveRange* newlr = LiveRange_SplitFrom(this);
+  LiveRange* newlr = Mitosis();
 
   //chose the live unit that will start the new live range
   LiveUnit* startunit;
@@ -550,7 +548,7 @@ LiveRange* LiveRange::Split()
   assert(startunit != NULL);
 
   debug("adding block: %s to  lr'", bname(startunit->block));
-  LiveRange_TransferLiveUnit(newlr, this, startunit);
+  TransferLiveUnitTo(newlr, startunit);
 
   //keep a queue of successors that we may add to the new live range
   std::list<Block*> succ_list;
@@ -567,7 +565,7 @@ LiveRange* LiveRange::Split()
       if((unit = LiveRange_IncludeInSplit(newlr, this, succ)) != NULL)
       {
         debug("adding block: %s to  lr'", bname(succ));
-        LiveRange_TransferLiveUnit(newlr, this, unit);
+        TransferLiveUnitTo(newlr, unit);
         succ_list.push_back(succ); //explore the succs of this node
       }
     }
@@ -627,6 +625,41 @@ Priority LiveRange::ComputePriority()
   priority = pr/clu;
   return priority;
 }
+
+/*
+ *================================
+ * LiveRange::Mitosis()
+ *================================
+ * Creates a new live range that will contain live unit split from the
+ * passed in original live range 
+ */
+LiveRange* LiveRange::Mitosis()
+{
+  LiveRange* newlr = new LiveRange(rc, NO_LRID, type);
+  newlr->orig_lrid = orig_lrid;
+  newlr->id = LiveRange::counter++;
+  newlr->is_candidate = TRUE;
+  newlr->type = type;
+
+  //some sanity checks
+  assert(color == Coloring::NO_COLOR);
+  assert(is_candidate == TRUE);
+
+  return newlr;
+}
+
+/*
+ *===============================
+ * LiveRange::TransferLiveUnitTO()
+ *===============================
+ *
+ */ 
+void LiveRange::TransferLiveUnitTo(LiveRange* to, LiveUnit* unit)
+{
+  LiveRange_AddLiveUnit(to, unit);
+  LiveRange_RemoveLiveUnit(this, unit);
+}
+
 
 
 /*------------------INTERNAL MODULE FUNCTIONS--------------------*/
@@ -851,28 +884,6 @@ void LiveRange_InsertStore(LiveRange*lr, LiveUnit* unit)
 
 
 
-/*
- *================================
- * LiveRange_SplitFrom()
- *================================
- * Creates a new live range that will contain live unit split from the
- * passed in original live range 
- */
-LiveRange* LiveRange_SplitFrom(LiveRange* origlr)
-{
-  LiveRange* newlr = new LiveRange(origlr->rc, NO_LRID, origlr->type);
-  newlr->orig_lrid = origlr->orig_lrid;
-  newlr->id = LiveRange::counter++;
-  newlr->is_candidate = TRUE;
-  newlr->type = origlr->type;
-
-  //some sanity checks
-  assert(origlr->color == Coloring::NO_COLOR);
-  assert(origlr->is_candidate == TRUE);
-
-  return newlr;
-}
-
 
 /*
  *================================
@@ -949,20 +960,6 @@ void LiveRange_AddBlock(LiveRange* lr, Block* b)
   VectorSet_Union(lr->forbidden, lr->forbidden, vsUsed);
 }
 
-
-/*
- *============================
- * LiveRange_TransferLiveUnit()
- *============================
- *
- */ 
-void LiveRange_TransferLiveUnit(LiveRange* to,
-                           LiveRange* from,
-                           LiveUnit* unit)
-{
-  LiveRange_AddLiveUnit(to, unit);
-  LiveRange_RemoveLiveUnit(from, unit);
-}
 
 /*
  *============================
