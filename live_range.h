@@ -5,6 +5,7 @@
 #include <set>
 #include <list>
 #include <vector>
+#include <map>
 #include "types.h"
 #include "debug.h"
 #include "stats.h"
@@ -50,6 +51,9 @@ struct LiveRange
   RegisterClass::RC rc;
   bool rematerializable;
   Operation* remat_op;
+
+  /* maps from block id --> live range, for keeping track of splits */
+  std::map<unsigned int, LiveRange*> *blockmap; 
 
   /* methods */
   void AddInterference(LiveRange* other);

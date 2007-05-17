@@ -640,6 +640,7 @@ LiveRange* LiveRange::Mitosis()
   newlr->id = LiveRange::counter++;
   newlr->is_candidate = TRUE;
   newlr->type = type;
+  newlr->blockmap = blockmap;
 
   //some sanity checks
   assert(color == Coloring::NO_COLOR);
@@ -658,6 +659,7 @@ void LiveRange::TransferLiveUnitTo(LiveRange* to, LiveUnit* unit)
 {
   LiveRange_AddLiveUnit(to, unit);
   LiveRange_RemoveLiveUnit(this, unit);
+  (*blockmap)[id(unit->block)] = to;
 }
 
 

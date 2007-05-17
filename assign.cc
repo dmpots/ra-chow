@@ -203,8 +203,8 @@ void EnsureReg(Register* reg,
   debug("ensuring reg: %d for inst: \n   %s",
      *reg, Debug::StringOfInst(origInst));
 
-  LRID lrid = Mapping::SSAName2OrigLRID(*reg);
-  *reg = GetMachineRegAssignment(blk, lrid);
+  LRID orig_lrid = Mapping::SSAName2OrigLRID(*reg);
+  *reg = GetMachineRegAssignment(blk, orig_lrid);
 
   //this live range is spilled. find a temporary register
   if(*reg == REG_UNALLOCATED)
@@ -214,7 +214,7 @@ void EnsureReg(Register* reg,
     bool needMemAccess;
 
     //find a temporary register for this value
-    regXneedMem = GetFreeTmpReg(lrid, blk, origInst, *updatedInst, 
+    regXneedMem = GetFreeTmpReg(orig_lrid, blk, origInst, *updatedInst, 
                                 op, purpose, instUses, instDefs);
 
     //get return values
@@ -227,22 +227,24 @@ void EnsureReg(Register* reg,
     //register
     if(needMemAccess)
     {
+      /* must grab the actual live range here to make sure that loads
+       * and stores respect the rematerialization settings */
+      LiveRange* lr = (*live_ranges[orig_lrid]->blockmap)[id(blk)];
       if(purpose == FOR_USE)
       {
-        InsertLoad(live_ranges[lrid], *updatedInst, tmpReg, Spill::REG_FP);
+        InsertLoad(lr, *updatedInst, tmpReg, Spill::REG_FP);
       }
       else //FOR_DEF
       {
         *updatedInst = 
-          InsertStore(live_ranges[lrid], 
-                      *updatedInst, tmpReg, Spill::REG_FP, AFTER_INST);
+          InsertStore(lr,*updatedInst, tmpReg, Spill::REG_FP, AFTER_INST);
       }
     }
     *reg = tmpReg;
   }
   else
   {
-    debug("reg: %d for lrid: %d is allocated", *reg, lrid);
+    debug("reg: %d for orig_lrid: %d is allocated", *reg, orig_lrid);
   }
 }
 

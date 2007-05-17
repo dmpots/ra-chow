@@ -11,6 +11,7 @@
 #include <SSA.h>
 #include <algorithm>
 #include <utility>
+#include <map>
 
 #include "chow.h"
 #include "chow_extensions.h"
@@ -484,6 +485,7 @@ void BuildInterferences(Arena arena)
     SparseSet_ForAll(v, lrset)
     {
       lr = live_ranges[v];
+      (*(lr->blockmap))[id(blk)] = lr;
 
       //update the interference lists
       SparseSet_ForAll(i, lrset)
@@ -519,10 +521,16 @@ void CreateLiveRanges(Arena arena, Unsigned_Int num_lrs)
   live_ranges.resize(num_lrs, NULL); //allocate space for live ranges
   for(unsigned int lrid = 0; lrid < num_lrs; lrid++) 
   {
-    live_ranges[lrid] = 
+    LiveRange* lr = 
       new LiveRange(RegisterClass::InitialRegisterClassForLRID(lrid), 
                     lrid,
                     Mapping::LiveRangeDefType(lrid));
+
+    //initialize blockmap here since there should only be one tied to
+    //the original live range that is shared by all live ranges split
+    //from this one
+    lr->blockmap = new std::map<unsigned int, LiveRange*>;
+    live_ranges[lrid] = lr;
   }
 }
 

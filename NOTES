@@ -1427,4 +1427,31 @@ procedure is needed.
           if fearlr not interfere with origlr then RemoveInterference
 
 
+========================================================
+Problem with rematerialization
+Thu May 17 09:30:53 CDT 2007
+========================================================
+The problem with the implementation was that when we assign registers
+we look up the live range based on the orig_lrid. This means that the
+original live range is checked for rematerialization settings and none
+of the split live ranges will ever be correctly checked. We need a way
+to look at the actual live range when generating loads and stores.
+
+The idea is to get rid of the color mapping and replace it with a map
+from orig_lrid x block --> current_lr. Then the color can be grabbed
+from the field in the current_lr. 
+
+what about the reverse color map? it is ok since it already uses the
+actual lrid, not the orig_lrid.
+
+
+========================================================
+Algorithm observation
+Thu May 17 12:01:46 CDT 2007
+========================================================
+Seems like we should be removing things from the constrained lists
+when we assign a color or decide to spill but this is not done.  Why
+am i not removing live ranges from the constrained lists when i
+MarkNonCanidate and delete them? seems like they shoule be removed.
+
 

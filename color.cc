@@ -17,7 +17,6 @@
 /*------------------MODULE LOCAL DEFINITIONS-------------------*/
 namespace {
   VectorSet** mRcBlkId_VsUsedColor;
-  Unsigned_Int** mBlkIdSSAName_Color;
 
   //mapping from block * register class * color --> lrid
   //this is maintained for the assingnment module which needs this
@@ -50,23 +49,6 @@ void Coloring::Init(Arena arena, unsigned int num_live_ranges)
       VectorSet_Clear(mRcBlkId_VsUsedColor[rc][bid]);
     } 
   }
-
-
-  //allocate a mapping of block x SSA_name -> register
-  mBlkIdSSAName_Color = (Unsigned_Int**)
-    Arena_GetMemClear(arena, 
-                      sizeof(Unsigned_Int*) * (1+block_count));
-  LOOPVAR i;
-  for(i = 0; i < block_count+1; i++)
-  {
-    mBlkIdSSAName_Color[i] = (Unsigned_Int*)
-      Arena_GetMemClear(arena, 
-                        sizeof(Unsigned_Int) * num_live_ranges );
-      LOOPVAR j;
-      for(j = 0; j < num_live_ranges; j++)
-        mBlkIdSSAName_Color[i][j] = NO_COLOR;
-  }
-
 }
 
 VectorSet Coloring::UsedColors(RegisterClass::RC rc, Block* blk)
@@ -77,14 +59,12 @@ VectorSet Coloring::UsedColors(RegisterClass::RC rc, Block* blk)
 void Coloring::SetColor(Block* blk, LRID lrid, Color color)
 {
   LiveRange* lr = Chow::live_ranges[lrid];
-  mBlkIdSSAName_Color[id(blk)][lr->orig_lrid] = color;
   inverse_color_map[std::make_pair(blk,lr->rc)][color] = lrid;
 }
 
 Color Coloring::GetColor(Block* blk, LRID lrid)
 {
-  LRID orig_lrid = Chow::live_ranges[lrid]->orig_lrid;
-  return mBlkIdSSAName_Color[id(blk)][orig_lrid];
+  return (*Chow::live_ranges[lrid]->blockmap)[(id(blk))]->color;
 }
 
 LRID Coloring::GetLRID(Block* blk, RegisterClass::RC rc, Color color)
