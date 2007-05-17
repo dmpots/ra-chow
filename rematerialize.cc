@@ -201,6 +201,8 @@ void SplitRematerializableLiveRanges()
     splitset.insert(live_ranges[SSAName2OrigLRID(ssa_orig)]);
     debug("phi split: %d", ssa_orig);
   }
+  debug("found %d live ranges that have remat parts", 
+    (int)splitset.size());
 
   //process each live range that is to be split
   for(std::set<LiveRange*>::iterator i = splitset.begin();
@@ -210,6 +212,7 @@ void SplitRematerializableLiveRanges()
     LiveRange* lr = *i;
     LUMap lu_map;
     debug("splitting: %d (lrid)", lr->id);
+    Debug::LiveRange_DDump(lr);
 
     //build the mapping from setid --> list of live units based on the
     //earlier findings in the remat_sets. these mappings represent the
@@ -222,6 +225,7 @@ void SplitRematerializableLiveRanges()
              id(lu->block), setid);
       lu_map[setid].push_back(lu);
     }
+    assert(lu_map.size() > 1);
 
     //now do the actual splitting. an arbitrary element is chosen to
     //retain the original live range id. this element is removed from
@@ -277,16 +281,12 @@ void SplitRematerializableLiveRanges()
       }
 
       //update origlr interference
+      LRSet::iterator del = fearIT++;
       if(!lr->InterferesWith(fearlr))
       {
         //increment iterator before delete
-        LRSet::iterator del = fearIT++; 
         fearlr->fear_list->erase(lr);
         lr->fear_list->erase(del);
-      }
-      else //does not interfere increment iterator normally
-      {
-        fearIT++; 
       }
     }
 
@@ -302,6 +302,7 @@ void SplitRematerializableLiveRanges()
       lr->rematerializable = false;
     }
 
+    //----DEBUG STUFF BELOW----
     //dump splits for dot
     if(Debug::dot_dump_lr && Debug::dot_dump_lr == lr->orig_lrid)
     {
@@ -317,6 +318,15 @@ void SplitRematerializableLiveRanges()
       Debug::DotDumpLR(lr, "split");
       Debug::dot_dumped_lrs.push_back(lr);
     }
+    debug("done splitting lr: %d", lr->id);
+    Debug::LiveRange_DDump(lr);
+    for(std::vector<LiveRange*>::iterator lrIT = new_lrs.begin();
+        lrIT != new_lrs.end();
+        lrIT++)
+    {
+      Debug::LiveRange_DDump(*lrIT);
+    }
+    //----DEBUG STUFF ABOVE----
   }
 }
 

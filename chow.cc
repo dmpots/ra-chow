@@ -524,32 +524,6 @@ void CreateLiveRanges(Arena arena, Unsigned_Int num_lrs)
                     lrid,
                     Mapping::LiveRangeDefType(lrid));
   }
-
-  //take care of rematerialization settings if needed by setting the
-  //orig_lrid of the split live range to the live range from which it
-  //was split
-  //FIXME: get rid of this or something
-  if(Params::Algorithm::rematerialize && false)
-  {
-    const Remat::SplitList splits = Remat::GetSplits();
-    for(Remat::SplitList::const_iterator i = splits.begin();
-        i != splits.end();
-        i++)
-    {
-      Variable ssa_orig = (*i).first;
-      Variable ssa_split = (*i).second;
-      LRID lrid_orig  = Mapping::SSAName2OrigLRID(ssa_orig);
-      LRID lrid_split = Mapping::SSAName2OrigLRID(ssa_split);
-
-      LiveRange* lr_split = live_ranges[lrid_split];
-      lr_split->orig_lrid = lrid_orig;
-
-      debug("processing ssa split (%d,%d)", ssa_orig, ssa_split);
-      debug("lr: %d split from: %d", lrid_split, lrid_orig);
-    }
-
-    
-  }
 }
 
 //make sure that if we have already added a live unit for this lrid
