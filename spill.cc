@@ -76,6 +76,7 @@ void Init(Arena arena)
   //we need to insert loads and stores
   frame.stack_pointer = Frame_GetStackSize(frame.op);
   frame.lrid = Mapping::SSAName2OrigLRID(frame.ssa_name);
+  assert(frame.lrid == 0);
 
   //keep arena for allocating new instructions
   spill_arena = arena;

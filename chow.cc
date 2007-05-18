@@ -41,8 +41,9 @@ namespace {
   void CreateLiveRanges(Arena arena, Unsigned_Int num_lrs);
   void SplitNeighbors(LiveRange*, LRSet*, LRSet*);
   void UpdateConstrainedLists(LiveRange* , LiveRange* , LRSet*, LRSet*);
+  void UpdateConstrainedListsAfterDelete(LiveRange*, LRSet*, LRSet*);
   LiveUnit* AddLiveUnitOnce(LRID, Block*, SparseSet, Variable);
-  LiveRange* ComputePriorityAndChooseTop(LRSet* lrs);
+  LiveRange* ComputePriorityAndChooseTop(LRSet* lrs, LRSet* lrs);
   void BuildInitialLiveRanges(Arena);
   void BuildInterferences(Arena arena);
   void AllocateRegisters();
@@ -134,12 +135,10 @@ void AllocateRegisters()
   live_ranges[Spill::frame.lrid]->MarkNonCandidateAndDelete();
 
 
-  //separate unconstrained live ranges
-  for(LRVec::size_type i = 0; i < live_ranges.size(); i++)
+  //separate unconstrained live ranges, skipping lrid 0 (frame lr)
+  for(LRVec::size_type i = 1; i < live_ranges.size(); i++)
   {
     lr = live_ranges[i];
-    //only look at candidates
-    if(!lr->is_candidate) continue;
 
     if(lr->IsConstrained())
     {
@@ -159,7 +158,7 @@ void AllocateRegisters()
   while(!(constr_lrs.empty()))
   {
     //steps 2: (a) - (c)
-    lr = ComputePriorityAndChooseTop(&constr_lrs);
+    lr = ComputePriorityAndChooseTop(&constr_lrs, &unconstr_lrs);
     if(lr == NULL)
     {
       debug("No more constrained lrs can be assigned");
@@ -172,12 +171,11 @@ void AllocateRegisters()
 
   //assign registers to unconstrained live ranges
   debug("assigning unconstrained live ranges colors");
-  //some may no longe be candidates now
   for(LRSet::iterator i = 
       unconstr_lrs.begin(); i != unconstr_lrs.end(); i++)
   {
     lr = *i;
-    if(!lr->is_candidate) continue;
+    assert(lr->is_candidate);
 
     debug("choose color for unconstrained LR: %d", lr->id);
     lr->AssignColor();
@@ -194,17 +192,16 @@ void AllocateRegisters()
  *=======================================
  *
  ***/
-LiveRange* ComputePriorityAndChooseTop(LRSet* lrs)
+LiveRange* 
+ComputePriorityAndChooseTop(LRSet* constr_lrs, LRSet* unconstr_lrs)
 {
-  float top_prio = -3.4e38; //a very small number
-  LiveRange* top_lr = NULL;
-  LiveRange* lr = NULL;
+  std::vector<LiveRange*> deletes;
   
-  //look at all candidates
-  for(LRSet::iterator i = lrs->begin(); i != lrs->end(); i++)
+  //compute priority for all live ranges
+  for(LRSet::iterator i = constr_lrs->begin(); i != constr_lrs->end(); i++)
   {
-    lr = *i;
-    if(!lr->is_candidate) continue;
+    LiveRange* lr = *i;
+    assert(lr->is_candidate);
 
     //priority has never been computed
     if(lr->priority == LiveRange::UNDEFINED_PRIORITY)
@@ -219,10 +216,25 @@ LiveRange* ComputePriorityAndChooseTop(LRSet* lrs)
       //can compute it again.
       if(lr->priority < 0.0 || lr->IsEntirelyUnColorable())
       {
-        lr->MarkNonCandidateAndDelete();
-        continue;
+        deletes.push_back(lr);
       }
     }
+  }
+
+  //remove any live ranges not deemed worthy
+  for(unsigned int i = 0; i < deletes.size(); i++)
+  {
+    LiveRange* lr = deletes[i];
+    lr->MarkNonCandidateAndDelete();
+    UpdateConstrainedListsAfterDelete(lr, constr_lrs, unconstr_lrs);
+  }
+
+  //find the top priority live range
+  float top_prio = -3.4e38; //a very small number
+  LiveRange* top_lr = NULL;
+  for(LRSet::iterator i = constr_lrs->begin(); i != constr_lrs->end(); i++)
+  {
+    LiveRange* lr = *i;
 
     //see if this live range has a greater priority
     if(lr->priority > top_prio)
@@ -235,7 +247,7 @@ LiveRange* ComputePriorityAndChooseTop(LRSet* lrs)
   if(top_lr != NULL)
   {
     debug("top priority is %.3f LR: %d", top_prio, top_lr->id);
-    lrs->erase(top_lr);
+    constr_lrs->erase(top_lr);
   }
   return top_lr;
 }
@@ -601,10 +613,9 @@ void SplitNeighbors(LiveRange* lr, LRSet* constr_lr, LRSet* unconstr_lr)
   copy(lr->fear_list->begin(), lr->fear_list->end(), worklist.begin());
 
   //our neighbors are the live ranges we interfere with
-  LiveRange* intf_lr;
   while(!worklist.empty())
   {
-    intf_lr = worklist.back(); worklist.pop_back();
+    LiveRange* intf_lr = worklist.back(); worklist.pop_back();
     //only check allocation candidates, may not be a candidate if it
     //has already been assigned a color
     if(!(intf_lr->is_candidate)) continue;
@@ -615,12 +626,11 @@ void SplitNeighbors(LiveRange* lr, LRSet* constr_lr, LRSet* unconstr_lr)
       debug("Need to split LR: %d", intf_lr->id);
       if(intf_lr->IsEntirelyUnColorable())
       {
-        //delete this live range from the interference graph. we dont
-        //need to update the constrained lists at this point because
-        //deleting this live range should have no effect on whether
-        //the live ranges it interferes with are constrained or not
-        //since it was never given a color
+        //delete this live range from the interference graph. update
+        //the constrained lists since live ranges may shuffle around
+        //after we delete this from the interference graph
         intf_lr->MarkNonCandidateAndDelete();
+        UpdateConstrainedListsAfterDelete(intf_lr, constr_lr, unconstr_lr);
       }
       else //try to split
       {
@@ -674,6 +684,7 @@ void UpdateConstrainedLists(LiveRange* newlr,
   for(LRSet::iterator i = updates.begin(); i != updates.end(); i++)
   {
     LiveRange* lr = *i;
+    //skip anyone that has already been assigned a color
     if(!lr->is_candidate) continue;
 
     if(lr->IsConstrained())
@@ -700,7 +711,38 @@ void UpdateConstrainedLists(LiveRange* newlr,
   }
 }
 
-
+/*
+ *====================================
+ * UpdateConstrainedListsAfterDelete()
+ *====================================
+ * Updates the lists after a live range is deleted from the
+ * interference graph to ensure that the live range is in the correct
+ * bucket.
+ ***/
+void UpdateConstrainedListsAfterDelete(LiveRange* lr,
+                                        LRSet* constr_lrs, 
+                                        LRSet* unconstr_lrs)
+{
+  for(LRSet::iterator i = lr->fear_list->begin(); 
+      i != lr->fear_list->end(); 
+      i++)
+  {
+    LiveRange* fear_lr = *i;
+    //skip anyone that has already been assigned a color
+    if(!(fear_lr)->is_candidate) continue;
+    if((fear_lr)->IsConstrained())
+    {
+      if(unconstr_lrs->erase(fear_lr))
+        constr_lrs->insert(fear_lr);
+    }
+    else
+    {
+      if(constr_lrs->erase(fear_lr))
+        unconstr_lrs->insert(fear_lr);
+    }
+  }
+  constr_lrs->erase(lr);
+}
 
 /*
  *===================
