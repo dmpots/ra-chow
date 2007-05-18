@@ -103,11 +103,11 @@ void Chow::Run()
   //--- Run the priority algorithm ---//
     Stats::Start("Allocate Registers");
   AllocateRegisters();
+  if(Debug::dot_dump_lr) Debug::DotDumpFinalLRs(); 
     Stats::Stop();
     Stats::Start("Rename Registers");
   RenameRegisters();
     Stats::Stop();
-  if(Debug::dot_dump_lr) Debug::DotDumpFinalLRs(); 
 }
 
 /*-----------------INTERNAL MODULE FUNCTIONS-------------------*/
@@ -905,7 +905,21 @@ void MoveLoadsAndStores()
             debug("moving load from %s to %s for lrid: %d_%d",
                    bname(msd.orig_blk), bname(blkLD),
                    msd.lr->orig_lrid, msd.lr->id);
-            Spill::InsertLoad(msd.lr, Block_LastInst(blkLD), 
+            LiveRange* lr = msd.lr;
+            if(Params::Algorithm::rematerialize)
+            {
+              if(lr->blockmap->find(id(edg->pred)) != lr->blockmap->end())
+              {
+                debug("remat OPPORTUNITY");
+                LiveRange* lrPred = (*lr->blockmap)[id(edg->pred)];
+                if(lrPred->rematerializable)
+                {
+                  debug("remat SUCCESS");
+                  lr = lrPred;
+                }
+              }
+            }
+            Spill::InsertLoad(lr, Block_LastInst(blkLD), 
                               mReg, Spill::REG_FP);
           }
         }

@@ -1446,12 +1446,39 @@ actual lrid, not the orig_lrid.
 
 
 ========================================================
-Algorithm observation
+Coloring algorithm observation
 Thu May 17 12:01:46 CDT 2007
 ========================================================
 Seems like we should be removing things from the constrained lists
 when we assign a color or decide to spill but this is not done.  Why
 am i not removing live ranges from the constrained lists when i
 MarkNonCanidate and delete them? seems like they shoule be removed.
+
+
+========================================================
+Rematerialization implementation
+Thu May 17 20:49:19 CDT 2007
+========================================================
+I figured out a way to make it so that loading a value at the start of
+a life range that was split from a remat part can use a loadI to load
+rather than a heavyweight load. The example I am thinking of is
+
+
+   (A) x <- 1     x <- foo()
+        \           /
+         \         /
+          \       /
+           \     /
+            \   /
+             \ /
+   (B)     z <- x + y
+
+Say spill x defined at (A). Then we need to reload it for use at point
+(B). Using enhanced code motion the load would be moved up to the edge
+coming from (A). So when we need to insert the load we can check the
+predecessor on that edge to see if it was once part of our live range
+(using the blockmap) and if it is rematerializable. If yes to both
+then generate a lightweight load, otherwise generate a heavyweight
+load.
 
 
