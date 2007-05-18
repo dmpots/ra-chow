@@ -176,12 +176,29 @@ RewriteControlFlow(Block* blkPred, Block* blkSucc, Block* blkOldSucc)
 
   //if using a jump table we must fix the label in the static data
   //area as well
-  if(op->opcode == JMPT)
+  if(op->opcode == JMPT || op->opcode == JMPr)
   {
-    debug("opcode is JMPT - fixing static data area");
+    debug("opcode is JMPT/JMPr - fixing static data area");
     assert(static_code_list); //must have it if there is a JMPT
 
-    Expr jmptab_label = op->arguments[0];
+    //find the lable for the jump table
+    Expr jmptab_label = NULL;
+    if(op->opcode == JMPT)
+    {
+      jmptab_label = op->arguments[0];
+    }
+    else //JMPr
+    {
+      //WARNING: HACK ATTACK
+      //so this is a huge hack, we are hoping that the first
+      //instruction in the block is a LDI of the label indicating the
+      //jump table. in all examples we saw it was, but may not always
+      //be so. also, if the block gets split the first inst may not be
+      //the correct loadI. heres to hope...
+      assert(blkPred->inst->next_inst->operations[0]->opcode == iLDI);
+      jmptab_label = 
+        blkPred->inst->next_inst->operations[0]->arguments[0];
+    }
     debug("jump table lable is: %s", Label_Get_String(jmptab_label));
     Static_Code_List* scl = static_code_list;
     do
