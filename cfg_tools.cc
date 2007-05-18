@@ -182,7 +182,7 @@ RewriteControlFlow(Block* blkPred, Block* blkSucc, Block* blkOldSucc)
     assert(static_code_list); //must have it if there is a JMPT
 
     //find the lable for the jump table
-    Expr jmptab_label = NULL;
+    Expr jmptab_label = 0;
     if(op->opcode == JMPT)
     {
       jmptab_label = op->arguments[0];
