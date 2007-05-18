@@ -44,6 +44,12 @@ expand HCT do |path|
   test path, :args => '-r1 -b2 -e -f'
 end
 
+#----------------- REMATERIALIZATION ---------------------#
+expand HCT do |path|
+  test path, :args => '-r32 -b15 -e -f -z'
+  test path, :args => '-r16 -b5 -e -f -z'
+end
+
 #----------------- EXPECTED FAILURES  ---------------------#
 test DODUC, :args => '-r32 -b3 -pm', 
             :expected => :XFAIL,
