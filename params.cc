@@ -23,6 +23,7 @@ float Params::Algorithm::loop_depth_weight = 10.0;
 bool  Params::Algorithm::enhanced_code_motion = false;
 bool  Params::Algorithm::move_loads_and_stores = false;
 bool  Params::Algorithm::rematerialize = false;
+bool  Params::Algorithm::trim_useless_blocks = false;
 
 /* program parameters */
 bool Params::Program::force_minimum_register_count = false;

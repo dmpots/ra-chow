@@ -36,7 +36,8 @@ typedef enum
   HELP_ENHANCEDCODEMOTION,
   HELP_FORCEMINIMUMREGISTERCOUNT,
   HELP_DUMPPARAMSONLY,
-  HELP_REMATERIALIZE
+  HELP_REMATERIALIZE,
+  HELP_TRIMUSELESS
 } Param_Help;
 
 
@@ -96,6 +97,7 @@ using Params::Algorithm::loop_depth_weight;
 using Params::Algorithm::move_loads_and_stores;
 using Params::Algorithm::enhanced_code_motion;
 using Params::Algorithm::rematerialize;
+using Params::Algorithm::trim_useless_blocks;
 using Params::Program::force_minimum_register_count;
 using Params::Program::dump_params_only;
 static Param_Details param_table[] = 
@@ -118,10 +120,12 @@ static Param_Details param_table[] =
   {'y', process_, I,F,dump_params_only,&dump_params_only,
          BOOL_PARAM, HELP_DUMPPARAMSONLY},
   {'z', process_, I,F,rematerialize,&rematerialize,
-         BOOL_PARAM, HELP_DUMPPARAMSONLY}
+         BOOL_PARAM, HELP_REMATERIALIZE},
+  {'t', process_, I,F,trim_useless_blocks,&trim_useless_blocks,
+         BOOL_PARAM, HELP_TRIMUSELESS}
 };
 const unsigned int NPARAMS = (sizeof(param_table) / sizeof(param_table[0]));
-const char* PARAMETER_STRING  = ":b:r:d:mpefyz";
+const char* PARAMETER_STRING  = ":b:r:d:mpefyzt";
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
 /*
@@ -359,6 +363,8 @@ static const char* get_usage(Param_Help idx)
       return "         dump values of allocation params and exit";
     case HELP_REMATERIALIZE:
       return "         rematerialize values instead of spilling";
+    case HELP_TRIMUSELESS:
+      return "         trim useless blocks after splitting";
 
     default:
       return " UNKNOWN PARAMETER\n";

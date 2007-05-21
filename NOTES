@@ -1482,3 +1482,25 @@ then generate a lightweight load, otherwise generate a heavyweight
 load.
 
 
+========================================================
+LiveRange Trimming
+Mon May 21 09:09:39 CDT 2007
+========================================================
+When done splitting a live range and it is time to trim. 
+
+To Trim:
+use worklist
+add any node where there is a use or a def.
+while worklist not empty
+  remove node
+  look at predecessors
+    if predecessor is in LR and not yet marked
+      mark predecessor
+      put predecessor on worklist
+
+go through all nodes and remove any node that is not marked
+
+
+note: we may leave some unconstrained lrs on the constrained list
+since we are deleting some live units from existence. this is not
+incorrect, but is not optimal.

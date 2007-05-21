@@ -22,6 +22,7 @@ namespace Params {
     extern bool enhanced_code_motion;
     extern bool move_loads_and_stores;
     extern bool rematerialize;
+    extern bool trim_useless_blocks;
   }
   namespace Program {
     extern bool force_minimum_register_count;
