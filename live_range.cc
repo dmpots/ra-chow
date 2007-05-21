@@ -537,6 +537,10 @@ Boolean LiveRange::IsEntirelyUnColorable() const
 LiveRange* LiveRange::Split()
 {
   Stats::chowstats.cSplits++;
+  if(Debug::dump_all_splits && splits->size() == 0)
+  {
+    Debug::DotDumpLR(this, "orig");
+  }
 
   //create a new live range and initialize values
   LiveRange* newlr = Mitosis();
@@ -572,12 +576,22 @@ LiveRange* LiveRange::Split()
   }
 
   LiveRange_UpdateAfterSplit(newlr, this);
+  splits->push_back(newlr);
   
+  // ------------ Debug ---------------//
   if(Debug::dot_dump_lr && Debug::dot_dump_lr == newlr->orig_lrid)
   {
     Debug::DotDumpLR(newlr, "split");
     Debug::dot_dumped_lrs.push_back(newlr);
   }
+  if(Debug::dump_all_splits)
+  {
+    Debug::DotDumpLR(newlr, "split");
+    char str[128] = {0};
+    sprintf(str, "split_%d", (int)splits->size());
+    Debug::DotDumpLR(this, str);
+  }
+  // ------------ Debug ---------------//
   return newlr;
 }
 
@@ -641,6 +655,7 @@ LiveRange* LiveRange::Mitosis()
   newlr->is_candidate = TRUE;
   newlr->type = type;
   newlr->blockmap = blockmap;
+  newlr->splits =  splits;
 
   //some sanity checks
   assert(color == Coloring::NO_COLOR);

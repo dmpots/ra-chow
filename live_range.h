@@ -54,6 +54,8 @@ struct LiveRange
 
   /* maps from block id --> live range, for keeping track of splits */
   std::map<unsigned int, LiveRange*> *blockmap; 
+  /* keeps track of all the live range split from this one */
+  std::vector<LiveRange*> *splits; 
 
   /* methods */
   void AddInterference(LiveRange* other);

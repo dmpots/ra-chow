@@ -35,6 +35,7 @@ struct LiveRange;
 namespace Debug {
   extern std::vector<LiveRange*> dot_dumped_lrs;
   extern LRID dot_dump_lr;
+  extern bool dump_all_splits;
 
   void LiveRange_DumpAll(LRVec*);
   void LiveRange_DDumpAll(LRVec* lrs);

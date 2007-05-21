@@ -260,6 +260,7 @@ void SplitRematerializableLiveRanges()
         lr->TransferLiveUnitTo(lr_new, *luIT);
       }
 
+      lr->splits->push_back(lr_new);
     }
 
     //rebuild interferences

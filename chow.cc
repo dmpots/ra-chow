@@ -542,6 +542,7 @@ void CreateLiveRanges(Arena arena, Unsigned_Int num_lrs)
     //the original live range that is shared by all live ranges split
     //from this one
     lr->blockmap = new std::map<unsigned int, LiveRange*>;
+    lr->splits = new std::vector<LiveRange*>;
     live_ranges[lrid] = lr;
   }
 }

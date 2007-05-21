@@ -48,6 +48,7 @@ std::vector<LiveRange*> dot_dumped_lrs;
 //used to control whether we dot dump a lr throughout the life of the
 //allocator. a non-zero value indicates the live range to watch
 LRID dot_dump_lr = 0;
+bool dump_all_splits = false;
 
 
 /*
