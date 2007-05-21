@@ -8,11 +8,14 @@
 #include <Shared.h>
 #include "types.h"
 
+/* forward def */
+struct LiveRange;
 namespace Chow 
 {
   namespace Extensions
   {
     void EnhancedCodeMotion(Edge*, Block*);
+    void Trim(LiveRange*);
   }
 }
 

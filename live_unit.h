@@ -22,6 +22,7 @@ struct LiveUnit
   Variable orig_name;
   std::list<LiveUnit*> *lr_units;
   std::list<LiveUnit*> *bb_units;
+  bool mark;
 }; 
 
 LiveUnit* LiveUnit_Alloc(Arena);

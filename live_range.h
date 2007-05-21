@@ -77,6 +77,8 @@ struct LiveRange
   Priority LiveRange::ComputePriority();
   LiveRange* Mitosis();
   void TransferLiveUnitTo(LiveRange* to, LiveUnit* unit);
+  void RebuildForbiddenList();
+  void RemoveLiveUnit(LiveUnit*);
 
   /* iterators */
   /* for live units in this live range */

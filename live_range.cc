@@ -18,6 +18,7 @@
 #include "cfg_tools.h" //control graph manipulation utilities
 #include "spill.h"
 #include "color.h"
+#include "chow_extensions.h"
 
 /*------------------MODULE LOCAL DEFINITIONS-------------------*/
 namespace {
@@ -76,7 +77,6 @@ namespace {
 
   LiveUnit* LiveRange_AddLiveUnit(LiveRange*, LiveUnit*);
   LiveUnit* LiveRange_AddLiveUnitBlock(LiveRange*, Block*);
-  void LiveRange_RemoveLiveUnit(LiveRange* , LiveUnit* );
   void LiveRange_RemoveLiveUnitBlock(LiveRange* lr, Block* b);
   LiveUnit* LiveRange_ChooseSplitPoint(LiveRange*);
   LiveUnit* LiveRange_IncludeInSplit(LiveRange*, LiveRange*, Block*);
@@ -574,6 +574,12 @@ LiveRange* LiveRange::Split()
       }
     }
   }
+  if(Params::Algorithm::trim_useless_blocks)
+  {
+    Chow::Extensions::Trim(this);
+    Chow::Extensions::Trim(newlr);
+    newlr->RebuildForbiddenList();
+  }
 
   LiveRange_UpdateAfterSplit(newlr, this);
   splits->push_back(newlr);
@@ -673,8 +679,35 @@ LiveRange* LiveRange::Mitosis()
 void LiveRange::TransferLiveUnitTo(LiveRange* to, LiveUnit* unit)
 {
   LiveRange_AddLiveUnit(to, unit);
-  LiveRange_RemoveLiveUnit(this, unit);
+  RemoveLiveUnit(unit);
   (*blockmap)[id(unit->block)] = to;
+}
+
+/*
+ *=============================
+ * LiveRange::RemoveLiveUnit()
+ *=============================
+ *
+ * removes a live unit from the live units list. if you call this
+ * function while iterating over the live units remember to bump the
+ * iterator before calling this function because its removal will
+ * invalidate it.
+ *
+ * NOTE: be wary if you change live units to not be stored in a
+ * std::list since removal can invalidate other elements pointed to by
+ * iterators if you are using other data structures.
+ ***/
+void LiveRange::RemoveLiveUnit(LiveUnit* unit)
+{
+  //remove from the basic block set
+  VectorSet_Delete(bb_list, id(unit->block));
+
+  std::list<LiveUnit*>::iterator elem;
+  elem = find(begin(), end(), unit);
+  if(elem != end())
+  {
+    units->erase(elem);
+  }
 }
 
 
@@ -710,26 +743,7 @@ void LiveRange_RemoveLiveUnitBlock(LiveRange* lr, Block* b)
 
   if(remove_unit != NULL)
   {
-    LiveRange_RemoveLiveUnit(lr, remove_unit);
-  }
-}
-
-/*
- *=============================
- * LiveRange_RemoveLiveUnitBlock()
- *=============================
- *
- ***/
-void LiveRange_RemoveLiveUnit(LiveRange* lr, LiveUnit* unit)
-{
-  //remove from the basic block set
-  VectorSet_Delete(lr->bb_list, id(unit->block));
-
-  std::list<LiveUnit*>::iterator elem;
-  elem = find(lr->units->begin(), lr->units->end(), unit);
-  if(elem != lr->units->end())
-  {
-    lr->units->erase(elem);
+    lr->RemoveLiveUnit(remove_unit);
   }
 }
 
@@ -947,15 +961,7 @@ void LiveRange_UpdateAfterSplit(LiveRange* newlr, LiveRange* origlr)
   //removing live units means we need to update the forbidden list
   //only do this for the orig live range since the new live range
   //keeps track as it goes
-  VectorSet_Clear(origlr->forbidden);
-  for(LiveRange::iterator it = origlr->begin(); it != origlr->end(); it++)
-  {
-    LiveUnit* unit = *it;
-    VectorSet vsUsed = Coloring::UsedColors(origlr->rc, unit->block);
-    VectorSet_Union(origlr->forbidden, 
-                    origlr->forbidden,
-                    vsUsed);
-  }
+  origlr->RebuildForbiddenList();
 
   //reset the priorites on the split live ranges since they are no
   //longer current. they will be recomputed if needed
@@ -963,6 +969,22 @@ void LiveRange_UpdateAfterSplit(LiveRange* newlr, LiveRange* origlr)
   origlr->priority = LiveRange::UNDEFINED_PRIORITY;
 }
 
+/*
+ *==================================
+ * LiveRange::RebuildForbiddenList()
+ *==================================
+ *
+ ***/
+void LiveRange::RebuildForbiddenList()
+{
+  VectorSet_Clear(forbidden);
+  for(LiveRange::iterator it = begin(); it != end(); it++)
+  {
+    LiveUnit* unit = *it;
+    VectorSet vsUsed = Coloring::UsedColors(rc, unit->block);
+    VectorSet_Union(forbidden, forbidden, vsUsed);
+  }
+}
  
 /*
  *============================

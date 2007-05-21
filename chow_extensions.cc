@@ -5,9 +5,11 @@
 /*--------------------------INCLUDES---------------------------*/
 #include <list>
 #include <utility>
+#include <queue>
 
 #include "chow_extensions.h"
 #include "live_range.h"
+#include "live_unit.h"
 #include "assign.h"
 #include "spill.h"
 #include "cfg_tools.h"
@@ -148,6 +150,60 @@ void EnhancedCodeMotion(Edge* edg, Block* blkLD)
     }
   }
 }
+
+/*
+ *========================================
+ * Chow::Extensions::Trim()
+ *========================================
+ * Attempts to trim away blocks that serve no purpose in the live
+ * range. these blocks come up after splitting a live range. there can
+ * be dangling blocks that are not part of a path that reaches a use
+ * or a def and thus serve no purpose.
+*/ 
+void Trim(LiveRange* lr)
+{
+  std::queue<LiveUnit*> worklist;
+  for(LiveRange::iterator i = lr->begin(); i != lr->end(); i++)
+  {
+    LiveUnit* lu = *i;
+    lu->mark = false;
+    if(lu->uses > 0 || lu->defs > 0){worklist.push(lu); lu->mark = true;}
+  }
+
+  //mark all useful live units
+  while(!worklist.empty())
+  {
+    LiveUnit* lu = worklist.front(); worklist.pop();
+    Edge* e;
+    Block_ForAllPreds(e, lu->block)
+    {
+      Block* pred = e->pred;
+      if(lr->ContainsBlock(pred)) 
+      {
+        LiveUnit* luPred = lr->LiveUnitForBlock(pred);
+        if(!luPred->mark)
+        {
+          luPred->mark = true;
+          worklist.push(luPred);
+        }
+      }
+    }
+  }
+
+  //delete unmarked units from the liverange
+  for(LiveRange::iterator i = lr->begin(); i != lr->end();)
+  {
+    LiveUnit* lu = *i; i++;
+
+    if(!lu->mark)
+    {
+      lr->RemoveLiveUnit(lu); 
+          //better be a list or i++ could be invalid
+    }
+  }
+
+}
+
 }}//end Chow::Enhancments namespace
 
 /*-------------------BEGIN LOCAL DEFINITIONS-------------------*/
