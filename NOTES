@@ -1504,3 +1504,28 @@ go through all nodes and remove any node that is not marked
 note: we may leave some unconstrained lrs on the constrained list
 since we are deleting some live units from existence. this is not
 incorrect, but is not optimal.
+
+========================================================
+Changes needed to make double take to float regs
+Tue May 22 15:18:12 CDT 2007
+========================================================
+HasColorAvailable()
+  - if it is a double then check that num_regs - forbidden size >= 2
+
+IsEntirelyUnColorable()
+  - need to check num_regs - forbidden size >=2 
+   <<and>>
+   there are two regs next to eachother on even numbered boundary
+
+AssignColor()
+  - factor out choosing a color into a function in color.cc
+  - if assigning to a double type then insert color,color+1 into
+    forbidden
+  - if asssigning to a double type then insert color,color+1 into
+    used_color set for each block
+
+IsConstrained()
+  - if it is a double lr then check if forbidden >= num_regs/2
+
+Add a command line switch to make double take two regs
+
