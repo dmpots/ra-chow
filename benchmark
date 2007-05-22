@@ -119,11 +119,12 @@ if __FILE__ == $0 then
     opt.on("-g", "--progress",
         "Print progress bar to stdout") {
       options.progress = true
-      options.ctest_args += "-Q"
+      options.ctest_args += "-Q" unless options.quiet_ctest 
     }
     opt.on("-Q", "--quiet-ctest",
         "Run ctest in quiet mode") {
-      options.ctest_args += "-Q"
+      options.ctest_args += "-Q" unless options.progress 
+      options.quiet_ctest = true
     }
     opt.on("-o", "--output OUTPUT_FILE",
         "Set the output file for the benchmarks") {|f|
