@@ -1525,7 +1525,13 @@ AssignColor()
     used_color set for each block
 
 IsConstrained()
-  - if it is a double lr then check if forbidden >= num_regs/2
+  - if it is a double lr then check if fearlist.size() >= num_regs/2
+
+ChooseSplitPoint()
+  - check to make sure color is available in the block
+
+IncludeInSplit()
+  - check to make sure color is available in the unioned set
 
 Add a command line switch to make double take two regs
 

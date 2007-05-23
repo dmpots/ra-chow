@@ -14,6 +14,7 @@ namespace Params {
     extern float load_save_weight;
     extern float store_save_weight;
     extern float move_cost_weight;
+    extern bool  double_takes_two_regs;
   }
   namespace Algorithm {
     extern int bb_max_insts;

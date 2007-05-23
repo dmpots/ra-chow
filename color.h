@@ -9,6 +9,8 @@
 #include "debug.h"
 #include "rc.h"
 
+/* forward def */
+struct LiveRange;
 
 namespace Coloring {
   /* constants */
@@ -20,6 +22,9 @@ namespace Coloring {
   void SetColor(Block* blk, LRID lrid, Color color);
   Color GetColor(Block* blk, LRID lrid);
   LRID GetLRID(Block* blk, RegisterClass::RC rc, Color color);
+
+  bool IsColorAvailable(LiveRange* lr, Block* blk);
+  bool IsColorAvailable(LiveRange* lr, VectorSet used_colors);
 }
 
 

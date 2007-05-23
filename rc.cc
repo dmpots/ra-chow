@@ -16,6 +16,7 @@
 #include "rc.h"
 #include "assign.h"
 #include "mapping.h"
+#include "params.h"
 
 /*------------------MODULE LOCAL DECLARATIONS------------------*/
 namespace {
@@ -30,6 +31,18 @@ RegisterClass::ReservedRegsInfo* mRc_ReservedRegs;
 /* constants */
 //update this if adding more classes
 const Unsigned_Int NUM_REG_CLASSES = 2; 
+//the number of registers required by each type, for example a double
+//requires two float registers.
+int mDefType_RegWidth[] = {
+  0, /* NO_DEFS */
+  1, /* INT_DEF */ 
+  1, /* FLOAT_DEF */
+  2, /* DOUBLE_DEF */
+  2, /* COMPLEX_DEF */ 
+  2, /* DCOMPLEX_DEF */ 
+  0  /* MULT_DEFS */
+};
+
 //space between sequential allocation of registers per class.
 //each register class will be allocated registers starting from
 //rc*REGCLASS_SPACE 
@@ -126,6 +139,14 @@ void Init(Arena arena,
     mRc_VsTmp[rc] = VectorSet_Create(arena, mRc_CReg[rc]);
   }
 
+  if(Params::Machine::double_takes_two_regs)
+  {
+    mDefType_RegWidth[DOUBLE_DEF] = 2;
+  }
+  else
+  {
+    mDefType_RegWidth[DOUBLE_DEF] = 1;
+  }
 }
 
 /*
@@ -227,6 +248,19 @@ VectorSet TmpVectorSet(RC rc)
 Unsigned_Int FirstRegister(RegisterClass::RC rc)
 {
   return rc*REGCLASS_SPACE;
+}
+
+/*
+ *========================
+ * RegWidth()
+ *========================
+ * Returns the "width" in registers for the given type, where width is
+ * the number of registers that type requires. For example, a type of
+ * Double requires two registers from the floating point class.
+ */
+int RegWidth(Def_Type dt)
+{
+  return mDefType_RegWidth[dt];
 }
 
 }//end RegisterClass namespace

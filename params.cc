@@ -15,6 +15,7 @@ bool  Params::Machine::enable_register_classes = true;
 float Params::Machine::load_save_weight = 1.0;
 float Params::Machine::store_save_weight = 1.0;
 float Params::Machine::move_cost_weight = 1.0;
+bool  Params::Machine::double_takes_two_regs = true;
 
 /* algorithm parameters */
 int   Params::Algorithm::bb_max_insts = 0;

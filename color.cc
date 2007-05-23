@@ -75,6 +75,29 @@ LRID Coloring::GetLRID(Block* blk, RegisterClass::RC rc, Color color)
   return lrid;
 }
 
+bool Coloring::IsColorAvailable(LiveRange* lr, Block* blk)
+{
+  return IsColorAvailable(lr, UsedColors(lr->rc, blk));
+}
+
+bool Coloring::IsColorAvailable(LiveRange* lr, VectorSet used_colors)
+{
+  /* TODO: this could be quite slow. keep an on on this section to see
+   * if we maybe need to speed it up */
+  int step = RegisterClass::RegWidth(lr->type);
+  for(Color c = 0; c < RegisterClass::NumMachineReg(lr->rc); c+=step)
+  {
+    bool free = true;
+    for(int i = 0; i < step; i++)
+    {
+      free = free && (!VectorSet_Member(used_colors, c+i));
+    }
+    if(free) return true;
+  }
+
+  return false;
+}
+
 /*------------------INTERNAL MODULE FUNCTIONS--------------------*/
 
 
