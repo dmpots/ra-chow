@@ -117,6 +117,7 @@ Color Coloring::SelectColor(const LiveRange* lr)
   }
 
   assert(false /*should always find a color */);
+  return -1U; //for sun compiler
 }
 
 /*------------------INTERNAL MODULE FUNCTIONS--------------------*/
