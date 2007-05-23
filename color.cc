@@ -24,6 +24,17 @@ namespace {
   //and JSR instructions
   std::map<std::pair<Block*, RegisterClass::RC>, std::map<Color,LRID> >
     inverse_color_map;
+
+  inline bool HasSpace(VectorSet used_colors, Color color, int width)
+  {
+    bool free = true;
+    for(int i = 0; i < width; i++)
+    {
+      free = free && (!VectorSet_Member(used_colors, color+i));
+    }
+
+    return free;
+  };
 }
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
@@ -75,27 +86,38 @@ LRID Coloring::GetLRID(Block* blk, RegisterClass::RC rc, Color color)
   return lrid;
 }
 
-bool Coloring::IsColorAvailable(LiveRange* lr, Block* blk)
+bool Coloring::IsColorAvailable(const LiveRange* lr, Block* blk)
 {
   return IsColorAvailable(lr, UsedColors(lr->rc, blk));
 }
 
-bool Coloring::IsColorAvailable(LiveRange* lr, VectorSet used_colors)
+bool Coloring::IsColorAvailable(const LiveRange* lr, VectorSet used_colors)
 {
   /* TODO: this could be quite slow. keep an on on this section to see
    * if we maybe need to speed it up */
   int step = RegisterClass::RegWidth(lr->type);
   for(Color c = 0; c < RegisterClass::NumMachineReg(lr->rc); c+=step)
   {
-    bool free = true;
-    for(int i = 0; i < step; i++)
-    {
-      free = free && (!VectorSet_Member(used_colors, c+i));
-    }
-    if(free) return true;
+    if(HasSpace(used_colors, c, step)) return true;
   }
 
   return false;
+}
+
+Color Coloring::SelectColor(const LiveRange* lr)
+{
+  //TODO: pick a better color, i.e. one that is used by neighbors
+  //neighbors. for now just pick the first available color
+  VectorSet free_colors = RegisterClass::TmpVectorSet(lr->rc);
+  VectorSet_Complement(free_colors, lr->forbidden);
+
+  int step = RegisterClass::RegWidth(lr->type);
+  for(Color c = 0; c < RegisterClass::NumMachineReg(lr->rc); c+=step)
+  {
+    if(HasSpace(lr->forbidden, c, step)) return c;
+  }
+
+  assert(false /*should always find a color */);
 }
 
 /*------------------INTERNAL MODULE FUNCTIONS--------------------*/

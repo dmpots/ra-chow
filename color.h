@@ -23,8 +23,9 @@ namespace Coloring {
   Color GetColor(Block* blk, LRID lrid);
   LRID GetLRID(Block* blk, RegisterClass::RC rc, Color color);
 
-  bool IsColorAvailable(LiveRange* lr, Block* blk);
-  bool IsColorAvailable(LiveRange* lr, VectorSet used_colors);
+  bool IsColorAvailable(const LiveRange* lr, Block* blk);
+  bool IsColorAvailable(const LiveRange* lr, VectorSet used_colors);
+  Color SelectColor(const LiveRange* lr);
 }
 
 

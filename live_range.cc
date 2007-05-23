@@ -183,7 +183,8 @@ void LiveRange::AddInterference(LiveRange* lr2)
 bool LiveRange::IsConstrained() const
 {
   return 
-    (fear_list->size() >= RegisterClass::NumMachineReg(rc));
+    (fear_list->size() >= 
+      (RegisterClass::NumMachineReg(rc)/RegisterClass::RegWidth(type)));
 }
 
 /*
@@ -223,23 +224,19 @@ void LiveRange::MarkNonCandidateAndDelete()
  ***/
 void LiveRange::AssignColor()
 {
-  //TODO: pick a better color, i.e. one that is used by neighbors
-  //neighbors
-  //for now just pick the first available color
-  VectorSet vsT = RegisterClass::TmpVectorSet(rc);
-  VectorSet_Complement(vsT, forbidden);
-  Color chosen_color = VectorSet_ChooseMember(vsT);
-  color = chosen_color;
-  assert(color < RegisterClass::NumMachineReg(rc));
-  is_candidate = FALSE; //no longer need a color
   Stats::chowstats.clrColored++;
+
+  color = Coloring::SelectColor(this);
+  is_candidate = FALSE; //no longer need a color
+  assert(color < RegisterClass::NumMachineReg(rc));
   debug("assigning color: %d to lr: %d", color, this->id);
 
   //update the interfering live ranges forbidden set
   for(LRSet::iterator it = fear_list->begin(); it != fear_list->end(); it++)
   {
     LiveRange* intf_lr = *it;
-    VectorSet_Insert(intf_lr->forbidden, color);
+    for(int i = 0; i < RegisterClass::RegWidth(type); i++)
+      VectorSet_Insert(intf_lr->forbidden, color+i);
     debug("adding color: %d to forbid list for LR: %d", color, intf_lr->id)
   }
 
@@ -249,7 +246,8 @@ void LiveRange::AssignColor()
     LiveUnit* unit = *it;
     VectorSet vs = Coloring::UsedColors(this->rc, unit->block);
     assert(!VectorSet_Member(vs, color));
-    VectorSet_Insert(vs, color);
+    for(int i = 0; i < RegisterClass::RegWidth(type); i++)
+      VectorSet_Insert(vs, color+i);
     Coloring::SetColor(unit->block, this->id, color);
 
     // ----------------  LOAD STORE OPTIMIZATION -----------------
@@ -481,7 +479,7 @@ Boolean LiveRange::InterferesWith(LiveRange* lr2) const
  */ 
 Boolean LiveRange::HasColorAvailable() const
 {
-  return (!VectorSet_Full(forbidden));
+  return (Coloring::IsColorAvailable(this, forbidden));
 }
 
 /*
@@ -504,11 +502,7 @@ Boolean LiveRange::IsEntirelyUnColorable() const
     //must have a free register where we have a def or a use
     if(unit->defs > 0 || unit->uses > 0)
     {
-      VectorSet vsUsedColors = Coloring::UsedColors(rc, unit->block);
-      if(!VectorSet_Full(vsUsedColors))
-      {
-        return false;
-      }
+      if(Coloring::IsColorAvailable(this, unit->block)) return false;
     }
   }
 
@@ -1015,8 +1009,7 @@ LiveUnit* LiveRange_ChooseSplitPoint(LiveRange* lr)
   for(LiveRange::iterator it = lr->begin(); it != lr->end(); it++)
   {
     LiveUnit* unit = *it;
-    VectorSet vsUsed = Coloring::UsedColors(lr->rc, unit->block);
-    if(!VectorSet_Full(vsUsed))
+    if(Coloring::IsColorAvailable(lr, unit->block))
     {
       //only take it if there is a use
       if(unit->uses > 0)
@@ -1059,12 +1052,9 @@ LiveUnit* LiveRange_IncludeInSplit(LiveRange* newlr,
   //we can include this block in the split if it does not max out the
   //forbidden set
   VectorSet vsUsed = Coloring::UsedColors(origlr->rc, b);
-  VectorSet vsT =
-    RegisterClass::TmpVectorSet(origlr->rc);
-  VectorSet_Union(vsT,
-                  newlr->forbidden, 
-                  vsUsed);
-  if(!VectorSet_Full(vsT))
+  VectorSet used_colors = RegisterClass::TmpVectorSet(origlr->rc);
+  VectorSet_Union(used_colors, newlr->forbidden, vsUsed);
+  if(Coloring::IsColorAvailable(newlr, used_colors))
   {
     unit = origlr->LiveUnitForBlock(b);
   }
