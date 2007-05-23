@@ -14,6 +14,7 @@
 namespace {
 LRID* ssa_name_to_lrid = NULL;
 Def_Type* mLrId_DefType = NULL;
+Def_Type* mSSAName_DefType = NULL;
 }
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
@@ -120,6 +121,25 @@ void Mapping::CreateLiveRangeTypeMap(Arena arena, Unsigned_Int lr_count)
 {
   mLrId_DefType = (Def_Type*)
         Arena_GetMemClear(arena,sizeof(Def_Type) * lr_count);
+
+  for(LOOPVAR i = 1; i < SSA_def_count; i++)
+  {
+    mLrId_DefType[SSAName2OrigLRID(i)] = mSSAName_DefType[i];
+  }
+  debug("done creating type map");
+}
+
+/*
+ *===============================
+ * Mapping::CreateSSANameTypeMap
+ *===============================
+ * Creates a mapping from ssa name to def type
+ */
+void Mapping::CreateSSANameTypeMap(Arena arena)
+{
+  mSSAName_DefType = (Def_Type*)
+        Arena_GetMemClear(arena,sizeof(Def_Type) * SSA_def_count);
+
   for(LOOPVAR i = 1; i < SSA_def_count; i++)
   {
     Def_Type def_type;
@@ -137,16 +157,26 @@ void Mapping::CreateLiveRangeTypeMap(Arena arena, Unsigned_Int lr_count)
       error("no use def chain for SSA name: %d", i);
       def_type = NO_DEFS;
     }
-    debug("LRID: %3d ==> Type: %d", SSAName2OrigLRID(i), def_type);
-    mLrId_DefType[SSAName2OrigLRID(i)] = def_type;
+    debug("SSA: %3d ==> Type: %d", i, def_type);
+    mSSAName_DefType[i] = def_type;
   }
-  debug("done creating type map");
 }
 
 /*
  *========================
- * Mapping::CreateLiveRangTypeMap
+ * Mapping::SSANameDefType
  *========================
+ * Gets a mapping from SSA name to def type
+ */
+Def_Type Mapping::SSANameDefType(Variable ssa_name)
+{
+  return mSSAName_DefType[ssa_name];
+}
+
+/*
+ *==========================
+ * Mapping::LiveRangeDefType
+ *==========================
  * Gets a mapping from live range id to def type
  */
 Def_Type Mapping::LiveRangeDefType(LRID lrid)

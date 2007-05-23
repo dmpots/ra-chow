@@ -13,6 +13,7 @@
 struct LiveRange;
 namespace Chow {
   extern std::vector<LiveRange*> live_ranges;
+  extern Arena arena;
   void Run();
 }
 

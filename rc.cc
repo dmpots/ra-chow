@@ -139,6 +139,10 @@ void Init(Arena arena,
     mRc_VsTmp[rc] = VectorSet_Create(arena, mRc_CReg[rc]);
   }
 
+}
+
+void InitRegWidths()
+{
   if(Params::Machine::double_takes_two_regs)
   {
     mDefType_RegWidth[DOUBLE_DEF] = 2;

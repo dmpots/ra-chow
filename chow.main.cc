@@ -6,10 +6,14 @@
 
 /*-----------------------MODULE INCLUDES-----------------------*/
 #include <Shared.h>
+#include <SSA.h>
 #include "chow.h"
 #include "params.h"
 #include "shared_globals.h" 
 #include "stats.h"
+#include "rc.h"
+#include "mapping.h"
+#include "cleave.h"
 
 /*------------------MODULE LOCAL DEFINITIONS-------------------*/
 /*#### module types ####*/
@@ -65,7 +69,9 @@ static void Param_InitDefaults(void);
 static void DumpParamTable(FILE* =stderr);
 static void Output(void);
 static void EnforceParameterConsistency();
-static void CheckRegisterLimitFeasibility(void);
+static void CheckRegisterLimitFeasibility(Arena);
+static void SetupMachineParams(Arena arena);
+static void  BuildSSA(Arena);
 static inline int max(int a, int b) { return a > b ? a : b;}
 
 /*#### module variables ####*/
@@ -196,7 +202,22 @@ int main(Int argc, Char **argv)
   //some paramerters should implicitly set other params, and this
   //function takse care of making sure our flags are consistent
   EnforceParameterConsistency();
-  CheckRegisterLimitFeasibility();
+
+  //build ssa for register requirement analysis and chow allocation
+  Chow::arena = Arena_Create();
+  if(Params::Algorithm::bb_max_insts > 0)
+  {
+    Stats::Start("Cleave Blocks");
+    //split basic blocks to desired size
+    InitCleaver(Chow::arena, Params::Algorithm::bb_max_insts);
+    CleaveBlocks();
+    Stats::Stop();
+  }
+  BuildSSA(Chow::arena);
+
+  //setup machine configuration
+  CheckRegisterLimitFeasibility(Chow::arena);
+  SetupMachineParams(Chow::arena);
 
   //Run the priority algorithm
   Chow::Run();
@@ -433,7 +454,7 @@ void EnforceParameterConsistency()
  * if ForceMinimumRegisterCount is enabled then we will modify
  * the number of machine registers.
  ***/
-void CheckRegisterLimitFeasibility()
+void CheckRegisterLimitFeasibility(Arena arena)
 {
   Block* b;
   Inst* inst;
@@ -442,6 +463,10 @@ void CheckRegisterLimitFeasibility()
   int cRegUses;
   int cRegDefs;
   int cRegMax = 0;
+
+  //need to know how wide each register type is
+  Mapping::CreateSSANameTypeMap(arena);
+  RegisterClass::InitRegWidths();
 
   ForAllBlocks(b)
   {
@@ -453,12 +478,14 @@ void CheckRegisterLimitFeasibility()
       {
         Operation_ForAllUses(reg, *op)
         {
-          cRegUses++;
+          cRegUses +=
+            RegisterClass::RegWidth(Mapping::SSANameDefType(*reg));
         }
 
         Operation_ForAllDefs(reg, *op)
         {
-          cRegDefs++;
+          cRegDefs +=
+            RegisterClass::RegWidth(Mapping::SSANameDefType(*reg));
         }
         if(cRegUses > cRegMax ){cRegMax = cRegUses; }
         if(cRegDefs > cRegMax) {cRegMax = cRegDefs; }
@@ -487,4 +514,23 @@ a magic wand.\n", Params::Machine::num_registers, cRegMax);
   }
 }
 
+void SetupMachineParams(Arena arena)
+{
+  RegisterClass::Init(arena, 
+                      Params::Machine::num_registers,
+                      Params::Machine::enable_register_classes,
+                      Params::Algorithm::num_reserved_registers);
+}
 
+
+void BuildSSA(Arena arena)
+{
+  Unsigned_Int ssa_options = 0;
+  ssa_options |= SSA_PRUNED;
+  ssa_options |= SSA_BUILD_DEF_USE_CHAINS;
+  ssa_options |= SSA_BUILD_USE_DEF_CHAINS;
+  ssa_options |= SSA_CONSERVE_LIVE_IN_INFO;
+  ssa_options |= SSA_CONSERVE_LIVE_OUT_INFO;
+  ssa_options |= SSA_IGNORE_TAGS;
+  SSA_Build(ssa_options);
+}

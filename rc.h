@@ -27,6 +27,7 @@ namespace RegisterClass {
             Unsigned_Int cReg,
             Boolean fEnableClasses,
             Unsigned_Int cReserved);
+  void InitRegWidths();
   RC InitialRegisterClassForLRID(LRID lrid);
   unsigned int NumMachineReg(RC);
   Register MachineRegForColor(RC, Color);

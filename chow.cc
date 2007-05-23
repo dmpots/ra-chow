@@ -59,22 +59,9 @@ namespace Chow {
 
 void Chow::Run()
 {
-  //arena for all chow memory allocations
-  arena = Arena_Create(); 
-
   //--- Initialization for building live ranges ---//
-  if(Params::Algorithm::bb_max_insts > 0)
-  {
-    Stats::Start("Cleave Blocks");
-    //split basic blocks to desired size
-    InitCleaver(arena, Params::Algorithm::bb_max_insts);
-    CleaveBlocks();
-    Stats::Stop();
-  }
-  RegisterClass::Init(arena, 
-                      Params::Machine::num_registers,
-                      Params::Machine::enable_register_classes,
-                      Params::Algorithm::num_reserved_registers);
+  //arena for all chow memory allocations
+  if(arena == NULL){arena = Arena_Create(); }
 
   //--- Build live ranges ---//
   BuildInitialLiveRanges(arena);
@@ -271,16 +258,6 @@ ComputePriorityAndChooseTop(LRSet* constr_lrs, LRSet* unconstr_lrs)
 void BuildInitialLiveRanges(Arena chow_arena)
 {
   using Chow::live_ranges;
-
-  //build ssa
-  Unsigned_Int ssa_options = 0;
-  ssa_options |= SSA_PRUNED;
-  ssa_options |= SSA_BUILD_DEF_USE_CHAINS;
-  ssa_options |= SSA_BUILD_USE_DEF_CHAINS;
-  ssa_options |= SSA_CONSERVE_LIVE_IN_INFO;
-  ssa_options |= SSA_CONSERVE_LIVE_OUT_INFO;
-  ssa_options |= SSA_IGNORE_TAGS;
-  SSA_Build(ssa_options);
 
   //run union find over phi nodes to get initial live ranges
   unsigned int clrInitial = FindLiveRanges(chow_arena);
