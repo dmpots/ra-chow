@@ -182,9 +182,25 @@ void LiveRange::AddInterference(LiveRange* lr2)
  ***/
 bool LiveRange::IsConstrained() const
 {
-  return 
-    (fear_list->size() >= 
-      (RegisterClass::NumMachineReg(rc)/RegisterClass::RegWidth(type)));
+  bool constrained;
+  if (fear_list->size() >= 
+      (RegisterClass::NumMachineReg(rc)/RegisterClass::RegWidth(type)))
+  {
+    constrained = true;
+  }
+  else
+  {
+    unsigned int total_width = 0;
+    for(LRSet::iterator it = fear_list->begin(); 
+        it != fear_list->end(); 
+        it++)
+    {
+      total_width += RegisterClass::RegWidth((*it)->type);
+    }
+    constrained = total_width >= RegisterClass::NumMachineReg(rc);
+
+  }
+  return constrained;
 }
 
 /*

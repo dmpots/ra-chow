@@ -96,7 +96,8 @@ bool Coloring::IsColorAvailable(const LiveRange* lr, VectorSet used_colors)
   /* TODO: this could be quite slow. keep an on on this section to see
    * if we maybe need to speed it up */
   int step = RegisterClass::RegWidth(lr->type);
-  for(Color c = 0; c < RegisterClass::NumMachineReg(lr->rc); c+=step)
+  unsigned int ub = RegisterClass::NumMachineReg(lr->rc) - step + 1;
+  for(Color c = 0; c < ub; c+=step)
   {
     if(HasSpace(used_colors, c, step)) return true;
   }
@@ -108,11 +109,9 @@ Color Coloring::SelectColor(const LiveRange* lr)
 {
   //TODO: pick a better color, i.e. one that is used by neighbors
   //neighbors. for now just pick the first available color
-  VectorSet free_colors = RegisterClass::TmpVectorSet(lr->rc);
-  VectorSet_Complement(free_colors, lr->forbidden);
-
   int step = RegisterClass::RegWidth(lr->type);
-  for(Color c = 0; c < RegisterClass::NumMachineReg(lr->rc); c+=step)
+  unsigned int ub = RegisterClass::NumMachineReg(lr->rc) - step + 1;
+  for(Color c = 0; c < ub; c+=step)
   {
     if(HasSpace(lr->forbidden, c, step)) return c;
   }

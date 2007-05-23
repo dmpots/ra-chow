@@ -627,6 +627,7 @@ void SplitNeighbors(LiveRange* lr, LRSet* constr_lr, LRSet* unconstr_lr)
       debug("Need to split LR: %d", intf_lr->id);
       if(intf_lr->IsEntirelyUnColorable())
       {
+        debug("LR: %d is uncolorable - will not split", intf_lr->id);
         //delete this live range from the interference graph. update
         //the constrained lists since live ranges may shuffle around
         //after we delete this from the interference graph

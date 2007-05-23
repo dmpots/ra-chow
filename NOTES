@@ -1535,3 +1535,30 @@ IncludeInSplit()
 
 Add a command line switch to make double take two regs
 
+========================================================
+Chow mis-characterize when live ranges are constrained
+Tue May 22 22:41:25 CDT 2007
+========================================================
+When you have a register type that must occupy two smaller registers
+(such as a double taking two float registers) Chow says that you
+should consider the bigger registers constrained if the have more
+neighbors that 1/2 of the total registers due to the fact that they
+take two registers.
+
+In fact this is not good enough because you may have a live range that
+is of the smaller register type that has less neighbors than the
+number of available registers, but each neighbor requires double
+registers. Thus if you have 7 neighbors and 14 registers then you
+should consider yourself constrained. So actually if you have less
+neighbors than number of registers you still need to count up the
+possible required registers by type of neighbor.
+
+========================================================
+Things that are messed up with double registers
+Tue May 22 22:49:26 CDT 2007
+========================================================
+1) temporary registers still only use one register for a double
+2) counting the number of required registers in
+CheckRegisterLimitFeasibility.
+3) possibly when evicting registers from frame and JSR statements
+
