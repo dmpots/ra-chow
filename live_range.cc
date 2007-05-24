@@ -19,6 +19,7 @@
 #include "spill.h"
 #include "color.h"
 #include "chow_extensions.h"
+#include "reach.h"
 
 /*------------------MODULE LOCAL DEFINITIONS-------------------*/
 namespace {
@@ -85,6 +86,7 @@ namespace {
   Boolean LiveRange_EntryPoint(LiveRange* lr, LiveUnit* unit);
   void LiveRange_MarkLoads(LiveRange* lr);
   void LiveRange_MarkStores(LiveRange* lr);
+  void LiveRange_MarkStores__ORIG(LiveRange* lr);
   void LiveRange_InsertLoad(LiveRange* lr, LiveUnit* unit);
   void LiveRange_InsertStore(LiveRange*lr, LiveUnit* unit);
   Priority LiveRange_OrigComputePriority(LiveRange* lr);
@@ -413,6 +415,7 @@ void LiveRange::MarkLoadsAndStores()
 {
   LiveRange_MarkLoads(this);
   LiveRange_MarkStores(this);
+  //LiveRange_MarkStores__ORIG(this);
 }
 
 
@@ -1109,6 +1112,102 @@ void LiveRange_MarkLoads(LiveRange* lr)
  * Calculates where to place the needed stores 
  */
 void LiveRange_MarkStores(LiveRange* lr)
+{
+  debug("*** MARKING STORES for LR: %d ***\n", lr->id);
+  std::vector<Block*> def_blocks;
+  for(LiveRange::iterator it = lr->begin(); it != lr->end(); it++)
+  {
+    LiveUnit* unit = *it;
+    if(unit->defs > 0)
+    {
+      //fStore = TRUE; //TODO: can optimize by caching this in LR
+      def_blocks.push_back(unit->block);
+    }
+  }
+  if(def_blocks.size() > 0)
+  {
+    //build union of all reaching sets for any block containing a def
+    VectorSet_Clear(LiveRange::tmpbbset);
+    for(unsigned int i = 0; i < def_blocks.size(); i++)
+    {
+      VectorSet_Union(
+        LiveRange::tmpbbset, 
+        LiveRange::tmpbbset, 
+        Reach::ReachableBlocks(def_blocks[i]));
+    }
+    //interset with this live ranges blocks to limit our scope
+    VectorSet_Intersect(
+      LiveRange::tmpbbset, 
+      LiveRange::tmpbbset, 
+      lr->bb_list);
+
+    //check all blocks a def reaches to see if a store is needed
+    for(LiveRange::iterator it = lr->begin(); it != lr->end(); it++)
+    {
+      LiveUnit* unit = *it;
+      if(!VectorSet_Member(LiveRange::tmpbbset, id(unit->block)))
+        continue;
+
+      Boolean only_internal_store = TRUE; //keep track of why store needed
+      unit->internal_store = FALSE; //reset to false, make true later
+      Edge* edg;
+      Block_ForAllSuccs(edg, unit->block)
+      {
+        Block* blkSucc = edg->succ;
+        if(lr->ContainsBlock(blkSucc))
+        { 
+          //debug("checking lr: %d successor block %s(%d)",
+          //      lr->id, bname(blkSucc), id(blkSucc));
+          LiveUnit* luSucc = lr->LiveUnitForBlock(blkSucc);
+
+          //a direct successor in our live range needs a load
+          if(luSucc->need_load) 
+          {
+            unit->need_store = TRUE;
+            debug("store needed for lr: %d block(%s) "
+                  "because load need in %s(%d)", lr->id, 
+                  bname(unit->block), bname(blkSucc), id(blkSucc));
+          }
+        }
+        else //unit is an exit point of the live range
+        {
+          //test for liveness
+          Liveness_Info info = SSA_live_in[id(blkSucc)];
+          for(LOOPVAR j = 0; j < info.size; j++)
+          {
+            //debug("LIVE_IN: %d in %s",info.names[j], bname(blkSucc));
+            //def is live along this path
+            if(lr->orig_lrid == info.names[j])
+            {
+              unit->need_store = TRUE;
+              only_internal_store = FALSE;
+              debug("store needed for lr: %d block(%s) "
+                    "because it is live in at successor %s(%d)\n",
+                    lr->id, bname(unit->block), 
+                    bname(blkSucc), id(blkSucc));
+              break;
+            }
+          }
+          if(!unit->need_store) {debug("NO STORE: %d\n",unit->orig_name);}
+        }//else, succ not in live range
+      }//end: ForAllSuccs
+      //now mark whether this store is internal to the live range only
+      if(unit->need_store && only_internal_store)
+      {
+        unit->internal_store = TRUE;
+      }
+    }//end: for all units
+  }//endif: lr contains a def
+  debug("\n*** DONE MARKING STORES for LR: %d ***\n", lr->id);
+}
+
+/*
+ *=================================
+ * LiveRange_MarkStores
+ *=================================
+ * Calculates where to place the needed stores 
+ */
+void LiveRange_MarkStores__ORIG(LiveRange* lr)
 {
 debug("*** MARKING STORES for LR: %d ***\n", lr->id);
   //walk through the live units and look for a store 

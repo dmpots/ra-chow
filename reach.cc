@@ -54,10 +54,12 @@ void ComputeReachability(Arena arena)
       }
     }
   }
+  /*
   ForAllBlocks(blk){
     fprintf(stderr, "blk: %s(%d):\t\t", bname(blk), id(blk));
     VectorSet_Dump(mBlk_ReachSet[id(blk)]);
   }
+  */
 }
 
 /*
