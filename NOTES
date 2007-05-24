@@ -1505,6 +1505,14 @@ note: we may leave some unconstrained lrs on the constrained list
 since we are deleting some live units from existence. this is not
 incorrect, but is not optimal.
 
+validate that trimming works on fmin.i for these live ranges
+  tmp_22_120: only top four blocks
+  tmp_22_22_split1: only use block
+  tmp_13_13_split1: no blocks
+  tmp_13_121: all the same blocks
+
+
+
 ========================================================
 Changes needed to make double take to float regs
 Tue May 22 15:18:12 CDT 2007
@@ -1593,3 +1601,24 @@ Wed May 23 20:47:32 CDT 2007
 When moving loads and stores the cost computation is not accurate for
 stores because any store that can be deleted should not count against
 the live range
+
+========================================================
+Implementing double registers in assign.cc
+Thu May 24 13:16:11 CDT 2007
+========================================================
+GetFreeTempReg()
+  540 - write function FindFreeReservedReg() to find a reserved reg
+  using the pairing info
+
+MarkRegisterUsed()
+  make sure to mark the entire pair used
+
+FindUsableReg()
+  probably easiest to change roundRobinIt to an in and use indexing
+
+RemoveUnusableReg()
+  need to remove reg+width depedning on live range type
+
+UnEvict()
+  erase from regMap the width of the lr
+
