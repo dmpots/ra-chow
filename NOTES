@@ -1558,7 +1558,38 @@ Things that are messed up with double registers
 Tue May 22 22:49:26 CDT 2007
 ========================================================
 1) temporary registers still only use one register for a double
-2) counting the number of required registers in
+X) counting the number of required registers in
 CheckRegisterLimitFeasibility.
 3) possibly when evicting registers from frame and JSR statements
 
+
+========================================================
+An alternate strategy for marking stores
+Wed May 23 20:24:44 CDT 2007
+========================================================
+Trying an alternate strategy for marking stores by using reachability.
+
+1) compute reachability so that there is a map from block -> set of
+blocks that can be reached from that block. use iterative dataflow
+worklist algorithm with equation:
+  Reach(b) = b \cup_{s \in succ} Reach(s)
+
+2) MarkStores()
+  build union of reach sets for each block that contains a def
+  intersect the union with the set of blocks in the live range
+  for each block in the live range
+    if block in defreach set then
+      if successor block needs load
+        need_store = true
+      if successor block not in live range
+        if live in at succsor block
+          need_store = true
+
+
+========================================================
+Cost computation for stores not accurate
+Wed May 23 20:47:32 CDT 2007
+========================================================
+When moving loads and stores the cost computation is not accurate for
+stores because any store that can be deleted should not count against
+the live range

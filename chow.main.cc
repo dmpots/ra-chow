@@ -14,6 +14,7 @@
 #include "rc.h"
 #include "mapping.h"
 #include "cleave.h"
+#include "reach.h"
 
 /*------------------MODULE LOCAL DEFINITIONS-------------------*/
 /*#### module types ####*/
@@ -71,7 +72,7 @@ static void Output(void);
 static void EnforceParameterConsistency();
 static void CheckRegisterLimitFeasibility(Arena);
 static void SetupMachineParams(Arena arena);
-static void  BuildSSA(Arena);
+static void  DataFlowAnalysis(Arena);
 static inline int max(int a, int b) { return a > b ? a : b;}
 
 /*#### module variables ####*/
@@ -213,7 +214,7 @@ int main(Int argc, Char **argv)
     CleaveBlocks();
     Stats::Stop();
   }
-  BuildSSA(Chow::arena);
+  DataFlowAnalysis(Chow::arena);
 
   //setup machine configuration
   CheckRegisterLimitFeasibility(Chow::arena);
@@ -523,7 +524,7 @@ void SetupMachineParams(Arena arena)
 }
 
 
-void BuildSSA(Arena arena)
+void DataFlowAnalysis(Arena arena)
 {
   Unsigned_Int ssa_options = 0;
   ssa_options |= SSA_PRUNED;
@@ -533,4 +534,6 @@ void BuildSSA(Arena arena)
   ssa_options |= SSA_CONSERVE_LIVE_OUT_INFO;
   ssa_options |= SSA_IGNORE_TAGS;
   SSA_Build(ssa_options);
+
+  Reach::ComputeReachability(arena);
 }
