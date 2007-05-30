@@ -223,8 +223,8 @@ void EnsureReg(Register* reg,
   using Spill::InsertStore;
   using Chow::live_ranges;
 
-  debug("ensuring reg: %d for inst: \n   %s",
-     *reg, Debug::StringOfInst(origInst));
+  debug("ensuring reg: %d for inst (0x%p): \n   %s",
+     *reg, origInst, Debug::StringOfInst(origInst));
 
   LRID orig_lrid = Mapping::SSAName2OrigLRID(*reg);
   *reg = GetMachineRegAssignment(blk, orig_lrid);
@@ -320,7 +320,7 @@ Register GetMachineRegAssignment(Block* b, LRID lrid)
   if(lrid == Spill::frame.lrid)
     return Spill::REG_FP;
 
-   /* return REG_UNALLOCATED; spill everything */
+   /* return REG_UNALLOCATED; to spill everything */
 
   Register color = GetColor(b, lrid);
   if(color == NO_COLOR)
@@ -415,7 +415,9 @@ void dump_map_contents(AssignedRegMap& regMap)
   debug("-- map contents --");
   AssignedRegMap::iterator rmIt;
   for(rmIt = regMap.begin(); rmIt != regMap.end(); rmIt++)
-    debug("  %d --> %d", (*rmIt).first, ((*rmIt).second)->machineReg);
+    debug("  %d --> %d (width: %d) (forInst: 0x%p)", (*rmIt).first, 
+    ((*rmIt).second)->machineReg, RegWidth((*rmIt).first),
+    ((*rmIt).second)->forInst);
   debug("-- end map contents --");
 }
 
@@ -578,7 +580,6 @@ GetFreeTmpReg(LRID lrid,
       FindSutiableTmpReg(regContents, origInst, purpose, instUses, rwidth);
     if(tmpReg != NULL)
     {
-      debug("found a temporary register to use"); 
       regXneedMem.first = 
         MarkRegisterUsed(tmpReg, origInst, purpose, lrid, regMap,
                          regContents->reserved, rwidth);
@@ -799,21 +800,32 @@ Register MarkRegisterUsed(AssignedReg* tmpReg,
                           AssignedRegList* reglist,
                           unsigned int rwidth)
 {
+  debug("marking reg: %d used for lrid: %d",tmpReg->machineReg, lrid);
+
   //remove any previous mapping that may exist for the live range in
   //this temporary register
-  debug("marking reg: %d used for lrid: %d",tmpReg->machineReg, lrid);
-  LRID prevLRID = tmpReg->forLRID;
-
-  RegMapIterator rmIt = regMap->find(prevLRID);
-  if(rmIt != regMap->end()){
-    debug("removing previous mapping reg: %d for lrid: %d",
-          (*rmIt).second->machineReg, prevLRID);
-    regMap->erase(rmIt);
-  }
-
-  //mark the temporary register as used
   for(unsigned int i = tmpReg->index; i< tmpReg->index + rwidth; i++)
   {
+    LRID prevLRID = (*reglist)[i]->forLRID;
+    RegMapIterator rmIt = regMap->find(prevLRID);
+    if(rmIt != regMap->end()){
+      debug("removing previous mapping reg: %d for lrid: %d",
+            (*rmIt).second->machineReg, prevLRID);
+      regMap->erase(rmIt);
+      //if a previous mapping exists then free all of the registers
+      //used by the liverange in the previous mapping
+      for(unsigned int j = i; j < i + RegWidth(prevLRID); j++)
+      {
+        (*reglist)[j]->free = TRUE;
+        (*reglist)[j]->forInst = NULL;
+        (*reglist)[j]->forLRID = NO_LRID;
+      }
+    }
+  }
+
+  for(unsigned int i = tmpReg->index; i< tmpReg->index + rwidth; i++)
+  {
+    //mark the temporary register as used
     (*reglist)[i]->free = FALSE;
     (*reglist)[i]->forInst = inst;
     (*reglist)[i]->forPurpose = purpose;
@@ -928,6 +940,7 @@ FindSutiableTmpReg(RegisterContents* regContents,
   //2) check to see if we have any more reserved registers available
   AssignedRegList reserved = *(regContents->reserved);
   {
+    debug("searching for a free temporary register");
     const AssignedRegList& free = 
       FindCandidateRegs(regContents->reserved, 
                         reg_width, 
@@ -947,6 +960,7 @@ FindSutiableTmpReg(RegisterContents* regContents,
   //register so now is the time to do it.
   if(tmpReg == NULL)
   {
+    debug("searching for an evictable temporary register");
     const AssignedRegList& kickable = 
       FindCandidateRegs(regContents->reserved, 
                         reg_width, 
@@ -988,7 +1002,7 @@ FindCandidateRegs(const AssignedRegList* possibles,
     }
     if(ok)
     {
-      debug("found a candidate: %d", r);
+      debug("found a candidate: %d", (*possibles)[r]->machineReg);
       candidates.push_back((*possibles)[r]);
     }
   }
