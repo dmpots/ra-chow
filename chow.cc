@@ -807,7 +807,8 @@ void RenameRegisters()
     //make available the tmp regs used in this instruction
     //pass in a pointer to the last instruction in the block so
     //that we can insert loads for evicted registers
-    ResetFreeTmpRegs(b->inst->prev_inst); 
+    if(!(Block_SuccCount(b) == 1 && Block_PredCount(b->succ->succ) == 1))
+      ResetFreeTmpRegs(b->inst->prev_inst); 
   }
 
   //if we are to optimize positions of loads and stores, do so after

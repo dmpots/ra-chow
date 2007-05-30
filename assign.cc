@@ -270,9 +270,6 @@ void EnsureReg(Register* reg,
  **/
 void ResetFreeTmpRegs(Inst* last_inst)
 {
-  using Spill::InsertLoad;
-  using Chow::live_ranges;
-
   debug("resetting free tmp regs");
   //take care of business for each register class
   for(unsigned int i = 0; i < reg_contents.size(); i++)
