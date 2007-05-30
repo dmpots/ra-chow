@@ -18,7 +18,7 @@ namespace Params {
   }
   namespace Algorithm {
     extern int bb_max_insts;
-    extern int num_reserved_registers;
+    extern unsigned int num_reserved_registers[];
     extern float loop_depth_weight;
     extern bool enhanced_code_motion;
     extern bool move_loads_and_stores;

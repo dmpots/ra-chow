@@ -15,6 +15,11 @@ namespace RegisterClass {
   {
     Register* regs;         /* array of temporary registers */
     Unsigned_Int cReserved; /* count of number reserved */
+    /* count of number hidden at the front, for all but INT reg  class
+     * this is the same as reserved, but ints need an extra hidden reg
+     * for the frame pointer */
+    Unsigned_Int cHidden;
+
   }; 
 
   /* variables */
@@ -26,7 +31,7 @@ namespace RegisterClass {
   void Init(Arena arena, 
             Unsigned_Int cReg,
             Boolean fEnableClasses,
-            Unsigned_Int cReserved);
+            Unsigned_Int* cReserved);
   void InitRegWidths();
   RC InitialRegisterClassForLRID(LRID lrid);
   unsigned int NumMachineReg(RC);

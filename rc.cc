@@ -67,7 +67,7 @@ const ReservedRegsInfo& GetReservedRegInfo(RC rc)
 void Init(Arena arena, 
           Unsigned_Int cReg, 
           Boolean fEnableClasses,
-          Unsigned_Int cReserved)
+          Unsigned_Int* cReserved)
 {
   unsigned int cRegisterClass = 1;
   fEnableMultipleClasses = fEnableClasses;
@@ -87,7 +87,7 @@ void Init(Arena arena,
     Arena_GetMemClear(arena, sizeof(Unsigned_Int)* cRegisterClass);
   for(unsigned int i = 0; i < all_classes.size(); i++)
   {
-    mRc_CReg[all_classes[i]] = cReg - cReserved;
+    mRc_CReg[all_classes[i]] = cReg - cReserved[i];
   }
 
   //allocate an array of reserved register structs. these are used
@@ -102,14 +102,15 @@ void Init(Arena arena,
     //allocate and initialize the array of registers for this class
     ReservedRegsInfo* reserved = &(mRc_ReservedRegs[rc]);
     reserved->regs = (Register*)
-      Arena_GetMemClear(arena, sizeof(Register) * cReserved);
-    for(LOOPVAR i = 0; i < cReserved; i++)
+      Arena_GetMemClear(arena, sizeof(Register) * cReserved[i]);
+    for(LOOPVAR j = 0; j < cReserved[i]; j++)
     {
-      reserved->regs[i] = FirstRegister(rc)+i;
+      reserved->regs[j] = FirstRegister(rc)+j;
     }
 
     //initialize remaing struct values
-    reserved->cReserved = cReserved;
+    reserved->cReserved = cReserved[i];
+    reserved->cHidden   = cReserved[i];
   }
 
   //reserve registers for addressability. at this time we only reserve
@@ -120,12 +121,12 @@ void Init(Arena arena,
   //so we bump the remaining regs by one. actually I think this is a
   //little silly and most machines would have a special register
   //already reserved for this purpose.
-  ReservedRegsInfo* reservedIntRegs = &(mRc_ReservedRegs[0]);
-  for(LOOPVAR i = 0; i < cReserved; i++)
+  ReservedRegsInfo* reservedIntRegs = &(mRc_ReservedRegs[INT]);
+  for(LOOPVAR i = 0; i < cReserved[INT]; i++)
   {
     reservedIntRegs->regs[i]++;
   }  
-  reservedIntRegs->cReserved++;
+  reservedIntRegs->cHidden++;
   mRc_CReg[0]--;
 
   //allocate temporary vector sets sized to the number of available
@@ -138,7 +139,6 @@ void Init(Arena arena,
     RC rc  = all_classes[i];
     mRc_VsTmp[rc] = VectorSet_Create(arena, mRc_CReg[rc]);
   }
-
 }
 
 void InitRegWidths()
@@ -217,7 +217,7 @@ Register MachineRegForColor(RC rc, Color c)
   //number of reserved registers for that class
   Register r = (FirstRegister(rc))
                + (c) 
-               + (mRc_ReservedRegs[rc].cReserved);
+               + (mRc_ReservedRegs[rc].cHidden);
   debug("MACHINE REG(rc,c):(%d,%d) = %d",rc,c,r);
   return  r;
 }
@@ -231,7 +231,7 @@ Register MachineRegForColor(RC rc, Color c)
  */
 Color ColorForMachineReg(RC rc, Register r)
 {
-  Color c = r - (FirstRegister(rc)) - (mRc_ReservedRegs[rc].cReserved);
+  Color c = r - (FirstRegister(rc)) - (mRc_ReservedRegs[rc].cHidden);
   debug("Color (rc,r):(%d,%d) = %d",rc,r,c);
   return  c;
 }

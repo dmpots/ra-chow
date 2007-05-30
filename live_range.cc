@@ -470,6 +470,16 @@ unsigned int LiveRange::Alignment() const
   return alignment_size[type];
 }
 
+/*
+ *================================
+ * LiveRange::RegWidth()
+ *================================
+ *
+ ***/
+unsigned int LiveRange::RegWidth() const
+{
+  return RegisterClass::RegWidth(type);
+}
 
 /*
  *=============================

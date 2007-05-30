@@ -1622,3 +1622,48 @@ RemoveUnusableReg()
 UnEvict()
   erase from regMap the width of the lr
 
+
+---
+GetFreeTmpReg()
+  + in step 1 update the full width of reserved registers
+  + combine steps 2,3 into one function: FindSutiableReg() and return
+  null if no reg works
+  + need to make a function for trimming potential registers that
+  respects the type of the live range that we are evcting so the
+  correct width of registers is trimmed
+  + same with trimming already evicted registers
+  + when choosing a register to evict you must still respect widths.
+  so that means either evicting two allocated floats or one allocated
+  double
+
+UnEvict()
+  + when resetting values for kicked assigned reg make sure to do it
+  for the entire width of the live range
+
+FindUsableReg()
+  + pass in vector of candidate pool
+  + accumulate candidates in a list based on a passed in predicate
+  + choose from the candidates 
+
+Invariants to maintain:
+  (1) regMap contains a mapping from lrid to first reg used
+  (2) reservedRegs accurately reflect the state of use in that if a
+  lr needs r0 and r1 then the reserved reg for both will have the
+  correct values in terms of origInst and purpose
+
+FindCandidates()
+  search_vector
+  for(0, ub by width)
+    found = true
+    for 0,width by 1
+      found = found and pred(seach_vector[r+w])
+    if found
+      candidates.push_back(candidate)
+  return candidates
+
+
+
+
+
+
+

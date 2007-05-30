@@ -79,6 +79,7 @@ struct LiveRange
   void TransferLiveUnitTo(LiveRange* to, LiveUnit* unit);
   void RebuildForbiddenList();
   void RemoveLiveUnit(LiveUnit*);
+  unsigned int RegWidth() const;
 
   /* iterators */
   /* for live units in this live range */

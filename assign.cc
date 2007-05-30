@@ -38,6 +38,8 @@ struct AssignedReg
   RegPurpose forPurpose;
   LRID forLRID;
   Boolean free;
+  int index;
+  unsigned int width;
 };
 
 //handy typedefs to save typing
@@ -83,7 +85,9 @@ Register MarkRegisterUsed(AssignedReg* tmpReg,
                         Inst* inst, 
                         RegPurpose purpose,
                         LRID lrid,
-                        AssignedRegMap& regMap);
+                        AssignedRegMap* regMap,
+                        AssignedRegList* reglist,
+                        unsigned int rwidth);
 
 void RemoveUnusableReg(std::list<AssignedReg*>& potentials, 
                          Register ssaName, Block* blk );
@@ -95,10 +99,27 @@ bool InsertEvictedStore(LRID evictedLRID,
                         Inst* origInst,
                         Inst* updatedInst,
                         Block* blk);
-
+AssignedReg* 
+FindSutiableTmpReg(RegisterContents* regContents, 
+                   Inst* origInst, 
+                   RegPurpose purpose,
+                   const RegisterList& instUses,
+                   unsigned int reg_width);
+inline unsigned int UB(unsigned int size, unsigned int width)
+{
+  return size - width + 1;
+}
+inline unsigned int RegWidth(LRID lrid)
+{
+  return Chow::live_ranges[lrid]->RegWidth();
+}
 
 /* used as predicates for seaching reg lists */
-Boolean isFree(const AssignedReg* reserved);
+template<class Predicate> 
+const AssignedRegList&
+FindCandidateRegs(const AssignedRegList* possibles, 
+                  unsigned int reg_width, 
+                  Predicate pred); 
 class AssignedReg_Usable;
 class AssignedReg_MRegEq;
 class AssignedReg_InstEq;
@@ -146,15 +167,15 @@ void Init(Arena arena)
     //to be used as a temporary register so we must remember this when
     //building the reserved regs list
     RegisterClass::ReservedRegsInfo rri = RegisterClass::GetReservedRegInfo(rc);
-    int num_reserved = 
-      (rc == RegisterClass::INT ? rri.cReserved-1 : rri.cReserved);
-    for(int i = 0; i < num_reserved; i++)
+    for(unsigned int i = 0; i < rri.cReserved; i++)
     {
       AssignedReg* rr = (AssignedReg*)
         Arena_GetMemClear(arena, sizeof(AssignedReg));
       
       rr->machineReg = rri.regs[i];
       rr->free = TRUE; 
+      rr->index = i;
+      rr->width = 0;
       reg_contents[rc].reserved->push_back(rr);
     }
     //set starting point for round robin usage
@@ -171,6 +192,8 @@ void Init(Arena arena)
       
       rr->machineReg = base+i;
       rr->free = TRUE; 
+      rr->index = i;
+      rr->width = 0;
       reg_contents[rc].assignable->push_back(rr);
     }
   }
@@ -411,7 +434,6 @@ void dump_reglist_contents(RegisterList& regList)
  *===================
  * says whether we can use the temporary register or not
  **/
-Boolean isFree(const AssignedReg* reserved){return reserved->free;}
 class AssignedReg_Usable : public std::unary_function<AssignedReg*, bool>
 {
   const Inst* inst;
@@ -464,6 +486,14 @@ class AssignedReg_MRegEq : public std::unary_function<AssignedReg*, bool>
   }
 };
 
+class AssignedReg_IsFree : public std::unary_function<AssignedReg*, bool>
+{
+  public:
+  bool operator() (const AssignedReg* rReg) const 
+  {
+    return rReg->free;
+  }
+};
 
 class AssignedReg_InstEq : public std::unary_function<AssignedReg*, bool>
 {
@@ -519,6 +549,7 @@ GetFreeTmpReg(LRID lrid,
 
   //get the register contents struct for this lrid register class
   RegisterContents* regContents = RegContentsForLRID(lrid);
+  unsigned int rwidth = RegWidth(lrid);
 
   //1) check to see if this lrid is already stored in one of our
   //temporary registers.
@@ -528,40 +559,29 @@ GetFreeTmpReg(LRID lrid,
   {
     debug("found the live range already in a temporary register");
     AssignedReg* rReg  = ((*it).second);
-    rReg->forInst = origInst;
-    rReg->forPurpose = purpose;
+    for(unsigned int i = rReg->index; i < rReg->index + rwidth; i++)
+    {
+      (*regContents->reserved)[i]->forInst = origInst;
+      (*regContents->reserved)[i]->forPurpose = purpose;
+    }
     regXneedMem.first  = rReg->machineReg;
     if(purpose == FOR_USE) {regXneedMem.second = false;}
     return regXneedMem;
   }
 
-  //2) check to see if we have any more reserved registers available
-  AssignedRegList* reserved = regContents->reserved;
-  AssignedRegList::const_iterator freeReserved = 
-    find_if(reserved->begin(), reserved->end(), isFree);
-  if(freeReserved != reserved->end())
-  {
-    debug("found a reserved register that is available");
-    AssignedReg* tmpReg = *freeReserved;
-    regXneedMem.first = 
-      MarkRegisterUsed(tmpReg, origInst, purpose, lrid, *regMap);
-    return regXneedMem;
-  }
-
-  //3) check to see if we can evict someone from a reserved registers
-  //or if they were put in the register for the current instruction.
-  //we have to do this since there are no more free reserved
-  //registers. if we have to do this it means that either we need the
-  //register to hold the def, or we were lazy about releasing the
-  //register so now is the time to do it.
-  {
-    AssignedReg* tmpReg;
-    tmpReg = FindUsableReg(regContents, origInst, purpose, instUses);
+  //find a sutiable temporary register to use, either
+  //2) a reserved register that is still available, or
+  //3) kick someone out of an occupied reserved register not needed
+  //for this instruction
+  {//private scope for tmpReg
+    AssignedReg* tmpReg = 
+      FindSutiableTmpReg(regContents, origInst, purpose, instUses, rwidth);
     if(tmpReg != NULL)
     {
-      debug("found a reserved register that we can evict");
+      debug("found a temporary register to use"); 
       regXneedMem.first = 
-        MarkRegisterUsed(tmpReg, origInst, purpose, lrid, *regMap);
+        MarkRegisterUsed(tmpReg, origInst, purpose, lrid, regMap,
+                         regContents->reserved, rwidth);
       return regXneedMem;
     }
   }
@@ -585,9 +605,10 @@ GetFreeTmpReg(LRID lrid,
          op->opcode == cJSRl ||
          op->opcode == qJSRl);
 //DROP >>>>
-// static Register bullshitReg = 1000;
-//  regXneedMem.first = bullshitReg++;
-//  return regXneedMem;
+  //TODO: make eviction work with double sized regs
+  static Register bullshitReg = 1000;
+  regXneedMem.first = bullshitReg++;
+  return regXneedMem;
 //DROP <<<<
 
   //evict a live range from a register and record the fact that the
@@ -679,7 +700,8 @@ GetFreeTmpReg(LRID lrid,
   regContents->evicted->push_back(std::make_pair(evictedLRID,tmpReg));
 
   regXneedMem.first = 
-    MarkRegisterUsed(tmpReg, origInst, purpose, lrid, *regMap);
+    MarkRegisterUsed(tmpReg, origInst, purpose, lrid, regMap,
+                     regContents->assignable, rwidth);
   return regXneedMem;
 }
 
@@ -773,27 +795,33 @@ Register MarkRegisterUsed(AssignedReg* tmpReg,
                           Inst* inst, 
                           RegPurpose purpose,
                           LRID lrid,
-                          AssignedRegMap& regMap)
+                          AssignedRegMap*  regMap,
+                          AssignedRegList* reglist,
+                          unsigned int rwidth)
 {
   //remove any previous mapping that may exist for the live range in
   //this temporary register
   debug("marking reg: %d used for lrid: %d",tmpReg->machineReg, lrid);
   LRID prevLRID = tmpReg->forLRID;
-  RegMapIterator rmIt = regMap.find(prevLRID);
-  if(rmIt != regMap.end()){
+
+  RegMapIterator rmIt = regMap->find(prevLRID);
+  if(rmIt != regMap->end()){
     debug("removing previous mapping reg: %d for lrid: %d",
           (*rmIt).second->machineReg, prevLRID);
-    regMap.erase(rmIt);
+    regMap->erase(rmIt);
   }
 
   //mark the temporary register as used
-  tmpReg->free = FALSE;
-  tmpReg->forInst = inst;
-  tmpReg->forPurpose = purpose;
-  tmpReg->forLRID = lrid;
-  regMap[lrid] = tmpReg;
+  for(unsigned int i = tmpReg->index; i< tmpReg->index + rwidth; i++)
+  {
+    (*reglist)[i]->free = FALSE;
+    (*reglist)[i]->forInst = inst;
+    (*reglist)[i]->forPurpose = purpose;
+    (*reglist)[i]->forLRID = lrid;
+  }
+  (*regMap)[lrid] = tmpReg;
 
-  dump_map_contents(regMap);
+  dump_map_contents(*regMap);
   return tmpReg->machineReg;
 }
 
@@ -880,6 +908,95 @@ RegisterContents* RegContentsForLRID(LRID lrid)
 {
   return &reg_contents[Chow::live_ranges[lrid]->rc];
 }
+
+/*
+ *=====================
+ * FindSuitableTmpReg
+ *=====================
+ * returns a temporary register that can be used to hold an
+ * unallocated live range or NULL if no such register exists.
+ */
+AssignedReg* 
+FindSutiableTmpReg(RegisterContents* regContents, 
+                   Inst* origInst, 
+                   RegPurpose purpose,
+                   const RegisterList& instUses,
+                   unsigned int reg_width)
+{
+  AssignedReg* tmpReg = NULL;
+
+  //2) check to see if we have any more reserved registers available
+  AssignedRegList reserved = *(regContents->reserved);
+  {
+    const AssignedRegList& free = 
+      FindCandidateRegs(regContents->reserved, 
+                        reg_width, 
+                        AssignedReg_IsFree());
+    if(!free.empty())
+    {
+      debug("found a reserved register that is free");
+      tmpReg = free.front();
+    }
+  }
+
+  //3) check to see if we can evict someone from a reserved registers
+  //or if they were put in the register for the current instruction.
+  //we have to do this since there are no more free reserved
+  //registers. if we have to do this it means that either we need the
+  //register to hold the def, or we were lazy about releasing the
+  //register so now is the time to do it.
+  if(tmpReg == NULL)
+  {
+    const AssignedRegList& kickable = 
+      FindCandidateRegs(regContents->reserved, 
+                        reg_width, 
+                        AssignedReg_Usable(origInst, purpose, instUses));
+    if(!kickable.empty())
+    {
+      debug("found a reserved register that we can evict");
+      /* TODO: run belady here */
+      tmpReg = kickable.front();
+    }
+  }
+
+  return tmpReg;
+}
+
+/*
+ *=====================
+ * FindCandidateRegs()
+ *=====================
+ * Searches for +reg_width+ registers in a row that satisfy the
+ * predicate. These registers are returned in a candidates list.
+ */
+template<class Predicate>
+const AssignedRegList&
+FindCandidateRegs(const AssignedRegList* possibles, 
+                  unsigned int reg_width, 
+                  Predicate pred) 
+{
+  static AssignedRegList candidates;
+  candidates.clear();
+
+  unsigned int ub =  UB(possibles->size(), reg_width);
+  for(unsigned int r = 0; r < ub; r++)
+  {
+    bool ok = true;
+    for(unsigned int w = 0; w < reg_width; w++)
+    {
+      ok = ok && pred((*possibles)[r+w]);
+    }
+    if(ok)
+    {
+      debug("found a candidate: %d", r);
+      candidates.push_back((*possibles)[r]);
+    }
+  }
+
+  return candidates;
+}
+
+
 
 }//end anonymous namespace
 

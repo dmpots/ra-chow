@@ -19,7 +19,7 @@ bool  Params::Machine::double_takes_two_regs = true;
 
 /* algorithm parameters */
 int   Params::Algorithm::bb_max_insts = 0;
-int   Params::Algorithm::num_reserved_registers = 2;
+unsigned int   Params::Algorithm::num_reserved_registers[] = {2,4};
 float Params::Algorithm::loop_depth_weight = 10.0;
 bool  Params::Algorithm::enhanced_code_motion = false;
 bool  Params::Algorithm::move_loads_and_stores = false;

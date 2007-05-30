@@ -440,6 +440,17 @@ void EnforceParameterConsistency()
 {
   if(Params::Algorithm::enhanced_code_motion) 
       Params::Algorithm::move_loads_and_stores = true;
+
+
+  //have to reserve five in this case because frame pointer takes one
+  //and doubles must be aligned and we need at least two places for
+  //temporary doubles and one extra is always added for frame pointer
+  if(!Params::Machine::enable_register_classes &&
+      Params::Machine::double_takes_two_regs &&
+      Params::Algorithm::num_reserved_registers[RegisterClass::INT] < 5)
+  {
+    Params::Algorithm::num_reserved_registers[RegisterClass::INT] = 5;
+  }
 }
 
 /*
