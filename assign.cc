@@ -183,7 +183,7 @@ void Init(Arena arena)
 
     //now build the list of all remaining machine registers for this
     //register class.
-    Register base = FirstRegister(rc) + rri.cReserved;
+    Register base = FirstRegister(rc) + rri.cHidden;
     unsigned int num_assignable = RegisterClass::NumMachineReg(rc);
     for(unsigned int i = 0; i < num_assignable; i++)
     {
@@ -386,13 +386,18 @@ void UnEvict(Inst** updatedInst)
         // ---- DEBUG -----<
         assert(rmIt != regMap->end());
         regMap->erase(rmIt);
+      }
 
-        //reset values on evicted reg. this is needed in case this
-        //register gets chosen for eviction again we don't want the old
-        //values hanging around in the AssignedReg*
-        kicked->free = TRUE;
-        kicked->forLRID = NO_LRID;
-        kicked->forInst = NULL;
+      //reset values on assigned regs. this is needed in case a
+      //register gets chosen for eviction again we don't want the old
+      //values hanging around in the AssignedReg*
+      for(AssignedRegList::iterator it=reg_contents[i].assignable->begin();
+          it != reg_contents[i].assignable->end();
+          it++)
+      {
+        (*it)->free = TRUE;
+        (*it)->forLRID = NO_LRID;
+        (*it)->forInst = NULL;
       }
 
       //2) remove all evicted registers from evicted list
@@ -509,6 +514,35 @@ class AssignedReg_InstEq : public std::unary_function<AssignedReg*, bool>
   }
 };
 
+class AssignedReg_Evictable :public std::unary_function<AssignedReg*, bool>
+{
+  Inst* inst; 
+  const RegisterList& forbidden_regs;
+  Block* blk;
+
+  public:
+  AssignedReg_Evictable(Inst* inst_, const RegisterList& rList, Block* b): 
+    inst(inst_), forbidden_regs(rList), blk(b) {};
+  bool operator() (const AssignedReg* aReg) const 
+  {
+    //can not use if already assigned for the same inst
+    if(aReg->forInst == inst) return false;
+
+    //can not use if will be assigned in the future
+    for(RegisterList::const_iterator it = forbidden_regs.begin();
+        it != forbidden_regs.end();
+        it++)
+    {
+      Register mReg = Assign::GetMachineRegAssignment(blk, *it);
+      if(mReg != Assign::REG_UNALLOCATED && mReg == aReg->machineReg) 
+        return false;
+    }
+
+    //othwise...
+    return true;
+  }
+};
+
 class EvictedListElem_Eq 
 : public std::unary_function<std::pair<LRID, AssignedReg*>, bool>
 {
@@ -606,10 +640,9 @@ GetFreeTmpReg(LRID lrid,
          op->opcode == cJSRl ||
          op->opcode == qJSRl);
 //DROP >>>>
-  //TODO: make eviction work with double sized regs
-  static Register bullshitReg = 1000;
-  regXneedMem.first = bullshitReg++;
-  return regXneedMem;
+//  static Register bullshitReg = 1000;
+//  regXneedMem.first = bullshitReg++;
+//  return regXneedMem;
 //DROP <<<<
 
   //evict a live range from a register and record the fact that the
@@ -618,9 +651,19 @@ GetFreeTmpReg(LRID lrid,
   //machine registers. we go through the uses (or defs) in the op and
   //remove any machine reg that is in use in the current operation
   //from the list of potential register we can commandeer
- 
+  const AssignedRegList& potentials = 
+    purpose == FOR_USE ?
+      FindCandidateRegs(regContents->assignable, 
+                        rwidth, 
+                        AssignedReg_Evictable(origInst,instUses,blk))
+      :
+      FindCandidateRegs(regContents->assignable, 
+                        rwidth, 
+                        AssignedReg_Evictable(origInst,instDefs,blk));
+    
   //go through the list of all registers and remove any register that
   //is allocated for this operation
+  /*
   std::list<AssignedReg*> potentials(regContents->assignable->size());
   copy(regContents->assignable->begin(), 
        regContents->assignable->end(),
@@ -656,6 +699,7 @@ GetFreeTmpReg(LRID lrid,
                 AssignedReg_InstEq(origInst)),
       potentials.end()
   );
+  */
 
 
   //there should be at least one register left to choose from. evict
