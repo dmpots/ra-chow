@@ -77,10 +77,6 @@ GetFreeTmpReg(LRID lrid,
                  const RegisterList& instUses,
                  const RegisterList& instDefs);
 
-AssignedReg* FindUsableReg( RegisterContents* reg_contents,
-                            Inst* inst,
-                            RegPurpose purpose,
-                            const RegisterList& instUses);
 Register MarkRegisterUsed(AssignedReg* tmpReg, 
                         Inst* inst, 
                         RegPurpose purpose,
@@ -88,9 +84,6 @@ Register MarkRegisterUsed(AssignedReg* tmpReg,
                         AssignedRegMap* regMap,
                         AssignedRegList* reglist,
                         unsigned int rwidth);
-
-void RemoveUnusableReg(std::list<AssignedReg*>& potentials, 
-                         Register ssaName, Block* blk );
 
 RegisterContents* RegContentsForLRID(LRID lrid);
 bool InsertEvictedStore(LRID evictedLRID, 
@@ -121,9 +114,6 @@ FindCandidateRegs(const AssignedRegList* possibles,
                   unsigned int reg_width, 
                   Predicate pred); 
 class AssignedReg_Usable;
-class AssignedReg_MRegEq;
-class AssignedReg_InstEq;
-class EvictedListElem_Eq;
 
 /* for debugging */
 void dump_map_contents(AssignedRegMap& regMap);
@@ -436,9 +426,9 @@ void dump_reglist_contents(RegisterList& regList)
 }
 
 /*
- *===================
+ *=======================
  * AssignedReg_Usable()
- *===================
+ *=======================
  * says whether we can use the temporary register or not
  **/
 class AssignedReg_Usable : public std::unary_function<AssignedReg*, bool>
@@ -481,18 +471,12 @@ class AssignedReg_Usable : public std::unary_function<AssignedReg*, bool>
   }
 };
 
-class AssignedReg_MRegEq : public std::unary_function<AssignedReg*, bool>
-{
-  Register mReg; 
-
-  public:
-  AssignedReg_MRegEq(Register mReg_) : mReg(mReg_) {};
-  bool operator() (const AssignedReg* reserved) const 
-  {
-    return reserved->machineReg == mReg;
-  }
-};
-
+/*
+ *=======================
+ * AssignedReg_IsFree()
+ *=======================
+ * predicate for whether a temporary register is free or not
+ **/
 class AssignedReg_IsFree : public std::unary_function<AssignedReg*, bool>
 {
   public:
@@ -502,18 +486,13 @@ class AssignedReg_IsFree : public std::unary_function<AssignedReg*, bool>
   }
 };
 
-class AssignedReg_InstEq : public std::unary_function<AssignedReg*, bool>
-{
-  Inst* inst; 
-
-  public:
-  AssignedReg_InstEq(Inst* inst_) : inst(inst_) {};
-  bool operator() (const AssignedReg* reserved) const 
-  {
-    return reserved->forInst == inst;
-  }
-};
-
+/*
+ *=======================
+ * AssignedReg_Evictable()
+ *=======================
+ * predicate for whether a register can be evicted if needed in a
+ * JSR/FRAME instruction
+ **/
 class AssignedReg_Evictable :public std::unary_function<AssignedReg*, bool>
 {
   Inst* inst; 
@@ -540,21 +519,6 @@ class AssignedReg_Evictable :public std::unary_function<AssignedReg*, bool>
 
     //othwise...
     return true;
-  }
-};
-
-class EvictedListElem_Eq 
-: public std::unary_function<std::pair<LRID, AssignedReg*>, bool>
-{
-  Register mReg; 
-  LRID lrid; 
-
-  public:
-  EvictedListElem_Eq(Register mReg_, LRID lrid_) 
-    : mReg(mReg_), lrid(lrid_) {};
-  bool operator() (const std::pair<LRID,AssignedReg*> p) const 
-  {
-    return p.first == lrid && p.second->machineReg == mReg;
   }
 };
 
@@ -660,53 +624,11 @@ GetFreeTmpReg(LRID lrid,
       FindCandidateRegs(regContents->assignable, 
                         rwidth, 
                         AssignedReg_Evictable(origInst,instDefs,blk));
-    
-  //go through the list of all registers and remove any register that
-  //is allocated for this operation
-  /*
-  std::list<AssignedReg*> potentials(regContents->assignable->size());
-  copy(regContents->assignable->begin(), 
-       regContents->assignable->end(),
-       potentials.begin());
-  debug("initial potential size: %d", (int)potentials.size());
-  debug("trimming registers needed in this inst");
-  if(purpose == FOR_USE)
-  {
-    LRID lridT;
-    RegisterList::const_iterator it;
-    for(it = instUses.begin(); it != instUses.end(); it++)
-    {
-      lridT = *it;
-      RemoveUnusableReg(potentials, lridT, blk);
-    }
-  }
-  else
-  {
-    LRID lridT;
-    RegisterList::const_iterator it;
-    for(it = instDefs.begin(); it != instDefs.end(); it++)
-    {
-      lridT = *it;
-      RemoveUnusableReg(potentials, lridT, blk);
-    }
-  }
-
-  //from the remaining registers remove any register that has already
-  //been evicted for another register in this operation
-  debug("trimming registers already evicted");
-  potentials.erase(
-      remove_if(potentials.begin(), potentials.end(), 
-                AssignedReg_InstEq(origInst)),
-      potentials.end()
-  );
-  */
-
 
   //there should be at least one register left to choose from. evict
   //it and use it now.
   assert(potentials.size() > 0);
   AssignedReg* tmpReg = potentials.front();
-  debug("trimmed potential size: %d", (int)potentials.size());
   debug("evicting machine register: %d", tmpReg->machineReg);
 
   //find the lrid assigned to this  machine register so that we know
@@ -836,6 +758,15 @@ bool InsertEvictedStore(LRID evictedLRID,
 }
 
 
+/*
+ *=====================
+ * MarkRegisterUsed()
+ *=====================
+ * Updates structures so that the register is known to be in use. If
+ * it is replacing another register that was previously in the
+ * register then the appropriate lists are updated so that we know
+ * those registers are no longer used by the previous live range.
+ */
 Register MarkRegisterUsed(AssignedReg* tmpReg, 
                           Inst* inst, 
                           RegPurpose purpose,
@@ -881,85 +812,11 @@ Register MarkRegisterUsed(AssignedReg* tmpReg,
   return tmpReg->machineReg;
 }
 
-void RemoveUnusableReg(std::list<AssignedReg*>& potentials, 
-                    LRID lridT, Block* blk )
-{
-  Register mReg = Assign::GetMachineRegAssignment(blk, lridT);
-  if(mReg != Assign::REG_UNALLOCATED)
-  {
-    debug("removing machine reg %d from potentials (lrid: %d)",
-        mReg, lridT);
-    potentials.erase(
-      remove_if(potentials.begin(), potentials.end(),
-                AssignedReg_MRegEq(mReg)),
-      potentials.end()
-    );
-  }
-}
-
-
 /*
  *=====================
- * FindUsableReg()
+ * RegContentsForLRID
  *=====================
- * Attempts to find a register among the reserved registers that can
- * be used as a temporary register in this instruction. A reserved
- * register can be used if it is not currently in use for this
- * instruction. See AssignedReg_Usable for the actual predicate used.
- *
- * We attempt to do a round robin eviction pattern of reserved
- * registers. That is we try evicting all other reserved registers
- * before evicting the same reserved register again. The round
- * robinness is not precise since we just keep a pointer to the last
- * one evicted and start a linear search from there. This should catch
- * most common cases so we are not evicting a register we just used
- * previously and need again shortly. We might be able to improve on
- * this by doing a real round robin, or even better using belady's
- * algorithm to kick out the guy used fartherst in the future.
  */
-AssignedReg* FindUsableReg(RegisterContents* regContents,
-                            Inst* inst,
-                            RegPurpose purpose,
-                            const RegisterList& instUses)
-{
-  AssignedReg* usable = NULL;
-  AssignedRegList* reserved = regContents->reserved;
-  AssignedRegList::iterator last_chosen = regContents->roundRobinIt;
-  AssignedRegList::iterator reservedIt;
-
-  //search from last reg chosen to end of list
-  reservedIt = find_if(++last_chosen,
-                       reserved->end(),
-                       AssignedReg_Usable(inst, purpose, instUses));
-
-  bool found = false;
-  if(reservedIt != reserved->end()) 
-  {
-    debug("found usable reg in [last chosen, end)");
-    found = true;
-  }
-  else //seach from beginning of list to last chosen
-  {
-    //include last chosen in the search. taken care of by ++ op above
-    reservedIt = find_if(reserved->begin(),
-                         last_chosen,
-                         AssignedReg_Usable(inst, purpose, instUses));
-    if(reservedIt != last_chosen)
-    {
-      debug("found usable reg in [begin, last chosen+1)");
-      found = true;
-    }
-  }
-  if(found)
-  {
-    usable = *reservedIt;
-    regContents->roundRobinIt = reservedIt;
-    debug("setting last chosen to: %d", (*reservedIt)->machineReg);
-  }
-
-  return usable;
-}
-
 RegisterContents* RegContentsForLRID(LRID lrid)
 {
   return &reg_contents[Chow::live_ranges[lrid]->rc];
