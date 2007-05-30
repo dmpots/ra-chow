@@ -979,7 +979,7 @@ FindCandidateRegs(const AssignedRegList* possibles,
   candidates.clear();
 
   unsigned int ub =  UB(possibles->size(), reg_width);
-  for(unsigned int r = 0; r < ub; r++)
+  for(unsigned int r = 0; r < ub; r += reg_width)
   {
     bool ok = true;
     for(unsigned int w = 0; w < reg_width; w++)

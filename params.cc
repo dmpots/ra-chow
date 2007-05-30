@@ -12,6 +12,7 @@
 /* machine parameters */
 int   Params::Machine::num_registers = 32;
 bool  Params::Machine::enable_register_classes = true;
+int   Params::Machine::num_register_classes = 2;
 float Params::Machine::load_save_weight = 1.0;
 float Params::Machine::store_save_weight = 1.0;
 float Params::Machine::move_cost_weight = 1.0;

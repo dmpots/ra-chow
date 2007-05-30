@@ -11,6 +11,7 @@ namespace Params {
   namespace Machine {
     extern int num_registers;
     extern bool enable_register_classes;
+    extern int num_register_classes;
     extern float load_save_weight;
     extern float store_save_weight;
     extern float move_cost_weight;

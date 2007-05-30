@@ -29,8 +29,6 @@ VectorSet* mRc_VsTmp;
 RegisterClass::ReservedRegsInfo* mRc_ReservedRegs;
 
 /* constants */
-//update this if adding more classes
-const Unsigned_Int NUM_REG_CLASSES = 2; 
 //the number of registers required by each type, for example a double
 //requires two float registers.
 int mDefType_RegWidth[] = {
@@ -73,7 +71,7 @@ void Init(Arena arena,
   fEnableMultipleClasses = fEnableClasses;
   if(fEnableMultipleClasses)
   {
-    cRegisterClass = NUM_REG_CLASSES;
+    cRegisterClass = Params::Machine::num_register_classes;
   }
   debug("using %d register classes", cRegisterClass);
   //populate the all_classes vector with the register classes used

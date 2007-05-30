@@ -451,6 +451,11 @@ void EnforceParameterConsistency()
   {
     Params::Algorithm::num_reserved_registers[RegisterClass::INT] = 5;
   }
+
+  if(!Params::Machine::enable_register_classes)
+  {
+    Params::Machine::num_register_classes = 1;
+  }
 }
 
 /*
@@ -480,6 +485,20 @@ void CheckRegisterLimitFeasibility(Arena arena)
   Mapping::CreateSSANameTypeMap(arena);
   RegisterClass::InitRegWidths();
 
+  //compute absolute minimum. there must be at least one register to
+  //allocate otherwise the vectorsets freak out on universe size of 0
+  unsigned int max_reserved = 0;
+  for(int rc = 0; rc < Params::Machine::num_register_classes; rc++)
+  {
+    max_reserved =  max(max_reserved,
+                        Params::Algorithm::num_reserved_registers[rc]);
+  }
+  //add one so that there is at least one element in the vector set
+  int absolute_minimum = max_reserved + 1;
+  //add one for the frame pointer if using a single register set
+  if(Params::Machine::num_register_classes == 1){absolute_minimum++;}
+
+
   ForAllBlocks(b)
   {
     Block_ForAllInsts(inst, b)
@@ -508,7 +527,7 @@ void CheckRegisterLimitFeasibility(Arena arena)
   {
     if(Params::Program::force_minimum_register_count)
     {
-      Params::Machine::num_registers = max(cRegMax,4); //4 is my minimum
+      Params::Machine::num_registers = max(cRegMax,absolute_minimum);
       fprintf(stderr, 
       "Adjusting the number of machine registers "
       "to permit allocation: %d\n", Params::Machine::num_registers);
