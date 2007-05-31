@@ -47,11 +47,23 @@ namespace Chow
       public:
       virtual bool operator()
         (LiveRange* lrnew, LiveRange* lrorig, Block* blk) = 0;
+      virtual void Reset(LiveUnit*){}; //default, do nothing
       virtual ~IncludeInSplitStrategy(){};
     };
 
     struct IncludeWhenNotFull : public IncludeInSplitStrategy
     {
+      bool operator()
+        (LiveRange* lrnew, LiveRange* lrorig, Block* blk);
+    };
+
+    struct IncludeWhenNotTooManyNeighbors : public IncludeInSplitStrategy
+    {
+      double max_ratio;
+      std::set<LiveRange*> neighbors;
+      IncludeWhenNotTooManyNeighbors(double maxR=2.0) : max_ratio(maxR) {};
+      void Reset(LiveUnit*); 
+      void AddNeighbors(Block* blk);
       bool operator()
         (LiveRange* lrnew, LiveRange* lrorig, Block* blk);
     };

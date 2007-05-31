@@ -579,6 +579,7 @@ LiveRange* LiveRange::Split()
 
   debug("adding block: %s to  lr'", bname(startunit->block));
   TransferLiveUnitTo(newlr, startunit);
+  Params::Algorithm::include_in_split_strategy.Reset(startunit);
 
   //keep a queue of successors that we may add to the new live range
   std::list<Block*> succ_list;
@@ -751,6 +752,7 @@ namespace {
 LiveUnit* LiveRange_AddLiveUnit(LiveRange* lr, LiveUnit* unit)
 {
   LiveRange_AddBlock(lr, unit->block);
+  unit->live_range = lr;
 
   lr->units->push_back(unit);
   return unit;

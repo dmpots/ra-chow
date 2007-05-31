@@ -57,6 +57,7 @@ namespace Chow {
   /* globals */
   Arena arena;
   LRVec live_ranges;
+  std::vector<std::vector<LiveUnit*> > live_units;
 }
 
 void Chow::Run()
@@ -504,12 +505,14 @@ void BuildInterferences(Arena arena)
 void CreateLiveRanges(Arena arena, Unsigned_Int num_lrs)
 {
   using Chow::live_ranges;
+  using Chow::live_units;
 
   //initialize LiveRange class
   LiveRange::Init(arena, num_lrs);
 
   //create initial live ranges
   live_ranges.resize(num_lrs, NULL); //allocate space for live ranges
+  live_units.resize(block_count+1);
   for(unsigned int lrid = 0; lrid < num_lrs; lrid++) 
   {
     LiveRange* lr = 
@@ -563,6 +566,7 @@ AddLiveUnitOnce(LRID lrid, Block* b, SparseSet lrset, Variable orig_name)
     SparseSet_Insert(lrset, lrid);
     Stats::BBStats bbstat = Stats::GetStatsForBlock(b, lr->id);
     new_unit = lr->AddLiveUnitForBlock(b, orig_name, bbstat);
+    Chow::live_units[id(b)].push_back(new_unit);
   }
 
   return new_unit;

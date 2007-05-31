@@ -7,6 +7,9 @@
 #include "types.h"
 #include "debug.h"
 
+/* forward def */
+struct LiveRange;
+
 /* live units hold info about the basic blocks in a live range. there
  * is a 1-1 mapping from live units to basic blocks in a live range */
 struct LiveUnit
@@ -23,6 +26,7 @@ struct LiveUnit
   std::list<LiveUnit*> *lr_units;
   std::list<LiveUnit*> *bb_units;
   bool mark;
+  LiveRange* live_range;
 }; 
 
 LiveUnit* LiveUnit_Alloc(Arena);
