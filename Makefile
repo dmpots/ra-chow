@@ -27,6 +27,7 @@ SRCFILES=union_find.cc\
          chow_extensions.cc\
          rematerialize.cc\
          reach.cc\
+         heuristics.cc\
 
 MAIN_SRC=chow.main.cc
 #

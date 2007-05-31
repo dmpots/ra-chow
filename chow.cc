@@ -30,6 +30,7 @@
 #include "depths.h" //for computing loop nesting depth
 #include "shared_globals.h" //Global namespace for iloc Shared vars
 #include "rematerialize.h" //Global namespace for iloc Shared vars
+#include "heuristics.h" //heuristics for splitting, etc.
 
 
 /*------------------MODULE LOCAL DEFINITIONS-------------------*/
@@ -48,6 +49,7 @@ namespace {
   void BuildInterferences(Arena arena);
   void AllocateRegisters();
   void RenameRegisters();
+  bool ShouldSplitLiveRange(LiveRange* lr);
 }
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
@@ -599,7 +601,7 @@ void SplitNeighbors(LiveRange* lr, LRSet* constr_lr, LRSet* unconstr_lr)
     if(!(intf_lr->is_candidate)) continue;
 
     //split if no registers available
-    if(!intf_lr->HasColorAvailable())
+    if(ShouldSplitLiveRange(intf_lr))
     {
       debug("Need to split LR: %d", intf_lr->id);
       if(intf_lr->IsEntirelyUnColorable())
@@ -952,6 +954,12 @@ void MoveLoadsAndStores()
   {
     Block_Order();
   }
+}
+
+//bool ShouldSplitLiveRange(LiveRange* lr, WhenToSplitStrategy& strategy)
+bool ShouldSplitLiveRange(LiveRange* lr)
+{
+  return Params::Algorithm::when_to_split_strategy(lr);
 }
 
 }

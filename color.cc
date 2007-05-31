@@ -93,16 +93,27 @@ bool Coloring::IsColorAvailable(const LiveRange* lr, Block* blk)
 
 bool Coloring::IsColorAvailable(const LiveRange* lr, VectorSet used_colors)
 {
+  return (NumColorsAvailable(lr, used_colors) > 0);
+}
+
+int Coloring::NumColorsAvailable(const LiveRange* lr)
+{
+  return NumColorsAvailable(lr, lr->forbidden);
+}
+
+int Coloring::NumColorsAvailable(const LiveRange* lr, VectorSet used_colors)
+{
+  int num_avail = 0;
   /* TODO: this could be quite slow. keep an on on this section to see
    * if we maybe need to speed it up */
   int step = RegisterClass::RegWidth(lr->type);
   unsigned int ub = RegisterClass::NumMachineReg(lr->rc) - step + 1;
   for(Color c = 0; c < ub; c+=step)
   {
-    if(HasSpace(used_colors, c, step)) return true;
+    if(HasSpace(used_colors, c, step)) num_avail++;
   }
 
-  return false;
+  return num_avail;
 }
 
 Color Coloring::SelectColor(const LiveRange* lr)

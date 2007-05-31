@@ -25,6 +25,8 @@ namespace Coloring {
 
   bool IsColorAvailable(const LiveRange* lr, Block* blk);
   bool IsColorAvailable(const LiveRange* lr, VectorSet used_colors);
+  int  NumColorsAvailable(const LiveRange* lr);
+  int  NumColorsAvailable(const LiveRange* lr, VectorSet used_colors);
   Color SelectColor(const LiveRange* lr);
 }
 

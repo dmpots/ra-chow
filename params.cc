@@ -8,6 +8,7 @@
  */
 
 #include "params.h"
+#include "heuristics.h"
 
 /* machine parameters */
 int   Params::Machine::num_registers = 32;
@@ -26,6 +27,11 @@ bool  Params::Algorithm::enhanced_code_motion = false;
 bool  Params::Algorithm::move_loads_and_stores = false;
 bool  Params::Algorithm::rematerialize = false;
 bool  Params::Algorithm::trim_useless_blocks = false;
+
+/* default heuristics */
+namespace H = Chow::Heuristics;
+H::WhenToSplitStrategy& Params::Algorithm::when_to_split_strategy = 
+  H::default_when_to_split;
 
 /* program parameters */
 bool Params::Program::force_minimum_register_count = false;
