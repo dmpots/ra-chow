@@ -20,6 +20,7 @@
 #include "color.h"
 #include "chow_extensions.h"
 #include "reach.h"
+#include "heuristics.h"
 
 /*------------------MODULE LOCAL DEFINITIONS-------------------*/
 namespace {
@@ -80,7 +81,7 @@ namespace {
   LiveUnit* LiveRange_AddLiveUnitBlock(LiveRange*, Block*);
   void LiveRange_RemoveLiveUnitBlock(LiveRange* lr, Block* b);
   LiveUnit* LiveRange_ChooseSplitPoint(LiveRange*);
-  LiveUnit* LiveRange_IncludeInSplit(LiveRange*, LiveRange*, Block*);
+  bool LiveRange_IncludeInSplit(LiveRange*, LiveRange*, Block*);
   void LiveRange_AddBlock(LiveRange* lr, Block* b);
   void LiveRange_UpdateAfterSplit(LiveRange*,LiveRange*);
   Boolean LiveRange_EntryPoint(LiveRange* lr, LiveUnit* unit);
@@ -133,6 +134,7 @@ LiveRange::LiveRange(RegisterClass::RC reg_class,
     VectorSet_Create(LiveRange::arena, RegisterClass::NumMachineReg(rc));
   is_candidate  = TRUE;
   type = def_type; 
+  num_colored_neighbors = 0;
 
   //fields for rematerialization
   rematerializable = false;
@@ -255,6 +257,7 @@ void LiveRange::AssignColor()
     LiveRange* intf_lr = *it;
     for(int i = 0; i < RegisterClass::RegWidth(type); i++)
       VectorSet_Insert(intf_lr->forbidden, color+i);
+    intf_lr->num_colored_neighbors++;
     debug("adding color: %d to forbid list for LR: %d", color, intf_lr->id)
   }
 
@@ -589,8 +592,9 @@ LiveRange* LiveRange::Split()
     Block_ForAllSuccs(e, b)
     {
       Block* succ = e->succ;
-      if((unit = LiveRange_IncludeInSplit(newlr, this, succ)) != NULL)
+      if(ContainsBlock(succ) && LiveRange_IncludeInSplit(newlr, this, succ))
       {
+        unit = LiveUnitForBlock(succ);
         debug("adding block: %s to  lr'", bname(succ));
         TransferLiveUnitTo(newlr, unit);
         succ_list.push_back(succ); //explore the succs of this node
@@ -947,6 +951,9 @@ void LiveRange_InsertStore(LiveRange*lr, LiveUnit* unit)
  */
 void LiveRange_UpdateAfterSplit(LiveRange* newlr, LiveRange* origlr)
 {
+  //reset count of colored neighbors and recompte this below
+  newlr->num_colored_neighbors = 0;
+  origlr->num_colored_neighbors = 0;
 
   //rebuild interferences of those live ranges that interfere with 
   //the original live range. they may now interfere with the new live
@@ -955,10 +962,12 @@ void LiveRange_UpdateAfterSplit(LiveRange* newlr, LiveRange* origlr)
       it != origlr->fear_list->end();)
   {
     LiveRange* fearlr = *it;
+    bool neighbor_colored = (fearlr->color != Coloring::NO_COLOR);
     //update newlr interference
     if(newlr->InterferesWith(fearlr))
     {
       newlr->AddInterference(fearlr);
+      if(neighbor_colored) newlr->num_colored_neighbors++;
     }
 
     //update origlr interference
@@ -969,8 +978,9 @@ void LiveRange_UpdateAfterSplit(LiveRange* newlr, LiveRange* origlr)
       fearlr->fear_list->erase(origlr);
       origlr->fear_list->erase(del);
     }
-    else //does not interfere increment iterator normally
+    else //interferes so just increment iterator normally
     {
+      if(neighbor_colored) origlr->num_colored_neighbors++;
       it++; 
     }
   }
@@ -1073,21 +1083,13 @@ LiveUnit* LiveRange_ChooseSplitPoint(LiveRange* lr)
  *============================
  *
  */ 
-LiveUnit* LiveRange_IncludeInSplit(LiveRange* newlr,
-                                   LiveRange* origlr,
-                                   Block* b)
+bool LiveRange_IncludeInSplit(LiveRange* newlr,
+                              LiveRange* origlr,
+                              Block* b)
 {
-  LiveUnit* unit = NULL;
-  //we can include this block in the split if it does not max out the
-  //forbidden set
-  VectorSet vsUsed = Coloring::UsedColors(origlr->rc, b);
-  VectorSet used_colors = RegisterClass::TmpVectorSet(origlr->rc);
-  VectorSet_Union(used_colors, newlr->forbidden, vsUsed);
-  if(Coloring::IsColorAvailable(newlr, used_colors))
-  {
-    unit = origlr->LiveUnitForBlock(b);
-  }
-  return unit;
+  using Params::Algorithm::include_in_split_strategy;
+  return include_in_split_strategy(newlr,origlr,b);
+  //return Params::Algorithm::include_in_split_strategy(newlr,origlr,b);
 }
 
 

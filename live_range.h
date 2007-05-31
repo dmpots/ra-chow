@@ -51,6 +51,7 @@ struct LiveRange
   RegisterClass::RC rc;
   bool rematerializable;
   Operation* remat_op;
+  int num_colored_neighbors;
 
   /* maps from block id --> live range, for keeping track of splits */
   std::map<unsigned int, LiveRange*> *blockmap; 

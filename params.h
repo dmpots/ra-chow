@@ -11,6 +11,7 @@
 namespace Chow{
 namespace Heuristics {
   class WhenToSplitStrategy;
+  class IncludeInSplitStrategy;
 }
 }
 
@@ -32,7 +33,10 @@ namespace Params {
     extern bool move_loads_and_stores;
     extern bool rematerialize;
     extern bool trim_useless_blocks;
-    extern Chow::Heuristics::WhenToSplitStrategy& when_to_split_strategy;
+
+    using namespace Chow::Heuristics;
+    extern WhenToSplitStrategy& when_to_split_strategy;
+    extern IncludeInSplitStrategy& include_in_split_strategy;
   }
   namespace Program {
     extern bool force_minimum_register_count;

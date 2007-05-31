@@ -10,10 +10,15 @@
 
 /* forward def */
 struct LiveRange;
+struct LiveUnit;
 namespace Chow 
 {
   namespace Heuristics
   {
+
+    /*
+     * WHEN TO SPLIT STRATEGIES
+     */
     struct WhenToSplitStrategy
     {
       public:
@@ -23,31 +28,41 @@ namespace Chow
 
     struct SplitWhenNoColorAvailable : public WhenToSplitStrategy
     {
-      virtual bool operator()(LiveRange*);
+      bool operator()(LiveRange*);
     };
 
     struct SplitWhenNumNeighborsTooGreat : public WhenToSplitStrategy
     {
-      SplitWhenNumNeighborsTooGreat(double maxR=2.0) : max_ratio(maxR){};
-      virtual bool operator()(LiveRange*);
       double max_ratio; //num_neighbors/num_colors
+      SplitWhenNumNeighborsTooGreat(double maxR=2.0) : max_ratio(maxR){};
+      bool operator()(LiveRange*);
     };
 
 
-    extern WhenToSplitStrategy& default_when_to_split;
-    //class SplitWhenTooManyNeighbors;
+    /*
+     * WHEN TO INCLUDE IN SPLIT STRATEGIES
+     */
+    struct IncludeInSplitStrategy
+    {
+      public:
+      virtual bool operator()
+        (LiveRange* lrnew, LiveRange* lrorig, Block* blk) = 0;
+      virtual ~IncludeInSplitStrategy(){};
+    };
+
+    struct IncludeWhenNotFull : public IncludeInSplitStrategy
+    {
+      bool operator()
+        (LiveRange* lrnew, LiveRange* lrorig, Block* blk);
+    };
 
     /*
-    template<class IncludeStrategy>
-    bool IncludeInSplit(LiveRange* lr_orig, LiveRange* lr_new,
-                        Block* blk, IncludeStrategy strategy)
-    {
-      return strategy(lr_orig, lr_new, blk);
-    }
-    */
+     * DEFAULT STRATEGY VARIABLES
+     */
+    extern WhenToSplitStrategy& default_when_to_split;
+    extern IncludeInSplitStrategy& default_include_in_split;
 
-   
-  }
-}
+  }//Heuristics
+}//Chow
 
 #endif

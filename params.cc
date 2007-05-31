@@ -10,30 +10,39 @@
 #include "params.h"
 #include "heuristics.h"
 
+namespace Params {
 /* machine parameters */
-int   Params::Machine::num_registers = 32;
-bool  Params::Machine::enable_register_classes = true;
-int   Params::Machine::num_register_classes = 2;
-float Params::Machine::load_save_weight = 1.0;
-float Params::Machine::store_save_weight = 1.0;
-float Params::Machine::move_cost_weight = 1.0;
-bool  Params::Machine::double_takes_two_regs = true;
+namespace Machine {
+int   num_registers = 32;
+bool  enable_register_classes = true;
+int   num_register_classes = 2;
+float load_save_weight = 1.0;
+float store_save_weight = 1.0;
+float move_cost_weight = 1.0;
+bool  double_takes_two_regs = true;
+}
 
 /* algorithm parameters */
-int   Params::Algorithm::bb_max_insts = 0;
-unsigned int   Params::Algorithm::num_reserved_registers[] = {2,4};
-float Params::Algorithm::loop_depth_weight = 10.0;
-bool  Params::Algorithm::enhanced_code_motion = false;
-bool  Params::Algorithm::move_loads_and_stores = false;
-bool  Params::Algorithm::rematerialize = false;
-bool  Params::Algorithm::trim_useless_blocks = false;
+namespace Algorithm {
+int   bb_max_insts = 0;
+unsigned int   num_reserved_registers[] = {2,4};
+float loop_depth_weight = 10.0;
+bool  enhanced_code_motion = false;
+bool  move_loads_and_stores = false;
+bool  rematerialize = false;
+bool  trim_useless_blocks = false;
 
 /* default heuristics */
-namespace H = Chow::Heuristics;
-H::WhenToSplitStrategy& Params::Algorithm::when_to_split_strategy = 
-  H::default_when_to_split;
+WhenToSplitStrategy& when_to_split_strategy = 
+  Chow::Heuristics::default_when_to_split;
+IncludeInSplitStrategy& include_in_split_strategy = 
+  Chow::Heuristics::default_include_in_split;
+}
 
 /* program parameters */
-bool Params::Program::force_minimum_register_count = false;
-bool Params::Program::dump_params_only = false;
+namespace Program {
+bool force_minimum_register_count = false;
+bool dump_params_only = false;
+}
 
+}
