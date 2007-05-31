@@ -39,7 +39,7 @@ struct AssignedReg
   LRID forLRID;
   Boolean free;
   int index;
-  unsigned int width;
+  bool is_reserved_reg;
 };
 
 //handy typedefs to save typing
@@ -165,7 +165,7 @@ void Init(Arena arena)
       rr->machineReg = rri.regs[i];
       rr->free = TRUE; 
       rr->index = i;
-      rr->width = 0;
+      rr->is_reserved_reg = true;
       reg_contents[rc].reserved->push_back(rr);
     }
     //set starting point for round robin usage
@@ -183,7 +183,7 @@ void Init(Arena arena)
       rr->machineReg = base+i;
       rr->free = TRUE; 
       rr->index = i;
-      rr->width = 0;
+      rr->is_reserved_reg = false;
       reg_contents[rc].assignable->push_back(rr);
     }
   }
@@ -559,10 +559,12 @@ GetFreeTmpReg(LRID lrid,
   {
     debug("found the live range already in a temporary register");
     AssignedReg* rReg  = ((*it).second);
+    AssignedRegList& reglist = rReg->is_reserved_reg ?
+      (*regContents->reserved) : (*regContents->assignable);
     for(unsigned int i = rReg->index; i < rReg->index + rwidth; i++)
     {
-      (*regContents->reserved)[i]->forInst = origInst;
-      (*regContents->reserved)[i]->forPurpose = purpose;
+      reglist[i]->forInst = origInst;
+      reglist[i]->forPurpose = purpose;
     }
     regXneedMem.first  = rReg->machineReg;
     if(purpose == FOR_USE) {regXneedMem.second = false;}
