@@ -50,6 +50,7 @@ namespace {
   void AllocateRegisters();
   void RenameRegisters();
   bool ShouldSplitLiveRange(LiveRange* lr);
+  inline void AddToCorrectConstrainedList(LRSet*,LRSet*,LiveRange*);
 }
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
@@ -129,17 +130,7 @@ void AllocateRegisters()
   for(LRVec::size_type i = 1; i < live_ranges.size(); i++)
   {
     lr = live_ranges[i];
-
-    if(lr->IsConstrained())
-    {
-      constr_lrs.insert(lr);
-      debug("Constrained LR:    %d", lr->id);
-    }
-    else
-    {
-      unconstr_lrs.insert(lr);
-      debug("UN-Constrained LR: %d", lr->id);
-    }
+    AddToCorrectConstrainedList(&constr_lrs, &unconstr_lrs, lr);
   }
 
 
@@ -204,7 +195,7 @@ ComputePriorityAndChooseTop(LRSet* constr_lrs, LRSet* unconstr_lrs)
       //we compute the priority function. if the priority changes due
       //to a live range split it should be reset to undefined so we
       //can compute it again.
-      if(lr->priority < 0.0 || lr->IsEntirelyUnColorable())
+      if(lr->priority <= 0.0 || lr->IsEntirelyUnColorable())
       {
         deletes.push_back(lr);
       }
@@ -215,7 +206,7 @@ ComputePriorityAndChooseTop(LRSet* constr_lrs, LRSet* unconstr_lrs)
   for(unsigned int i = 0; i < deletes.size(); i++)
   {
     LiveRange* lr = deletes[i];
-    lr->MarkNonCandidateAndDelete();
+    lr->MarkNonCandidateAndDelete(); Stats::chowstats.cSpills++;
     UpdateConstrainedListsAfterDelete(lr, constr_lrs, unconstr_lrs);
   }
 
@@ -590,6 +581,7 @@ AddLiveUnitOnce(LRID lrid, Block* b, SparseSet lrset, Variable orig_name)
 void SplitNeighbors(LiveRange* lr, LRSet* constr_lr, LRSet* unconstr_lr)
 {
   debug("BEGIN SPLITTING");
+  using Stats::chowstats;
 
   //make a copy of the interference list as a worklist since splitting
   //may add and remove items to the original interference list
@@ -614,7 +606,7 @@ void SplitNeighbors(LiveRange* lr, LRSet* constr_lr, LRSet* unconstr_lr)
         //delete this live range from the interference graph. update
         //the constrained lists since live ranges may shuffle around
         //after we delete this from the interference graph
-        intf_lr->MarkNonCandidateAndDelete();
+        intf_lr->MarkNonCandidateAndDelete(); chowstats.cSpills++;
         UpdateConstrainedListsAfterDelete(intf_lr, constr_lr, unconstr_lr);
       }
       else //try to split
@@ -625,13 +617,21 @@ void SplitNeighbors(LiveRange* lr, LRSet* constr_lr, LRSet* unconstr_lr)
         Chow::live_ranges.push_back(newlr);
         debug("ADDED LR: %d", newlr->id);
 
-        //make sure constrained lists are up-to-date after split
-        UpdateConstrainedLists(newlr, intf_lr, constr_lr, unconstr_lr);
-
-        //if the remainder of the live range we just split from
-        //interferes with the live range we assigned a color to then 
-        //add it to the work list because it may need to be split more
-        if(intf_lr->InterferesWith(lr)) worklist.push_back(intf_lr);
+        if(intf_lr->IsZeroOccurrence())
+        {
+          intf_lr->MarkNonCandidateAndDelete(); chowstats.cZeroOccurrence++;
+          UpdateConstrainedListsAfterDelete(intf_lr, constr_lr, unconstr_lr);
+          AddToCorrectConstrainedList(constr_lr, unconstr_lr, newlr);
+        }
+        else
+        {
+          //make sure constrained lists are up-to-date after split
+          UpdateConstrainedLists(newlr, intf_lr, constr_lr, unconstr_lr);
+          //if the remainder of the live range we just split from
+          //interferes with the live range we assigned a color to then 
+          //add it to the work list because it may need to be split more
+          if(intf_lr->InterferesWith(lr)) worklist.push_back(intf_lr);
+        }
 
         debug("split complete for LR: %d", intf_lr->id);
         Debug::LiveRange_DDump(intf_lr);
@@ -681,14 +681,7 @@ void UpdateConstrainedLists(LiveRange* newlr,
   }
 
   //also, need to update the new and original live range positions
-  if(newlr->IsConstrained())
-  {
-    constr_lrs->insert(newlr);
-  }
-  else
-  {
-    unconstr_lrs->insert(newlr);
-  }
+  AddToCorrectConstrainedList(constr_lrs, unconstr_lrs, newlr);
   if(!origlr->IsConstrained())
   {
     constr_lrs->erase(origlr);
@@ -961,6 +954,22 @@ void MoveLoadsAndStores()
 bool ShouldSplitLiveRange(LiveRange* lr)
 {
   return Params::Algorithm::when_to_split_strategy(lr);
+}
+
+inline void AddToCorrectConstrainedList(LRSet* constr_lrs, 
+                                        LRSet* unconstr_lrs,
+                                        LiveRange* lr)
+{
+  if(lr->IsConstrained())
+  {
+    constr_lrs->insert(lr);
+    debug("Constrained LR:    %d", lr->id);
+  }
+  else
+  {
+    unconstr_lrs->insert(lr);
+    debug("UN-Constrained LR:    %d", lr->id);
+  }
 }
 
 }

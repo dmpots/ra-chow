@@ -57,6 +57,7 @@ struct LiveRange
   std::map<unsigned int, LiveRange*> *blockmap; 
   /* keeps track of all the live range split from this one */
   std::vector<LiveRange*> *splits; 
+  bool zero_occurs;
 
   /* methods */
   void AddInterference(LiveRange* other);
@@ -81,6 +82,7 @@ struct LiveRange
   void RebuildForbiddenList();
   void RemoveLiveUnit(LiveUnit*);
   unsigned int RegWidth() const;
+  bool IsZeroOccurrence() const;
 
   /* iterators */
   /* for live units in this live range */

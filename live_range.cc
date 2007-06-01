@@ -219,7 +219,6 @@ void LiveRange::MarkNonCandidateAndDelete()
 {
   color = Coloring::NO_COLOR;
   is_candidate = FALSE;
-  Stats::chowstats.cSpills++;
 
   debug("deleting LR: %d from interference graph", this->id);
   //remove me from all neighbors fear list
@@ -540,6 +539,23 @@ Boolean LiveRange::IsEntirelyUnColorable() const
 
   debug("LR: %d is UNCOLORABLE", id);
   return true;
+}
+
+bool LiveRange::IsZeroOccurrence() const
+{
+  /*
+  for(LiveRange::iterator it = begin(); it != end(); it++)
+  {
+    LiveUnit* unit = *it;
+    //must have a free register where we have a def or a use
+    if(unit->defs > 0 || unit->uses > 0)
+    {
+      return false;
+    }
+  }
+  return true;
+  */
+  return zero_occurs;
 }
 
 /*
@@ -1103,6 +1119,7 @@ bool LiveRange_IncludeInSplit(LiveRange* newlr,
  */
 void LiveRange_MarkLoads(LiveRange* lr)
 {
+  lr->zero_occurs = true;
   for(LiveRange::iterator it = lr->begin(); it != lr->end(); it++)
   {
     LiveUnit* unit = *it;
@@ -1116,6 +1133,7 @@ void LiveRange_MarkLoads(LiveRange* lr)
         unit->need_load = TRUE;
       }
     }
+    if(unit->defs > 0 || unit->uses > 0){lr->zero_occurs = false;}
   }
 }
 

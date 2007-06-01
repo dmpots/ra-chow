@@ -31,6 +31,7 @@ struct ChowStats
   Unsigned_Int clrColored;
   Unsigned_Int cSplits;
   Unsigned_Int cSpills;
+  Unsigned_Int cZeroOccurrence;
   Unsigned_Int cChowStores;
   Unsigned_Int cChowLoads;
   Unsigned_Int cInsertedCopies;

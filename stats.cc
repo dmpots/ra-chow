@@ -107,7 +107,9 @@ void DumpAllocationStats()
   fprintf(stderr, " Colored LiveRange Count: %d\n",
                                            chowstats.clrColored+1);
   fprintf(stderr, " Spilled LiveRange Count: %d\n", 
-                                           chowstats.cSpills-1);
+                                           chowstats.cSpills);
+  fprintf(stderr, " Zero Occurrence  Count: %d\n", 
+                                           chowstats.cZeroOccurrence);
   fprintf(stderr, " Number of Splits: %d\n", chowstats.cSplits);
   fprintf(stderr, " Inserted Copies : %d\n", chowstats.cInsertedCopies);
   fprintf(stderr, " Thwarted Copies : %d\n", chowstats.cThwartedCopies);
