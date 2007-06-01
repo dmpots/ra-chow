@@ -26,7 +26,7 @@ namespace Heuristics {
  * DEFAULT STRATEGIES
  */
 SplitWhenNoColorAvailable no_color_available;
-SplitWhenNumNeighborsTooGreat num_neighbors_too_great(100);
+SplitWhenNumNeighborsTooGreat num_neighbors_too_great;
 
 IncludeWhenNotFull when_not_full;
 IncludeWhenEnoughColors when_enough_colors;
@@ -34,12 +34,12 @@ IncludeWhenNotTooManyNeighbors when_not_too_many_neighbors;
 
 
 //default heuristics
-//WhenToSplitStrategy& default_when_to_split = no_color_available;
-//IncludeInSplitStrategy& default_include_in_split = when_not_full;
+WhenToSplitStrategy& default_when_to_split = no_color_available;
+IncludeInSplitStrategy& default_include_in_split = when_not_full;
 
 //chow's heuristics
-WhenToSplitStrategy& default_when_to_split = num_neighbors_too_great;
-IncludeInSplitStrategy& default_include_in_split=when_not_too_many_neighbors;
+//WhenToSplitStrategy& default_when_to_split = num_neighbors_too_great;
+//IncludeInSplitStrategy& default_include_in_split=when_not_too_many_neighbors;
 
 //dave's heuristics
 //WhenToSplitStrategy& default_when_to_split = no_color_available;
@@ -74,10 +74,7 @@ bool IncludeWhenNotFull::operator()
   bool include = false;
   //we can include this block in the split if it does not max out the
   //forbidden set
-  VectorSet vsUsed = Coloring::UsedColors(lrorig->rc, blk);
-  VectorSet used_colors = RegisterClass::TmpVectorSet(lrorig->rc);
-  VectorSet_Union(used_colors, lrnew->forbidden, vsUsed);
-  if(Coloring::IsColorAvailable(lrnew, used_colors))
+  if(ColorsLeftAfterBlock(lrnew, blk) > 0)
   {
     include = true;
   }
@@ -145,10 +142,7 @@ bool IncludeWhenNotTooManyNeighbors::operator()
 
   // check that the total number of neighbors/colors does not exceed
   // the ratio 
-  VectorSet used_colors = RegisterClass::TmpVectorSet(lrorig->rc);
-  VectorSet vsUsed = Coloring::UsedColors(lrorig->rc, blk);
-  VectorSet_Union(used_colors, lrnew->forbidden, vsUsed);
-  double num_colors_after  = Coloring::NumColorsAvailable(lrnew,used_colors);
+  double num_colors_after  = ColorsLeftAfterBlock(lrnew, blk);
 
   debug("nebs: %d, colors: %.0f, ratio: %.2f", num_neighbors_after,
     num_colors_after, ((double)num_neighbors_after/num_colors_after));
