@@ -75,7 +75,9 @@ void Coloring::SetColor(Block* blk, LRID lrid, Color color)
 
 Color Coloring::GetColor(Block* blk, LRID lrid)
 {
-  return (*Chow::live_ranges[lrid]->blockmap)[(id(blk))]->color;
+  LiveRange* lr = (*Chow::live_ranges[lrid]->blockmap)[(id(blk))];
+  assert(lr); /* could also return NO_COLOR if lr is NULL */
+  return lr->color;
 }
 
 LRID Coloring::GetLRID(Block* blk, RegisterClass::RC rc, Color color)

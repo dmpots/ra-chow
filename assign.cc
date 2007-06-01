@@ -24,6 +24,7 @@
 #include "stats.h"
 #include "color.h"
 #include "mapping.h"
+#include "cfg_tools.h"
 
 /*------------------MODULE LOCAL DECLARATIONS------------------*/
 namespace {
@@ -106,6 +107,12 @@ inline unsigned int RegWidth(LRID lrid)
 {
   return Chow::live_ranges[lrid]->RegWidth();
 }
+inline void ResetAssignedReg(AssignedReg* ar)
+{
+  ar->free = TRUE;
+  ar->forLRID = NO_LRID;
+  ar->forInst = NULL;
+}
 
 /* used as predicates for seaching reg lists */
 template<class Predicate> 
@@ -117,6 +124,7 @@ class AssignedReg_Usable;
 
 /* for debugging */
 void dump_map_contents(AssignedRegMap& regMap);
+void dump_assignedlist_contents(const AssignedRegList& arList);
 }
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
@@ -268,28 +276,76 @@ void EnsureReg(Register* reg,
  * used to reset the count of which temporary registers are in use for
  * an instruction
  **/
-void ResetFreeTmpRegs(Inst* last_inst)
+void ResetFreeTmpRegs(Block* blk)
 {
-  debug("resetting free tmp regs");
-  //take care of business for each register class
-  for(unsigned int i = 0; i < reg_contents.size(); i++)
+  //need to reset all tmps if there are multiple paths from this block
+  //or multiple paths to the successor
+  bool reset_all = 
+    (Block_SuccCount(blk) != 1 || Block_PredCount(blk->succ->succ) != 1);
+
+  //this if/else looks like a big copy and paste job, which it is but
+  //it was easier to get it to work this way and probably easier to
+  //understand later as the conditionals in the loop get a little
+  //messy if you try to merge the cases.
+  if(reset_all)
   {
-    RegisterContents* regContents = &reg_contents[i];
-
-    //3) set all reserved registers to be FREE so they can be used in
-    //the next block
-    AssignedRegList* reserved = regContents->reserved;
-    AssignedRegList::const_iterator resIT;
-    for(resIT = reserved->begin(); resIT != reserved->end(); resIT++)
+    //take care of business for each register class
+    debug("resetting all tmp regs to be free");
+    for(unsigned int i = 0; i < reg_contents.size(); i++)
     {
-      (*resIT)->free = TRUE;
-      (*resIT)->forLRID = NO_LRID;
-      (*resIT)->forInst = NULL;
-    }
+      RegisterContents* regContents = &reg_contents[i];
+      //3) set all reserved registers to be FREE so they can be used in
+      //the next block
+      AssignedRegList* reserved = regContents->reserved;
+      AssignedRegList::const_iterator resIT;
+      for(resIT = reserved->begin(); resIT != reserved->end(); resIT++)
+      {
+        ResetAssignedReg(*resIT);
+      }
 
-    //4) clear the regMap
-    regContents->regMap->clear();
+      //4) clear the regMap
+      regContents->regMap->clear();
+    }
   }
+  else
+  {
+    //take care of business for each register class
+    debug("resetting tmp regs allocated in succesor to be free");
+    for(unsigned int i = 0; i < reg_contents.size(); i++)
+    {
+      RegisterContents* regContents = &reg_contents[i];
+      AssignedRegList* reserved = regContents->reserved;
+      AssignedRegList::const_iterator resIT;
+      for(resIT = reserved->begin(); resIT != reserved->end(); resIT++)
+      {
+        //reset the reg if this tmp reg holds a live range that has a
+        //real register in the next block
+        if(IsAllocated((*resIT)->forLRID, blk->succ->succ))
+        {
+          debug("resetting tmp reg: r%d for lrid: %d", 
+            (*resIT)->machineReg, (*resIT)->forLRID);
+          regContents->regMap->erase((*resIT)->forLRID);
+          ResetAssignedReg(*resIT);
+        }
+      }
+    }
+  }
+}
+
+/*
+ *==========================
+ * IsAllocated()
+ *==========================
+ * returns true if the live range is allocated a register in the
+ * block. the live range does not have to have originally contained
+ * the block.
+ **/
+inline bool IsAllocated(LRID lrid, Block* blk)
+{
+  if(lrid == NO_LRID) return false;
+  //have to check to see if the block was ever part of the live range
+  if((*Chow::live_ranges[lrid]->blockmap)[id(blk)] == NULL) return false;
+  return (GetMachineRegAssignment(blk, lrid) != REG_UNALLOCATED);
 }
 
 
@@ -298,6 +354,7 @@ void ResetFreeTmpRegs(Inst* last_inst)
  * GetMachineRegAssignment()
  *==========================
  * Gets the machine register assignment for a lrid in a given block
+ * the block must have originally been part of the live range.
  **/
 Register GetMachineRegAssignment(Block* b, LRID lrid)
 {
@@ -382,9 +439,7 @@ void UnEvict(Inst** updatedInst)
           it != reg_contents[i].assignable->end();
           it++)
       {
-        (*it)->free = TRUE;
-        (*it)->forLRID = NO_LRID;
-        (*it)->forInst = NULL;
+        ResetAssignedReg(*it);
       }
 
       //2) remove all evicted registers from evicted list
@@ -413,13 +468,24 @@ void dump_map_contents(AssignedRegMap& regMap)
   debug("-- end map contents --");
 }
 
-void dump_reglist_contents(RegisterList& regList)
+void dump_reglist_contents(const RegisterList& regList, Block* blk)
 {
   debug("-- reglist contents --");
-  RegisterList::iterator rmIt;
+  RegisterList::const_iterator rmIt;
   for(rmIt = regList.begin(); rmIt != regList.end(); rmIt++)
-    debug("  %d", (*rmIt));
+    debug("  %d --> r%d", (*rmIt), 
+      Assign::GetMachineRegAssignment(blk, *rmIt));
   debug("-- end reglist contents --");
+}
+
+void dump_assignedlist_contents(const AssignedRegList& arList)
+{
+  debug("-- assigned reglist contents --");
+  AssignedRegList::const_iterator rmIt;
+  for(rmIt = arList.begin(); rmIt != arList.end(); rmIt++)
+    debug("  r%d (%d lrid at inst %p)", 
+      (*rmIt)->machineReg, (*rmIt)->forLRID, (*rmIt)->forInst);
+  debug("-- end assigned reglist contents --");
 }
 
 /*
@@ -626,6 +692,9 @@ GetFreeTmpReg(LRID lrid,
 
   //there should be at least one register left to choose from. evict
   //it and use it now.
+  //dump_reglist_contents(instUses, blk);
+  //dump_assignedlist_contents(*regContents->assignable);
+  //dump_map_contents(*regContents->regMap);
   assert(potentials.size() > 0);
   AssignedReg* tmpReg = potentials.front();
   debug("evicting machine register: %d", tmpReg->machineReg);
@@ -790,9 +859,7 @@ Register MarkRegisterUsed(AssignedReg* tmpReg,
       //used by the liverange in the previous mapping
       for(unsigned int j = i; j < i + RegWidth(prevLRID); j++)
       {
-        (*reglist)[j]->free = TRUE;
-        (*reglist)[j]->forInst = NULL;
-        (*reglist)[j]->forLRID = NO_LRID;
+        ResetAssignedReg((*reglist)[j]);
       }
     }
   }
