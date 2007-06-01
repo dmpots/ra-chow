@@ -51,19 +51,32 @@ namespace Chow
       virtual ~IncludeInSplitStrategy(){};
     };
 
+    /* A */
     struct IncludeWhenNotFull : public IncludeInSplitStrategy
     {
       bool operator()
         (LiveRange* lrnew, LiveRange* lrorig, Block* blk);
     };
 
+    /* B */
     struct IncludeWhenNotTooManyNeighbors : public IncludeInSplitStrategy
     {
       double max_ratio;
       std::set<LiveRange*> neighbors;
       IncludeWhenNotTooManyNeighbors(double maxR=2.0) : max_ratio(maxR) {};
       void Reset(LiveUnit*); 
-      void AddNeighbors(Block* blk);
+      void AddNeighbors(LiveRange*,Block* blk);
+      bool operator()
+        (LiveRange* lrnew, LiveRange* lrorig, Block* blk);
+    };
+
+    /* C */
+    struct IncludeWhenEnoughColors : public IncludeInSplitStrategy
+    {
+      int fixed_min;
+      int min_colors;
+      IncludeWhenEnoughColors(int min=-1) : fixed_min(min){};
+      void Reset(LiveUnit*); 
       bool operator()
         (LiveRange* lrnew, LiveRange* lrorig, Block* blk);
     };
