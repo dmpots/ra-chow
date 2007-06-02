@@ -95,10 +95,24 @@ bool InsertEvictedStore(LRID evictedLRID,
                         Block* blk);
 AssignedReg* 
 FindSutiableTmpReg(RegisterContents* regContents, 
+                   Block* blk, 
                    Inst* origInst, 
+                   Inst* updatedInst, 
                    RegPurpose purpose,
                    const RegisterList& instUses,
                    unsigned int reg_width);
+AssignedReg* 
+Belady(const AssignedRegList& choices, Block* startblk, Inst* updatedInst);
+
+int 
+UpdateDistances(
+  std::map<LRID, int>& distances,
+  Block* blk, 
+  int startdist, 
+  Inst* start_inst = NULL
+);
+
+/* inline functions */
 inline unsigned int UB(unsigned int size, unsigned int width)
 {
   return size - width + 1;
@@ -112,6 +126,11 @@ inline void ResetAssignedReg(AssignedReg* ar)
   ar->free = TRUE;
   ar->forLRID = NO_LRID;
   ar->forInst = NULL;
+}
+inline bool SingleSuccessorPath(Block* blk)
+{
+  return (Block_SuccCount(blk) == 1) &&
+         (Block_PredCount(blk->succ->succ) == 1);
 }
 
 /* used as predicates for seaching reg lists */
@@ -280,8 +299,7 @@ void ResetFreeTmpRegs(Block* blk)
 {
   //need to reset all tmps if there are multiple paths from this block
   //or multiple paths to the successor
-  bool reset_all = 
-    (Block_SuccCount(blk) != 1 || Block_PredCount(blk->succ->succ) != 1);
+  bool reset_all = !SingleSuccessorPath(blk);
 
   //this if/else looks like a big copy and paste job, which it is but
   //it was easier to get it to work this way and probably easier to
@@ -640,7 +658,8 @@ GetFreeTmpReg(LRID lrid,
   //for this instruction
   {//private scope for tmpReg
     AssignedReg* tmpReg = 
-      FindSutiableTmpReg(regContents, origInst, purpose, instUses, rwidth);
+      FindSutiableTmpReg(regContents, blk, origInst, updatedInst,
+                         purpose, instUses, rwidth);
     if(tmpReg != NULL)
     {
       regXneedMem.first = 
@@ -897,7 +916,9 @@ RegisterContents* RegContentsForLRID(LRID lrid)
  */
 AssignedReg* 
 FindSutiableTmpReg(RegisterContents* regContents, 
+                   Block* blk,
                    Inst* origInst, 
+                   Inst* updatedInst, 
                    RegPurpose purpose,
                    const RegisterList& instUses,
                    unsigned int reg_width)
@@ -935,8 +956,8 @@ FindSutiableTmpReg(RegisterContents* regContents,
     if(!kickable.empty())
     {
       debug("found a reserved register that we can evict");
-      /* TODO: run belady here */
-      tmpReg = kickable.front();
+      //tmpReg = kickable.front();
+      tmpReg = Belady(kickable, blk, updatedInst->next_inst);
     }
   }
 
@@ -977,6 +998,97 @@ FindCandidateRegs(const AssignedRegList* possibles,
   return candidates;
 }
 
+/*
+ *=====================
+ * Belady()
+ *=====================
+ * Run the belady local register allocation algorithm to decied which
+ * temporary register should be used next. The algorithm looks for the
+ * register which is not used for the longes amount of time and
+ * chooses it for eviction.
+ */
+AssignedReg* 
+Belady(const AssignedRegList& choices, Block* start_blk, Inst* start_inst)
+{
+  debug("running belady to choose a temporary register to evict");
+  typedef AssignedRegList::const_iterator LI;
+  std::map<LRID, int> distances;
+  //initialize map with distance of -1 for all our choices
+  for(LI i = choices.begin(); i != choices.end(); i++)
+  {
+    distances[(*i)->forLRID] = -1;
+  }
+  
+  //find distances for the given block
+  int dist = UpdateDistances(distances, start_blk, 0, start_inst);
+
+  //continue to look at distances as long as there is a single path
+  //from this block and a single path to the next block
+  if(SingleSuccessorPath(start_blk))
+  {
+    Block* blk = start_blk;
+    do {
+      blk = blk->succ->succ;
+      dist = UpdateDistances(distances, blk, dist);
+    }while(SingleSuccessorPath(blk));
+  }
+
+  //choose tmp reg with largest distance
+  AssignedReg* tmpReg = NULL;
+  int max_dist = -2;
+  for(LI i = choices.begin(); i != choices.end(); i++)
+  {
+    int cur_dist = distances[(*i)->forLRID];
+    if(cur_dist == -1) {tmpReg = *i; break;}
+    if(cur_dist > max_dist){tmpReg = *i; max_dist = cur_dist;}
+  }
+
+  debug("finished belady");
+  assert(tmpReg != NULL);
+  return tmpReg;
+} 
+
+/*
+ *=====================
+ * UpdateDistances()
+ *=====================
+ * Updates the passed distance map with the distances that each live
+ * range is used. counting begins from +start_inst+ starting with the
+ * distance +start_dist+. The distance is incremented for each
+ * instruction and returned to the caller.
+ */
+int 
+UpdateDistances(
+  std::map<LRID, int>& distances,
+  Block* blk, 
+  int start_dist, 
+  Inst* start_inst
+)
+{
+  using Mapping::SSAName2OrigLRID;
+  debug("updating distances for block: %s(%d)", bname(blk), id(blk));
+
+  if(start_inst == NULL) start_inst = blk->inst->next_inst;
+  int dist = start_dist;
+
+  //run through all instructions in the block and update the distances
+  for(Inst* inst = start_inst; inst != blk->inst; inst = inst->next_inst)
+  {
+    debug("checking inst for distances: %s", Debug::StringOfInst(inst));
+    Operation** op;
+    Inst_ForAllOperations(op, inst)
+    {
+      Register* reg;
+      Operation_ForAllUses(reg, *op)
+      {
+        distances[SSAName2OrigLRID(*reg)] = dist;
+      }
+    }
+    dist++;
+  }
+
+  return dist;
+}
 
 
 }//end anonymous namespace
