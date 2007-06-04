@@ -183,9 +183,11 @@ RewriteControlFlow(Block* blkPred, Block* blkSucc, Block* blkOldSucc)
 
     //find the lable for the jump table
     Expr jmptab_label = 0;
+    bool search_all_labels = false;
     if(op->opcode == JMPT)
     {
       jmptab_label = op->arguments[0];
+      debug("jump table lable is: %s", Label_Get_String(jmptab_label));
     }
     else //JMPr
     {
@@ -195,17 +197,24 @@ RewriteControlFlow(Block* blkPred, Block* blkSucc, Block* blkOldSucc)
       //jump table. in all examples we saw it was, but may not always
       //be so. also, if the block gets split the first inst may not be
       //the correct loadI. heres to hope...
-      assert(blkPred->inst->next_inst->operations[0]->opcode == iLDI);
-      jmptab_label = 
-        blkPred->inst->next_inst->operations[0]->arguments[0];
+      //assert(blkPred->inst->next_inst->operations[0]->opcode == iLDI);
+      //jmptab_label =
+      //  blkPred->inst->next_inst->operations[0]->arguments[0];
+
+      //WARNING: HACK ATTACK (part 2)
+      // so the above did not work for the reasons outlined. the next
+      // attempt is to just search through all static labels until we
+      // find the label we are trying to replace. hopefully this works
+      // ok and the lable is not in the static code list for another
+      // reason as well...
+      search_all_labels = true;
     }
-    debug("jump table lable is: %s", Label_Get_String(jmptab_label));
     Static_Code_List* scl = static_code_list;
     do
     {
       debug("looking at static label: %s",
             Label_Get_String(scl->label->label));
-      if(scl->label->label == jmptab_label)
+      if(scl->label->label == jmptab_label || search_all_labels)
       {
         debug("found jmp table label");
         debug("attempting to replace iDATA label: %s",
@@ -223,7 +232,7 @@ RewriteControlFlow(Block* blkPred, Block* blkSucc, Block* blkOldSucc)
           }
           scn = scn->next_operation;
         }while(scn != scl->operation_list);
-        break;
+        if(!search_all_labels) break;
       }
 
       scl = scl->next_list;
