@@ -87,14 +87,31 @@ namespace Chow
     struct ColorChoiceStrategy
     {
       public:
-      virtual Color operator()(const LiveRange*, std::vector<Color>) = 0;
+      virtual Color operator()
+        (const LiveRange*, const std::vector<Color>&) = 0;
       virtual ~ColorChoiceStrategy(){};
     };
 
-    struct ChooseFirstColor : public ColorChoiceStrategy
+    struct ChooseFirstColor : ColorChoiceStrategy
     {
-      Color operator()(const LiveRange*, std::vector<Color>);
+      Color operator()(const LiveRange*, const std::vector<Color>&);
     };
+
+    struct ChooseColorFromMostConstrainedNeighbor : ColorChoiceStrategy
+    {
+      Color operator()(const LiveRange*, const std::vector<Color>&);
+    };
+
+    struct ChooseColorInMostNeighborsForbidden : ColorChoiceStrategy
+    {
+      Color operator()(const LiveRange*, const std::vector<Color>&);
+    };
+
+    struct ChooseColorFromSplit : ColorChoiceStrategy
+    {
+      Color operator()(const LiveRange*, const std::vector<Color>&);
+    };
+
 
     /*
      * DEFAULT STRATEGY VARIABLES

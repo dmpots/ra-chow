@@ -36,13 +36,15 @@ IncludeWhenNotTooManyNeighbors when_not_too_many_neighbors;
 
 //coloring
 ChooseFirstColor choose_first_color;
+ChooseColorFromMostConstrainedNeighbor choose_from_most_constrained;
 
 
 
 //default heuristics
 WhenToSplitStrategy& default_when_to_split = no_color_available;
 IncludeInSplitStrategy& default_include_in_split = when_not_full;
-ColorChoiceStrategy& default_color_choice = choose_first_color;
+//ColorChoiceStrategy& default_color_choice = choose_first_color;
+ColorChoiceStrategy& default_color_choice = choose_from_most_constrained;
 
 //chow's heuristics
 //WhenToSplitStrategy& default_when_to_split = num_neighbors_too_great;
@@ -183,13 +185,73 @@ bool IncludeWhenEnoughColors::operator()
 /*
  * HOW TO COLOR STRATEGIES
  */
-Color 
+Color
 ChooseFirstColor::operator()(
-  const LiveRange* lr, 
-  std::vector<Color> choices
+  const LiveRange* lr,
+  const std::vector<Color>& choices
 )
 {
   return choices.front();
+}
+
+Color
+ChooseColorFromMostConstrainedNeighbor::operator()(
+  const LiveRange* lr,
+  const std::vector<Color>& choices
+)
+{
+  using Coloring::NO_COLOR;
+  typedef LRSet::iterator SI;
+  typedef std::vector<LiveRange*>::iterator LI;
+  typedef std::vector<Color>::const_iterator CI;
+
+  //look at all the live ranges that the live range interferes with
+  //and see which ones have a forbidden color the same as one of the
+  //choices for the given live range
+  std::vector<LiveRange*> lr_choices;
+  for(SI si = lr->fear_list->begin(); si != lr->fear_list->end(); si++)
+  {
+    for(CI ci = choices.begin(); ci != choices.end(); ci++)
+    {
+      if(VectorSet_Member((*si)->forbidden, *ci))
+      {
+        lr_choices.push_back(*si);
+        break;
+      }
+    }
+  }
+  //if none of the colors to pick from is already in the forbidden
+  //list of another live range then just pick the first available
+  if(lr_choices.empty()) return choices.front();
+
+  //otherwise find the live range that has the most forbidden colors
+  int max_forbidden = -1;
+  LiveRange* max_lr = NULL;
+  for(LI li = lr_choices.begin(); li != lr_choices.end(); li++)
+  {
+    int size = VectorSet_Size((*li)->forbidden);
+    if(size > max_forbidden)
+    {
+      max_forbidden = size;
+      max_lr = (*li);
+    }
+  }
+  assert(max_lr != NULL);
+
+  //now choose the color that is available as a choice for this live
+  //range and also in the forbidden set of the live range with the
+  //most forbidden colors
+  Color color = NO_COLOR;
+  for(CI ci = choices.begin(); ci != choices.end(); ci++)
+  {
+    if(VectorSet_Member(max_lr->forbidden, *ci))
+    {
+      color = *ci; break;
+    }
+  }
+
+  assert(color != NO_COLOR);
+  return color;
 }
 
 }
