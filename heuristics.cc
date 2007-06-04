@@ -25,17 +25,24 @@ namespace Heuristics {
 /*
  * DEFAULT STRATEGIES
  */
+//splitting
 SplitWhenNoColorAvailable no_color_available;
 SplitWhenNumNeighborsTooGreat num_neighbors_too_great;
 
+//including
 IncludeWhenNotFull when_not_full;
 IncludeWhenEnoughColors when_enough_colors;
 IncludeWhenNotTooManyNeighbors when_not_too_many_neighbors;
+
+//coloring
+ChooseFirstColor choose_first_color;
+
 
 
 //default heuristics
 WhenToSplitStrategy& default_when_to_split = no_color_available;
 IncludeInSplitStrategy& default_include_in_split = when_not_full;
+ColorChoiceStrategy& default_color_choice = choose_first_color;
 
 //chow's heuristics
 //WhenToSplitStrategy& default_when_to_split = num_neighbors_too_great;
@@ -171,6 +178,18 @@ bool IncludeWhenEnoughColors::operator()
 {
   int left = ColorsLeftAfterBlock(lrnew, blk);
   return left >= min_colors;
+}
+
+/*
+ * HOW TO COLOR STRATEGIES
+ */
+Color 
+ChooseFirstColor::operator()(
+  const LiveRange* lr, 
+  std::vector<Color> choices
+)
+{
+  return choices.front();
 }
 
 }

@@ -13,6 +13,8 @@
 #include "rc.h"
 #include "live_range.h"
 #include "assign.h"
+#include "params.h"
+#include "heuristics.h"
 
 /*------------------MODULE LOCAL DEFINITIONS-------------------*/
 namespace {
@@ -35,6 +37,15 @@ namespace {
 
     return free;
   };
+
+  /* computes the upper bound for the colors that can be used for this
+   * live range. the upper bound is the last color for which we can
+   * check +step+ colors from that color and still be looking at valid
+   * colors. the stpe is simply the register width */
+  inline unsigned int UB(const LiveRange* lr, unsigned int step)
+  {
+    return RegisterClass::NumMachineReg(lr->rc) - step + 1;
+  }
 }
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
@@ -109,7 +120,7 @@ int Coloring::NumColorsAvailable(const LiveRange* lr, VectorSet used_colors)
   /* TODO: this could be quite slow. keep an on on this section to see
    * if we maybe need to speed it up */
   int step = RegisterClass::RegWidth(lr->type);
-  unsigned int ub = RegisterClass::NumMachineReg(lr->rc) - step + 1;
+  unsigned int ub = UB(lr, step);
   for(Color c = 0; c < ub; c+=step)
   {
     if(HasSpace(used_colors, c, step)) num_avail++;
@@ -120,17 +131,16 @@ int Coloring::NumColorsAvailable(const LiveRange* lr, VectorSet used_colors)
 
 Color Coloring::SelectColor(const LiveRange* lr)
 {
-  //TODO: pick a better color, i.e. one that is used by neighbors
-  //neighbors. for now just pick the first available color
+  std::vector<Color> choices;
   int step = RegisterClass::RegWidth(lr->type);
-  unsigned int ub = RegisterClass::NumMachineReg(lr->rc) - step + 1;
+  unsigned int ub = UB(lr, step);
   for(Color c = 0; c < ub; c+=step)
   {
-    if(HasSpace(lr->forbidden, c, step)) return c;
+    if(HasSpace(lr->forbidden, c, step)) choices.push_back(c);
   }
 
-  assert(false /*should always find a color */);
-  return -1U; //for sun compiler
+  assert(!choices.empty());/*should always find a color */
+  return Params::Algorithm::color_choice_strategy(lr, choices);
 }
 
 /*------------------INTERNAL MODULE FUNCTIONS--------------------*/

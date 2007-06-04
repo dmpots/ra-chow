@@ -82,10 +82,26 @@ namespace Chow
     };
 
     /*
+     * HOW TO COLOR STRATEGIES
+     */
+    struct ColorChoiceStrategy
+    {
+      public:
+      virtual Color operator()(const LiveRange*, std::vector<Color>) = 0;
+      virtual ~ColorChoiceStrategy(){};
+    };
+
+    struct ChooseFirstColor : public ColorChoiceStrategy
+    {
+      Color operator()(const LiveRange*, std::vector<Color>);
+    };
+
+    /*
      * DEFAULT STRATEGY VARIABLES
      */
     extern WhenToSplitStrategy& default_when_to_split;
     extern IncludeInSplitStrategy& default_include_in_split;
+    extern ColorChoiceStrategy& default_color_choice;
 
   }//Heuristics
 }//Chow

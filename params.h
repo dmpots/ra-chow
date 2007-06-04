@@ -12,6 +12,7 @@ namespace Chow{
 namespace Heuristics {
   class WhenToSplitStrategy;
   class IncludeInSplitStrategy;
+  class ColorChoiceStrategy;
 }
 }
 
@@ -37,6 +38,7 @@ namespace Params {
     using namespace Chow::Heuristics;
     extern WhenToSplitStrategy& when_to_split_strategy;
     extern IncludeInSplitStrategy& include_in_split_strategy;
+    extern ColorChoiceStrategy& color_choice_strategy;
   }
   namespace Program {
     extern bool force_minimum_register_count;

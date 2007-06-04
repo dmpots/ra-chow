@@ -37,6 +37,8 @@ WhenToSplitStrategy& when_to_split_strategy =
   Chow::Heuristics::default_when_to_split;
 IncludeInSplitStrategy& include_in_split_strategy = 
   Chow::Heuristics::default_include_in_split;
+ColorChoiceStrategy& color_choice_strategy = 
+  Chow::Heuristics::default_color_choice;
 }
 
 /* program parameters */
