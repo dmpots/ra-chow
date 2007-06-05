@@ -37,6 +37,7 @@ IncludeWhenNotTooManyNeighbors when_not_too_many_neighbors;
 //coloring
 ChooseFirstColor choose_first_color;
 ChooseColorFromMostConstrainedNeighbor choose_from_most_constrained;
+ChooseColorInMostNeighborsForbidden choose_most_forbidden;
 
 //strategy variables
 ColorChoiceStrategy* color_choice_strategy = NULL;
@@ -53,6 +54,9 @@ void SetColorChoiceStrategy(ColorChoice cs)
       break;
     case CHOOSE_FROM_MOST_CONSTRAINED:
       color_choice_strategy = &choose_from_most_constrained;
+      break;
+    case CHOOSE_FROM_MOST_FORBIDDEN:
+      color_choice_strategy = &choose_most_forbidden;
       break;
     default:
       error("unknown color strategy: %d", cs);
@@ -266,7 +270,11 @@ ChooseColorFromMostConstrainedNeighbor::operator()(
   }
   //if none of the colors to pick from is already in the forbidden
   //list of another live range then just pick the first available
-  if(lr_choices.empty()) return choices.front();
+  if(lr_choices.empty())
+  {
+    debug("no neighbors with forbidden colors, picking any");
+    return choices.front();
+  }
 
   //otherwise find the live range that has the most forbidden colors
   int max_forbidden = -1;
@@ -293,10 +301,64 @@ ChooseColorFromMostConstrainedNeighbor::operator()(
       color = *ci; break;
     }
   }
+  debug("choosing color: %d from lr: %d_%d with %d forbidden",
+    color, max_lr->orig_lrid, max_lr->id, max_forbidden);
 
   assert(color != NO_COLOR);
   return color;
 }
+
+Color 
+ChooseColorInMostNeighborsForbidden::operator()(
+  const LiveRange* lr, 
+  const std::vector<Color>& choices
+)
+{
+  using Coloring::NO_COLOR;
+
+  typedef LRSet::iterator SI;
+  typedef std::vector<Color>::const_iterator CI;
+  typedef std::map<Color,int>::const_iterator CCI;
+
+  std::map<Color, int> color_count_map;
+  for(CI ci = choices.begin(); ci != choices.end(); ci++)
+  {
+    for(SI si = lr->fear_list->begin(); si != lr->fear_list->end(); si++)
+    {
+      if(VectorSet_Member((*si)->forbidden, *ci))
+      {
+        color_count_map[*ci]++;
+      }
+    }
+  }
+
+  Color max_color = NO_COLOR;
+  int max_count = -1;
+  for(CCI cci = color_count_map.begin(); cci != color_count_map.end(); cci++)
+  {
+    if((*cci).second > max_count)
+    {
+      max_count = (*cci).second;
+      max_color = (*cci).first;
+    }
+  }
+
+  Color color = NO_COLOR;
+  if(max_color == NO_COLOR)
+  {
+    debug("no max color found, taking first available");
+    color = choices.front();
+  }
+  else
+  {
+    debug("max color found: %d at count: %d", max_color, max_count);
+    color = max_color;
+  }
+
+  return color;
+}
+
+
 
 }
 }//end Chow::Heuristics namespace

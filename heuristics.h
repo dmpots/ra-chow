@@ -19,17 +19,18 @@ namespace Chow
      * STRATEGY NAMES
      */
     enum WhenToSplit {
-      NO_COLOR_AVAILABLE, 
+      NO_COLOR_AVAILABLE,
       NUM_NEIGHBORS_TOO_GREAT
     };
     enum IncludeInSplit {
-      WHEN_NOT_FULL, 
-      WHEN_ENOUGH_COLORS, 
+      WHEN_NOT_FULL,
+      WHEN_ENOUGH_COLORS,
       WHEN_NOT_TOO_MANY_NEIGHBORS
     };
     enum ColorChoice {
       CHOOSE_FIRST_COLOR, 
-      CHOOSE_FROM_MOST_CONSTRAINED
+      CHOOSE_FROM_MOST_CONSTRAINED,
+      CHOOSE_FROM_MOST_FORBIDDEN
     };
 
     /*
