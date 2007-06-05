@@ -6,15 +6,7 @@
  */
 #ifndef __GUARD_PARAMS_H
 #define __GUARD_PARAMS_H
-
-/* forward def */
-namespace Chow{
-namespace Heuristics {
-  class WhenToSplitStrategy;
-  class IncludeInSplitStrategy;
-  class ColorChoiceStrategy;
-}
-}
+#include "heuristics.h"
 
 namespace Params {
   namespace Machine {
@@ -36,9 +28,9 @@ namespace Params {
     extern bool trim_useless_blocks;
 
     using namespace Chow::Heuristics;
-    extern WhenToSplitStrategy& when_to_split_strategy;
-    extern IncludeInSplitStrategy& include_in_split_strategy;
-    extern ColorChoiceStrategy& color_choice_strategy;
+    extern WhenToSplit when_to_split;
+    extern ColorChoice color_choice;
+    extern IncludeInSplit include_in_split;
   }
   namespace Program {
     extern bool force_minimum_register_count;

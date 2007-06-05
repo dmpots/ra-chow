@@ -23,7 +23,7 @@ unsigned int ColorsLeftAfterBlock(LiveRange* lr, Block* blk);
 namespace Chow {
 namespace Heuristics {
 /*
- * DEFAULT STRATEGIES
+ * STRATEGY VARIABLES
  */
 //splitting
 SplitWhenNoColorAvailable no_color_available;
@@ -38,13 +38,67 @@ IncludeWhenNotTooManyNeighbors when_not_too_many_neighbors;
 ChooseFirstColor choose_first_color;
 ChooseColorFromMostConstrainedNeighbor choose_from_most_constrained;
 
+//strategy variables
+ColorChoiceStrategy* color_choice_strategy = NULL;
+IncludeInSplitStrategy* include_in_split_strategy = NULL;
+WhenToSplitStrategy* when_to_split_strategy = NULL;
 
+//heuristic setters
+void SetColorChoiceStrategy(ColorChoice cs)
+{
+  switch(cs)
+  {
+    case CHOOSE_FIRST_COLOR:
+      color_choice_strategy = &choose_first_color;
+      break;
+    case CHOOSE_FROM_MOST_CONSTRAINED:
+      color_choice_strategy = &choose_from_most_constrained;
+      break;
+    default:
+      error("unknown color strategy: %d", cs);
+      abort();
+  }
+}
+
+void SetIncludeInSplitStrategy(IncludeInSplit is)
+{
+  switch(is)
+  {
+    case WHEN_NOT_FULL:
+      include_in_split_strategy = &when_not_full;
+      break;
+    case WHEN_ENOUGH_COLORS: 
+      include_in_split_strategy = &when_enough_colors;
+      break;
+    case WHEN_NOT_TOO_MANY_NEIGHBORS:
+      include_in_split_strategy = &when_not_too_many_neighbors;
+      break;
+   default:
+      error("unknown include in split strategy: %d", is);
+      abort();
+  }
+}
+
+void SetWhenToSplitStrategy(WhenToSplit ws)
+{
+  switch(ws)
+  {
+    case NO_COLOR_AVAILABLE:
+      when_to_split_strategy = &no_color_available;
+      break;
+    case NUM_NEIGHBORS_TOO_GREAT:
+      when_to_split_strategy = &num_neighbors_too_great;
+      break;
+    default:
+      error("unknown when to split strategy: %d", ws);
+      abort();
+  }
+}
 
 //default heuristics
-WhenToSplitStrategy& default_when_to_split = no_color_available;
-IncludeInSplitStrategy& default_include_in_split = when_not_full;
+//WhenToSplitStrategy& default_when_to_split = no_color_available;
+//IncludeInSplitStrategy& default_include_in_split = when_not_full;
 //ColorChoiceStrategy& default_color_choice = choose_first_color;
-ColorChoiceStrategy& default_color_choice = choose_from_most_constrained;
 
 //chow's heuristics
 //WhenToSplitStrategy& default_when_to_split = num_neighbors_too_great;
@@ -53,6 +107,7 @@ ColorChoiceStrategy& default_color_choice = choose_from_most_constrained;
 //dave's heuristics
 //WhenToSplitStrategy& default_when_to_split = no_color_available;
 //IncludeInSplitStrategy& default_include_in_split = when_enough_colors;
+
 /*
  * WHEN TO SPLIT STRATEGIES
  */
@@ -114,17 +169,6 @@ void IncludeWhenNotTooManyNeighbors::AddNeighbors(LiveRange* lr,Block* blk)
   //go through all the live units that include this block and add them
   //as neighbors if they are a candidate or have been assigned a color
   debug("live unit size: %d", (int)Chow::live_units[id(blk)].size());
-  /*
-  for(unsigned int i = 0; i < Chow::live_units[id(blk)].size(); i++)
-  {
-    LiveUnit* lu = Chow::live_units[id(blk)][i];
-    if(lu->live_range->is_candidate || 
-       lu->live_range->color != Coloring::NO_COLOR)
-    {
-      neighbors.insert(lu->live_range);
-    }
-  }
-  */
   std::for_each(
     lr->fear_list->begin(), lr->fear_list->end(), 
     AddIfBlockEq(blk, neighbors));

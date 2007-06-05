@@ -140,7 +140,7 @@ Color Coloring::SelectColor(const LiveRange* lr)
   }
 
   assert(!choices.empty());/*should always find a color */
-  return Params::Algorithm::color_choice_strategy(lr, choices);
+  return (*Chow::Heuristics::color_choice_strategy)(lr, choices);
 }
 
 /*------------------INTERNAL MODULE FUNCTIONS--------------------*/

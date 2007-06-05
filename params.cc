@@ -33,12 +33,9 @@ bool  rematerialize = false;
 bool  trim_useless_blocks = false;
 
 /* default heuristics */
-WhenToSplitStrategy& when_to_split_strategy = 
-  Chow::Heuristics::default_when_to_split;
-IncludeInSplitStrategy& include_in_split_strategy = 
-  Chow::Heuristics::default_include_in_split;
-ColorChoiceStrategy& color_choice_strategy = 
-  Chow::Heuristics::default_color_choice;
+ColorChoice color_choice = CHOOSE_FIRST_COLOR;
+IncludeInSplit include_in_split = WHEN_NOT_FULL;
+WhenToSplit when_to_split = NO_COLOR_AVAILABLE;
 }
 
 /* program parameters */

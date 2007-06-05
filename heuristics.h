@@ -15,6 +15,22 @@ namespace Chow
 {
   namespace Heuristics
   {
+    /*
+     * STRATEGY NAMES
+     */
+    enum WhenToSplit {
+      NO_COLOR_AVAILABLE, 
+      NUM_NEIGHBORS_TOO_GREAT
+    };
+    enum IncludeInSplit {
+      WHEN_NOT_FULL, 
+      WHEN_ENOUGH_COLORS, 
+      WHEN_NOT_TOO_MANY_NEIGHBORS
+    };
+    enum ColorChoice {
+      CHOOSE_FIRST_COLOR, 
+      CHOOSE_FROM_MOST_CONSTRAINED
+    };
 
     /*
      * WHEN TO SPLIT STRATEGIES
@@ -86,7 +102,6 @@ namespace Chow
      */
     struct ColorChoiceStrategy
     {
-      public:
       virtual Color operator()
         (const LiveRange*, const std::vector<Color>&) = 0;
       virtual ~ColorChoiceStrategy(){};
@@ -114,12 +129,14 @@ namespace Chow
 
 
     /*
-     * DEFAULT STRATEGY VARIABLES
+     * STRATEGY VARIABLES
      */
-    extern WhenToSplitStrategy& default_when_to_split;
-    extern IncludeInSplitStrategy& default_include_in_split;
-    extern ColorChoiceStrategy& default_color_choice;
-
+    extern ColorChoiceStrategy* color_choice_strategy;
+    extern IncludeInSplitStrategy* include_in_split_strategy;
+    extern WhenToSplitStrategy* when_to_split_strategy;
+    void SetColorChoiceStrategy(ColorChoice cs);
+    void SetIncludeInSplitStrategy(IncludeInSplit is);
+    void SetWhenToSplitStrategy(WhenToSplit ws);
   }//Heuristics
 }//Chow
 

@@ -595,7 +595,7 @@ LiveRange* LiveRange::Split()
 
   debug("adding block: %s to  lr'", bname(startunit->block));
   TransferLiveUnitTo(newlr, startunit);
-  Params::Algorithm::include_in_split_strategy.Reset(startunit);
+  Chow::Heuristics::include_in_split_strategy->Reset(startunit);
 
   //keep a queue of successors that we may add to the new live range
   std::list<Block*> succ_list;
@@ -1105,9 +1105,8 @@ bool LiveRange_IncludeInSplit(LiveRange* newlr,
                               LiveRange* origlr,
                               Block* b)
 {
-  using Params::Algorithm::include_in_split_strategy;
-  return include_in_split_strategy(newlr,origlr,b);
-  //return Params::Algorithm::include_in_split_strategy(newlr,origlr,b);
+  return 
+    (*Chow::Heuristics::include_in_split_strategy)(newlr,origlr,b);
 }
 
 

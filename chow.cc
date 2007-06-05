@@ -953,7 +953,7 @@ void MoveLoadsAndStores()
 //bool ShouldSplitLiveRange(LiveRange* lr, WhenToSplitStrategy& strategy)
 bool ShouldSplitLiveRange(LiveRange* lr)
 {
-  return Params::Algorithm::when_to_split_strategy(lr);
+  return (*Chow::Heuristics::when_to_split_strategy)(lr);
 }
 
 inline void AddToCorrectConstrainedList(LRSet* constr_lrs, 

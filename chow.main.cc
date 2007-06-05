@@ -15,6 +15,7 @@
 #include "mapping.h"
 #include "cleave.h"
 #include "reach.h"
+#include "heuristics.h"
 
 /*------------------MODULE LOCAL DEFINITIONS-------------------*/
 /*#### module types ####*/
@@ -42,7 +43,10 @@ typedef enum
   HELP_FORCEMINIMUMREGISTERCOUNT,
   HELP_DUMPPARAMSONLY,
   HELP_REMATERIALIZE,
-  HELP_TRIMUSELESS
+  HELP_TRIMUSELESS,
+  HELP_COLORCHOICESTRATEGY,
+  HELP_SPLITINCLUDESTRATEGY,
+  HELP_SPLITWHENSTRATEGY
 } Param_Help;
 
 
@@ -64,6 +68,7 @@ typedef struct param_details
 /*#### module functions ####*/
 /* functions to process parameters */
 static int process_(Param_Details*, char*);
+static int process_heuristic(Param_Details* param, char* arg);
 static const char* get_usage(Param_Help idx);
 static void usage(Boolean);
 static void Param_InitDefaults(void);
@@ -105,6 +110,9 @@ using Params::Algorithm::move_loads_and_stores;
 using Params::Algorithm::enhanced_code_motion;
 using Params::Algorithm::rematerialize;
 using Params::Algorithm::trim_useless_blocks;
+using Params::Algorithm::color_choice;
+using Params::Algorithm::include_in_split;
+using Params::Algorithm::when_to_split;
 using Params::Program::force_minimum_register_count;
 using Params::Program::dump_params_only;
 static Param_Details param_table[] = 
@@ -129,10 +137,16 @@ static Param_Details param_table[] =
   {'z', process_, I,F,rematerialize,&rematerialize,
          BOOL_PARAM, HELP_REMATERIALIZE},
   {'t', process_, I,F,trim_useless_blocks,&trim_useless_blocks,
-         BOOL_PARAM, HELP_TRIMUSELESS}
+         BOOL_PARAM, HELP_TRIMUSELESS},
+  {'c', process_heuristic, color_choice,F,B,&color_choice,
+         INT_PARAM, HELP_COLORCHOICESTRATEGY},
+  {'i', process_heuristic, include_in_split,F,B,&include_in_split,
+         INT_PARAM, HELP_SPLITINCLUDESTRATEGY},
+  {'w', process_heuristic, when_to_split,F,B,&when_to_split,
+         INT_PARAM, HELP_SPLITWHENSTRATEGY}
 };
 const unsigned int NPARAMS = (sizeof(param_table) / sizeof(param_table[0]));
-const char* PARAMETER_STRING  = ":b:r:d:mpefyzt";
+const char* PARAMETER_STRING  = ":b:r:d:c:i:w:mpefyzt";
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
 /*
@@ -320,6 +334,33 @@ int process_(Param_Details* param, char* arg)
     }
   }
 
+  return SUCCESS;
+}
+
+int process_heuristic(Param_Details* param, char* arg)
+{
+  using Chow::Heuristics::ColorChoice;
+  using Chow::Heuristics::IncludeInSplit;
+  using Chow::Heuristics::WhenToSplit;
+  using Chow::Heuristics::SetColorChoiceStrategy;
+  using Chow::Heuristics::SetIncludeInSplitStrategy;
+  using Chow::Heuristics::SetWhenToSplitStrategy;
+
+  int hval = (arg == NULL ) ?  param->idefault : atoi(arg);
+  switch(param->name)
+  {
+    case 'c': 
+      SetColorChoiceStrategy(ColorChoice(hval)); break;
+    case 'i': 
+      SetIncludeInSplitStrategy(IncludeInSplit(hval)); break;
+    case 'w': 
+      SetWhenToSplitStrategy(WhenToSplit(hval)); break;
+    default:
+      error("unknown heuristic: %c", param->name);
+      abort();
+  }
+
+  *(int*)param->value = hval;
   return SUCCESS;
 }
 
