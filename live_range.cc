@@ -582,6 +582,7 @@ LiveRange* LiveRange::Split()
   if(Debug::dump_all_splits && splits->size() == 0)
   {
     Debug::DotDumpLR(this, "orig");
+    splits->push_back(this);
   }
 
   //create a new live range and initialize values
@@ -638,7 +639,7 @@ LiveRange* LiveRange::Split()
   {
     Debug::DotDumpLR(newlr, "split");
     char str[128] = {0};
-    sprintf(str, "split_%d", (int)splits->size());
+    sprintf(str, "split_%d", (int)splits->size() - 1);
     Debug::DotDumpLR(this, str);
   }
   // ------------ Debug ---------------//

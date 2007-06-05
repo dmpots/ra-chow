@@ -13,15 +13,7 @@
 
 /*------------------MODULE LOCAL DECLARATIONS------------------*/
 namespace {
-template<class T>
-inline T max(T a, T b){return a > b ? a : b;}
-
-unsigned int ColorsLeftAfterBlock(LiveRange* lr, Block* blk);
-}
-
-/*--------------------BEGIN IMPLEMENTATION---------------------*/
-namespace Chow {
-namespace Heuristics {
+using namespace Chow::Heuristics;
 /*
  * STRATEGY VARIABLES
  */
@@ -38,7 +30,21 @@ IncludeWhenNotTooManyNeighbors when_not_too_many_neighbors;
 ChooseFirstColor choose_first_color;
 ChooseColorFromMostConstrainedNeighbor choose_from_most_constrained;
 ChooseColorInMostNeighborsForbidden choose_most_forbidden;
+ChooseColorFromSplit choose_from_split;
 
+template<class T>
+inline T max(T a, T b){return a > b ? a : b;}
+
+unsigned int ColorsLeftAfterBlock(LiveRange* lr, Block* blk);
+Color FindMaxOrDefault(
+  const std::map<Color,int>& color_count_map,
+  const std::vector<Color>& choices
+);
+}
+
+/*--------------------BEGIN IMPLEMENTATION---------------------*/
+namespace Chow {
+namespace Heuristics {
 //strategy variables
 ColorChoiceStrategy* color_choice_strategy = NULL;
 IncludeInSplitStrategy* include_in_split_strategy = NULL;
@@ -57,6 +63,9 @@ void SetColorChoiceStrategy(ColorChoice cs)
       break;
     case CHOOSE_FROM_MOST_FORBIDDEN:
       color_choice_strategy = &choose_most_forbidden;
+      break;
+    case CHOOSE_FROM_SPLIT:
+      color_choice_strategy = &choose_from_split;
       break;
     default:
       error("unknown color strategy: %d", cs);
@@ -314,8 +323,6 @@ ChooseColorInMostNeighborsForbidden::operator()(
   const std::vector<Color>& choices
 )
 {
-  using Coloring::NO_COLOR;
-
   typedef LRSet::iterator SI;
   typedef std::vector<Color>::const_iterator CI;
   typedef std::map<Color,int>::const_iterator CCI;
@@ -331,6 +338,56 @@ ChooseColorInMostNeighborsForbidden::operator()(
       }
     }
   }
+  return FindMaxOrDefault(color_count_map, choices);
+}
+
+Color 
+ChooseColorFromSplit::operator()(
+  const LiveRange* lr, 
+  const std::vector<Color>& choices
+)
+{
+  typedef std::vector<Color>::const_iterator CI;
+  typedef std::vector<LiveRange*>::const_iterator LI;
+
+  std::map<Color, int> color_count_map;
+  for(CI ci = choices.begin(); ci != choices.end(); ci++)
+  {
+    for(LI li = lr->splits->begin(); li != lr->splits->end(); li++)
+    {
+      if((*li)->color == *ci) color_count_map[*ci]++;
+    }
+  }
+
+  //find max
+  typedef std::map<Color,int>::const_iterator CCI;
+  return FindMaxOrDefault(color_count_map, choices);
+
+}
+
+}
+}//end Chow::Heuristics namespace
+
+/*-------------------BEGIN LOCAL DEFINITIONS-------------------*/
+
+namespace {
+
+unsigned int ColorsLeftAfterBlock(LiveRange* lr, Block* blk)
+{
+  VectorSet used_colors = RegisterClass::TmpVectorSet(lr->rc);
+  VectorSet vsUsed = Coloring::UsedColors(lr->rc, blk);
+  VectorSet_Union(used_colors, lr->forbidden, vsUsed);
+
+  return Coloring::NumColorsAvailable(lr,used_colors);
+}
+
+Color FindMaxOrDefault(
+  const std::map<Color,int>& color_count_map,
+  const std::vector<Color>& choices
+)
+{
+  using Coloring::NO_COLOR;
+  typedef std::map<Color,int>::const_iterator CCI;
 
   Color max_color = NO_COLOR;
   int max_count = -1;
@@ -356,24 +413,6 @@ ChooseColorInMostNeighborsForbidden::operator()(
   }
 
   return color;
-}
-
-
-
-}
-}//end Chow::Heuristics namespace
-
-/*-------------------BEGIN LOCAL DEFINITIONS-------------------*/
-
-namespace {
-
-unsigned int ColorsLeftAfterBlock(LiveRange* lr, Block* blk)
-{
-  VectorSet used_colors = RegisterClass::TmpVectorSet(lr->rc);
-  VectorSet vsUsed = Coloring::UsedColors(lr->rc, blk);
-  VectorSet_Union(used_colors, lr->forbidden, vsUsed);
-
-  return Coloring::NumColorsAvailable(lr,used_colors);
 }
 
 }//end anonymous namespace

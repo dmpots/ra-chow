@@ -30,7 +30,8 @@ namespace Chow
     enum ColorChoice {
       CHOOSE_FIRST_COLOR, 
       CHOOSE_FROM_MOST_CONSTRAINED,
-      CHOOSE_FROM_MOST_FORBIDDEN
+      CHOOSE_FROM_MOST_FORBIDDEN,
+      CHOOSE_FROM_SPLIT
     };
 
     /*
