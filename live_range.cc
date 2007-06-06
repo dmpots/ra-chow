@@ -589,13 +589,13 @@ LiveRange* LiveRange::Split()
   LiveRange* newlr = Mitosis();
 
   //chose the live unit that will start the new live range
-  LiveUnit* startunit;
-  LiveUnit* unit;
-  startunit = LiveRange_ChooseSplitPoint(this);
+  LiveUnit* startunit = LiveRange_ChooseSplitPoint(this);
   assert(startunit != NULL);
 
   debug("adding block: %s to  lr'", bname(startunit->block));
   TransferLiveUnitTo(newlr, startunit);
+  (*Chow::Heuristics::how_to_split_strategy)(newlr, this, startunit);
+/*
   Chow::Heuristics::include_in_split_strategy->Reset(startunit);
 
   //keep a queue of successors that we may add to the new live range
@@ -612,13 +612,14 @@ LiveRange* LiveRange::Split()
       Block* succ = e->succ;
       if(ContainsBlock(succ) && LiveRange_IncludeInSplit(newlr, this, succ))
       {
-        unit = LiveUnitForBlock(succ);
+        LiveUnit* unit = LiveUnitForBlock(succ);
         debug("adding block: %s to  lr'", bname(succ));
         TransferLiveUnitTo(newlr, unit);
         succ_list.push_back(succ); //explore the succs of this node
       }
     }
   }
+*/
   if(Params::Algorithm::trim_useless_blocks)
   {
     Chow::Extensions::Trim(this);

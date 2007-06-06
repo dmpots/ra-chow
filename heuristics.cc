@@ -20,6 +20,8 @@ using namespace Chow::Heuristics;
 //splitting
 SplitWhenNoColorAvailable no_color_available;
 SplitWhenNumNeighborsTooGreat num_neighbors_too_great;
+ChowSplit chow_split;
+UpAndDownSplit up_and_down_split;
 
 //including
 IncludeWhenNotFull when_not_full;
@@ -49,6 +51,7 @@ namespace Heuristics {
 ColorChoiceStrategy* color_choice_strategy = NULL;
 IncludeInSplitStrategy* include_in_split_strategy = NULL;
 WhenToSplitStrategy* when_to_split_strategy = NULL;
+SplitStrategy* how_to_split_strategy = NULL;
 
 //heuristic setters
 void SetColorChoiceStrategy(ColorChoice cs)
@@ -108,18 +111,21 @@ void SetWhenToSplitStrategy(WhenToSplit ws)
   }
 }
 
-//default heuristics
-//WhenToSplitStrategy& default_when_to_split = no_color_available;
-//IncludeInSplitStrategy& default_include_in_split = when_not_full;
-//ColorChoiceStrategy& default_color_choice = choose_first_color;
-
-//chow's heuristics
-//WhenToSplitStrategy& default_when_to_split = num_neighbors_too_great;
-//IncludeInSplitStrategy& default_include_in_split=when_not_too_many_neighbors;
-
-//dave's heuristics
-//WhenToSplitStrategy& default_when_to_split = no_color_available;
-//IncludeInSplitStrategy& default_include_in_split = when_enough_colors;
+void SetHowToSplitStrategy(HowToSplit hs)
+{
+  switch(hs)
+  {
+    case CHOW_SPLIT:
+      how_to_split_strategy = &chow_split;
+      break;
+    case UP_AND_DOWN_SPLIT:
+      how_to_split_strategy = &up_and_down_split;
+      break;
+    default:
+      error("unknown how to split strategy: %d", hs);
+      abort();
+  }
+}
 
 /*
  * WHEN TO SPLIT STRATEGIES
@@ -364,6 +370,107 @@ ChooseColorFromSplit::operator()(
   return FindMaxOrDefault(color_count_map, choices);
 
 }
+
+/*
+ * HOW TO SPLIT STRATEGIES
+ */
+void 
+SplitStrategy::operator()(
+  LiveRange* _newlr,
+  LiveRange* _origlr,
+  LiveUnit* startunit
+)
+{
+  //set instance variables used in splitting functions
+  newlr = _newlr;
+  origlr = _origlr;
+  include_in_split_strategy->Reset(startunit);
+
+  //keep a queue of successors that we may add to the new live range
+  std::list<Block*> fringe_list;
+  fringe_list.push_back(startunit->block);
+  while(!fringe_list.empty())
+  {
+    Block* blk = RemoveFringeNode(fringe_list);
+    ExpandFringeNode(blk, fringe_list);
+  }
+
+}
+
+void 
+SplitStrategy::ExpandSuccs(Block* blk, FringeList& fringe)
+{
+  Edge* e;
+  Block_ForAllSuccs(e, blk)
+  {
+    Block* succ = e->succ;
+    if(origlr->ContainsBlock(succ) && IncludeInSplit(succ))
+    {
+      LiveUnit* unit = origlr->LiveUnitForBlock(succ);
+      debug("adding block: %s to  lr'", bname(succ));
+      origlr->TransferLiveUnitTo(newlr, unit);
+      fringe.push_back(succ); //explore the succs of this node
+    }
+  }
+}
+
+void 
+SplitStrategy::ExpandPreds(Block* blk, FringeList& fringe)
+{
+  Edge* e;
+  Block_ForAllPreds(e, blk)
+  {
+    Block* pred = e->pred;
+    if(origlr->ContainsBlock(pred) && IncludeInSplit(pred))
+    {
+      LiveUnit* unit = origlr->LiveUnitForBlock(pred);
+      debug("adding block: %s to  lr'", bname(pred));
+      origlr->TransferLiveUnitTo(newlr, unit);
+      fringe.push_back(pred); //explore the succs of this node
+    }
+  }
+}
+
+bool 
+SplitStrategy::IncludeInSplit(Block* blk)
+{
+  return (*include_in_split_strategy)(newlr,origlr,blk);
+}
+
+Block* 
+SplitStrategy::RemoveFront(FringeList& fringe)
+{
+  Block* blk = fringe.front(); fringe.pop_front();
+  return blk;
+}
+
+/* 0 */
+Block* 
+ChowSplit::RemoveFringeNode(FringeList& fringe)
+{
+  return RemoveFront(fringe);
+}
+
+void 
+ChowSplit::ExpandFringeNode(Block* blk, FringeList& fringe)
+{
+  ExpandSuccs(blk, fringe);
+}
+
+/* 1 */
+Block* 
+UpAndDownSplit::RemoveFringeNode(FringeList& fringe)
+{
+  return RemoveFront(fringe);
+}
+
+void 
+UpAndDownSplit::ExpandFringeNode(Block* blk, FringeList& fringe)
+{
+  ExpandSuccs(blk, fringe);
+  ExpandPreds(blk, fringe);
+}
+
 
 }
 }//end Chow::Heuristics namespace

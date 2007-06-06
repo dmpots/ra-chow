@@ -113,6 +113,7 @@ using Params::Algorithm::trim_useless_blocks;
 using Params::Algorithm::color_choice;
 using Params::Algorithm::include_in_split;
 using Params::Algorithm::when_to_split;
+using Params::Algorithm::how_to_split;
 using Params::Program::force_minimum_register_count;
 using Params::Program::dump_params_only;
 static Param_Details param_table[] = 
@@ -143,10 +144,12 @@ static Param_Details param_table[] =
   {'i', process_heuristic, include_in_split,F,B,&include_in_split,
          INT_PARAM, HELP_SPLITINCLUDESTRATEGY},
   {'w', process_heuristic, when_to_split,F,B,&when_to_split,
-         INT_PARAM, HELP_SPLITWHENSTRATEGY}
+         INT_PARAM, HELP_SPLITWHENSTRATEGY},
+  {'s', process_heuristic, how_to_split,F,B,&how_to_split,
+         INT_PARAM, NO_HELP}
 };
 const unsigned int NPARAMS = (sizeof(param_table) / sizeof(param_table[0]));
-const char* PARAMETER_STRING  = ":b:r:d:c:i:w:mpefyzt";
+const char* PARAMETER_STRING  = ":b:r:d:c:i:w:s:mpefyzt";
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
 /*
@@ -342,9 +345,11 @@ int process_heuristic(Param_Details* param, char* arg)
   using Chow::Heuristics::ColorChoice;
   using Chow::Heuristics::IncludeInSplit;
   using Chow::Heuristics::WhenToSplit;
+  using Chow::Heuristics::HowToSplit;
   using Chow::Heuristics::SetColorChoiceStrategy;
   using Chow::Heuristics::SetIncludeInSplitStrategy;
   using Chow::Heuristics::SetWhenToSplitStrategy;
+  using Chow::Heuristics::SetHowToSplitStrategy;
 
   int hval = (arg == NULL ) ?  param->idefault : atoi(arg);
   switch(param->name)
@@ -355,6 +360,8 @@ int process_heuristic(Param_Details* param, char* arg)
       SetIncludeInSplitStrategy(IncludeInSplit(hval)); break;
     case 'w': 
       SetWhenToSplitStrategy(WhenToSplit(hval)); break;
+    case 's': 
+      SetHowToSplitStrategy(HowToSplit(hval)); break;
     default:
       error("unknown heuristic: %c", param->name);
       abort();

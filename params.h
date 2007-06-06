@@ -31,6 +31,7 @@ namespace Params {
     extern WhenToSplit when_to_split;
     extern ColorChoice color_choice;
     extern IncludeInSplit include_in_split;
+    extern HowToSplit how_to_split;
   }
   namespace Program {
     extern bool force_minimum_register_count;

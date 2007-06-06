@@ -36,6 +36,7 @@ bool  trim_useless_blocks = false;
 ColorChoice color_choice = CHOOSE_FIRST_COLOR;
 IncludeInSplit include_in_split = WHEN_NOT_FULL;
 WhenToSplit when_to_split = NO_COLOR_AVAILABLE;
+HowToSplit how_to_split = CHOW_SPLIT;
 }
 
 /* program parameters */
