@@ -58,7 +58,7 @@ typedef struct param_details
   //union {
     Int      idefault;
     float    fdefault;
-    Boolean  bdefault;
+    bool     bdefault;
   //};
   void* value;
   Param_Type type;
@@ -70,7 +70,7 @@ typedef struct param_details
 static int process_(Param_Details*, char*);
 static int process_heuristic(Param_Details* param, char* arg);
 static const char* get_usage(Param_Help idx);
-static void usage(Boolean);
+static void usage(bool);
 static void Param_InitDefaults(void);
 static void DumpParamTable(FILE* =stderr);
 static void Output(void);
@@ -90,7 +90,7 @@ static const char EMPTY_NAME = '\0';
  * value of a union can be initialized */
 static const int     I = 0;
 static const float   F = 0.0;
-static const Boolean B = FALSE;
+static const bool    B = false;
 
 /* table of all parameters we accept. the idea for using a table 
  * like this was taken from the code for the zfs file system in
@@ -311,7 +311,7 @@ int process_(Param_Details* param, char* arg)
         *((float*)(param->value)) = param->fdefault;
         break;
       case BOOL_PARAM:
-        *((Boolean*)(param->value)) = param->bdefault;
+        *((bool*)(param->value)) = param->bdefault;
         break;
       default:
         error("unknown type");
@@ -329,7 +329,7 @@ int process_(Param_Details* param, char* arg)
         *((float*)(param->value)) = atof(arg);
         break;
       case BOOL_PARAM:
-        *((Boolean*)(param->value)) = !(param->bdefault);
+        *((bool*)(param->value)) = !(param->bdefault);
         break;
       default:
         error("unknown type");
@@ -377,7 +377,7 @@ int process_heuristic(Param_Details* param, char* arg)
  *===========
  *
  ***/
-void usage(Boolean requested)
+void usage(bool requested)
 {
   LOOPVAR i;
   FILE* fp = stdout;
@@ -464,7 +464,7 @@ void DumpParamTable(FILE* outfile)
         fprintf(outfile, "%f", *((float*)param.value));
         break;
       case BOOL_PARAM:
-        fprintf(outfile, "%s", *((Boolean*)param.value) ? "true":"false" );
+        fprintf(outfile, "%s", *((bool*)param.value) ? "true":"false" );
         break;
       default:
         error("unknown type");
