@@ -175,7 +175,7 @@ int main(Int argc, Char **argv)
         break;
 
       case '?' :
-        fprintf(stderr, "invalid option '%c' option\n", optopt);
+        fprintf(stderr, "invalid option '%c'\n", optopt);
         usage(FALSE);
         break;
 
