@@ -1661,9 +1661,66 @@ FindCandidates()
       candidates.push_back(candidate)
   return candidates
 
+========================================================
+Why chow reserves four registers
+Wed Jun  6 23:12:54 CDT 2007
+========================================================
+(1) chow does not actually need to reserve two registers for
+generating loads and stores since he is assuming that he can work on
+values directly in memory. he wants to reserve registers used by the
+code generator so that it can generate the low level code needed for
+unallocated variables. he says at most 4 regs are needed (504). keith
+says the four registers is due to an idiosyncracy of the mips
+architecture in translating p-code (the IR used by chow) to machine
+instructions.
 
+========================================================
+Local allocation
+Thu Jun  7 22:28:48 CDT 2007
+========================================================
+After looking at the codes and talking with keith it is apperant that
+some sort of local allocation is needed. As keith says a priority
+based allocator will never select local values to keep in a reg. This
+was killing us on at least one code, namely seval.i. The local values
+were not given registers and so were generating loads and stores, even
+though it would be possible to allocate them using temporary
+registers.
 
+implementing local allocation
+I think that we can just beef up our Ensure algorithm a bit more to
+make it work for local allocation as well. all that we need to do is
+to change when we generate stores. right now we always generate a
+store after a def, but we should be smarter about it by waiting to
+generate a store when we need to reclaim the temporary register. this
+means for each tmp reg we need to keep track of when it is dirty. then
+in MarkRegisterUsed if we find an old mapping for the register we are
+taking then we should generate a store if the reg is dirty and if it
+needs the store. we can tell if it needs the store by looking at the
+next use for the register. if it is a local live range then we can get
+an exact number, if it is a global live range we check to see if it
+has a use in this block or if it is live out at the end of the block.
 
+also we need to take care when clearing registers out at the end of
+basic blocks. if the tmpreg contains a global live range then we might
+need to insert a store. if the live range is local then by definition
+it ends at the block so no store is needed.
 
+finding local values
+in order to run local allocation we need to remove local variables
+from the interference graph (perhaps we could have a yes/no param for
+this as well). so we need a way to indicate which values are local
+only. we can find local-only values by checking to see if a variable
+is defined in a block and not live-in or live-out. now, how do we do
+this in the correct namespace?????? <<<<<<<<HERE
+- convert to ssa
+- for each ssa name check to see if it is live out in the block in
+  which it was defined, if so then it is not a local name
+- unconvert from ssa (SSA_Restore())
+- split basic blocks
+- convert again to ssa
+- make sure that the ssa names still map to the same orig variable
+
+command line options
+-l #,# to specify the number of local registers per register class
 
 

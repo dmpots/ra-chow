@@ -16,6 +16,7 @@ typedef unsigned int Variable;
 typedef unsigned int MemoryLocation;
 typedef unsigned int LRID;
 typedef unsigned int LOOPVAR;
+typedef unsigned int uint;
 typedef float Priority;
 
 //simple switch to say where to insert an instruction
