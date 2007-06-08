@@ -51,6 +51,7 @@ namespace {
   void RenameRegisters();
   bool ShouldSplitLiveRange(LiveRange* lr);
   inline void AddToCorrectConstrainedList(LRSet*,LRSet*,LiveRange*);
+  void CountLocals(const std::vector<LiveRange*>& lrs);
 }
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
@@ -69,6 +70,7 @@ void Chow::Run()
 
   //--- Build live ranges ---//
   BuildInitialLiveRanges(arena);
+  CountLocals(live_ranges);
   if(Debug::dot_dump_lr){
     LiveRange* lr = live_ranges[Debug::dot_dump_lr];
     Debug::DotDumpLR(lr, "initial");
@@ -970,6 +972,31 @@ inline void AddToCorrectConstrainedList(LRSet* constr_lrs,
     unconstr_lrs->insert(lr);
     debug("UN-Constrained LR:    %d", lr->id);
   }
+}
+
+void CountLocals(const std::vector<LiveRange*>& lrs)
+{
+  typedef unsigned int uint;
+  std::map<Block*, int> lcnt;
+  for(uint i = 0; i < lrs.size(); i++)
+  {
+    LiveRange* lr = lrs[i];
+    if(lr->units->size() == 1)
+    {
+      lcnt[lr->units->front()->block]++;
+    }
+  }
+
+  typedef std::map<Block*, int>::iterator MI;
+  int sum = 0;
+  for(MI i = lcnt.begin(); i != lcnt.end(); i++)
+  {
+    printf("%s: %d\n", bname(i->first), i->second);
+    sum += i->second;
+  }
+  printf("---------------------\n");
+  printf("Total: %d\n", sum);
+  exit(EXIT_SUCCESS);
 }
 
 }

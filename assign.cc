@@ -14,7 +14,6 @@
 #include <functional>
 #include <utility>
 
-
 #include "assign.h"
 #include "chow.h"
 #include "live_range.h"
@@ -1090,6 +1089,55 @@ UpdateDistances(
   return dist;
 }
 
+
+//HERE:
+//need to fill in details for computing distance map and deciding how
+//exactly we want to do local allocation. choices are to 
+//1) keep track of distances as we go so that whenever we assign a
+//tmpReg we mark the index of the next use. this requires computing
+//the index for each next use. we can do that by walking the code
+//forward once to count the number of insts, then walk backwards and
+//annotate each use with its next index which will be used in
+//MarkRegisterUsed. 
+//in order to evict registers we must keep track of the index of each
+//inst. this is probably best done by doing one pass to create a
+//global inst --> index mapping. the mapping is only important that it
+//maintains an ordering among insts in straight line code. (we can
+//probably create this mapping in GatherStats).
+//
+//once we have such an ordering we can use it to mark each use with
+//its next use index. inst X lrid --> instindex. then when we need a
+//tmpreg we can select the one with the greates index, or choose one
+//that has passed its last use. when we do this we should also set any
+//assignedReg structs to free that have passed their last use as a
+//cleanup pass.
+//now just think about and make sure this will work when we don't do
+//local allocation.
+void ComputeDistanceMap(Block* start_blk)
+{
+  //find the end block
+  Block* end_blk = start_blk;
+  while(SingleSuccessorPath(end_blk)) end_blk = end_blk->succ->succ;
+
+  //count distances
+  //start at the end block and move up until you get to the start
+  for(Block* blk = end_blk; blk != start_blk; blk = blk->pred->pred)
+  {
+    //count distance
+  }
+  //count distances in do start blk
+
+}
+
+std::map<std::pair<Operation*,LRID>,int>distance_map;
+int NextUse(Operation* op, LRID lrid)
+{
+  using std::make_pair;
+  typedef std::map<std::pair<Operation*,LRID>,int>::iterator MIT;
+  MIT it = distance_map.find(make_pair(op,lrid));
+  if(it == distance_map.end()) return -1;
+  return (*it).second;
+}
 
 }//end anonymous namespace
 

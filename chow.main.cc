@@ -7,6 +7,7 @@
 /*-----------------------MODULE INCLUDES-----------------------*/
 #include <Shared.h>
 #include <SSA.h>
+#include <map>
 #include "chow.h"
 #include "params.h"
 #include "shared_globals.h" 
@@ -78,6 +79,7 @@ static void EnforceParameterConsistency();
 static void CheckRegisterLimitFeasibility(Arena);
 static void SetupMachineParams(Arena arena);
 static void  DataFlowAnalysis(Arena);
+static void FindLocalOnlyNames();
 static inline int max(int a, int b) { return a > b ? a : b;}
 
 /*#### module variables ####*/
@@ -220,6 +222,7 @@ int main(Int argc, Char **argv)
   //some paramerters should implicitly set other params, and this
   //function takse care of making sure our flags are consistent
   EnforceParameterConsistency();
+  FindLocalOnlyNames();
 
   //build ssa for register requirement analysis and chow allocation
   Chow::arena = Arena_Create();
@@ -615,3 +618,43 @@ void DataFlowAnalysis(Arena arena)
 
   Reach::ComputeReachability(arena);
 }
+
+void FindLocalOnlyNames()
+{
+  Unsigned_Int ssa_options = 0;
+  ssa_options |= SSA_PRUNED;
+  ssa_options |= SSA_CONSERVE_LIVE_OUT_INFO;
+  ssa_options |= SSA_IGNORE_TAGS;
+  SSA_Build(ssa_options);
+
+  //find which names are only used in one block
+  std::map<Variable,bool> local_names;
+  for(uint i = 1; i < SSA_def_count; i++)
+  {
+    Liveness_Info info = SSA_live_out[id(SSA_block_map[i])];
+    bool isLocal = true;
+    for(uint j = 0; j < info.size; j++)
+    {
+      if(info.names[j] == i) {isLocal = false; break;}
+    }
+    local_names[i] = isLocal;
+  }
+
+  //TODO: the lazy thing to do is to revert the original name space,
+  //for now we will be lazy and make a check that conversion to ssa
+  //gives the same mapping, so the second time we convert to ssa make
+  //sure orig_ssa_name_map == SSA_name_map. you can be not lazy by
+  //rewriting the necessary code structures such as SSA_live_out as
+  //well as anything that relies on a Block (since splitting may add
+  //more blocks). i don't do this also because i'm not sure if these
+  //structures get used by something else.
+  //revert back to original namespace
+  std::map<Variable,Variable> orig_ssa_name_map;
+  for(uint i = 1; i < SSA_def_count; i++)
+  {
+    orig_ssa_name_map[i] = SSA_name_map[i];
+  }
+  SSA_Restore();
+}
+
+
