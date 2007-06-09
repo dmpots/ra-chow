@@ -1710,8 +1710,7 @@ in order to run local allocation we need to remove local variables
 from the interference graph (perhaps we could have a yes/no param for
 this as well). so we need a way to indicate which values are local
 only. we can find local-only values by checking to see if a variable
-is defined in a block and not live-in or live-out. now, how do we do
-this in the correct namespace?????? <<<<<<<<HERE
+is defined in a block and not live-in or live-out.
 - convert to ssa
 - for each ssa name check to see if it is live out in the block in
   which it was defined, if so then it is not a local name
@@ -1723,4 +1722,37 @@ this in the correct namespace?????? <<<<<<<<HERE
 command line options
 -l #,# to specify the number of local registers per register class
 
+
+========================================================
+Local allocation - change details
+Sat Jun  9 13:39:12 CDT 2007
+========================================================
+How to implement local allocation
++ Move Assign::Init() into the RenameRegisters() function in chow.cc
++ In Assign::Init() issue a call to BuildInstOrderingMap() that
+  computes an id for each inst that gives an ordering that can be used
+  in local allocation
++ add a call to InitLocalAllocation() that calls ComputeDistanceMap at
+  the top of the block loop in RenameRegs(). This needs a flag that is
+  set by ResetTmpRegs when the map needs to be computed. The flag is
+  set when reset_all is true.
++ add a next_use field to the AssignedReg struct.
++ in MarkRegisterUsed() set the next_use field based on the contents
+  of dist_map[inst][lrid]. (rename to AssignRegister())
++ update ResetAssignedReg() to clear the next_use field
++ update Bleady(). now you just need to look through the choices list
+  and find the AssignedReg with the largest value for next_use. if any
+  registers have a next_use of (-1) or have a next_use that is greater
+  than the current inst should be Reset();
+AT THIS POINT YOU SHOULD BE ABLE TO ALLOCATE NORMALLY
++ add a param to say whether local live ranges should be removed
++ add a param to say how many local registers to reserve
++ call FindLocalOnlyNames() in chow.main.cc
++ when computing ssa for the second time (DataFlowAnalysis) check to
+  make sure the SSA names are the same (if removing locals)
++ add field to live range for local_only live ranges
++ in AddLiveUnitOnce, if the orig_name is a local_name then mark the
+  live range as local
++ after BuildInitialLiveRanges() you should remove local live ranges
+  from the interference graph
 

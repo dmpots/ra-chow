@@ -1090,53 +1090,102 @@ UpdateDistances(
 }
 
 
-//HERE:
-//need to fill in details for computing distance map and deciding how
-//exactly we want to do local allocation. choices are to 
-//1) keep track of distances as we go so that whenever we assign a
-//tmpReg we mark the index of the next use. this requires computing
-//the index for each next use. we can do that by walking the code
-//forward once to count the number of insts, then walk backwards and
-//annotate each use with its next index which will be used in
-//MarkRegisterUsed. 
-//in order to evict registers we must keep track of the index of each
-//inst. this is probably best done by doing one pass to create a
-//global inst --> index mapping. the mapping is only important that it
-//maintains an ordering among insts in straight line code. (we can
-//probably create this mapping in GatherStats).
-//
-//once we have such an ordering we can use it to mark each use with
-//its next use index. inst X lrid --> instindex. then when we need a
-//tmpreg we can select the one with the greates index, or choose one
-//that has passed its last use. when we do this we should also set any
-//assignedReg structs to free that have passed their last use as a
-//cleanup pass.
-//now just think about and make sure this will work when we don't do
-//local allocation.
+//FOR LOCAL ALLOCATION
+std::map<Inst*, std::map<LRID, int> >distance_map;
+std::map<Inst*, int> inst_ids;
+void RecordDistance(
+  Register vreg,
+  Inst* inst,
+  std::map<LRID, int>& next_uses);
+void AnnotateBlockWithDistances(Block*, std::map<LRID, int>& next_uses);
+
 void ComputeDistanceMap(Block* start_blk)
 {
+  distance_map.clear();
+
   //find the end block
   Block* end_blk = start_blk;
   while(SingleSuccessorPath(end_blk)) end_blk = end_blk->succ->succ;
 
-  //count distances
-  //start at the end block and move up until you get to the start
+  //begin with the end block and move backwards up the graph
+  //until you get to the original start block
+  std::map<LRID, int> next_uses;
   for(Block* blk = end_blk; blk != start_blk; blk = blk->pred->pred)
   {
-    //count distance
+    //record distances for the block
+    AnnotateBlockWithDistances(blk, next_uses);
   }
-  //count distances in do start blk
-
+  //and finally for the start block as well
+  AnnotateBlockWithDistances(start_blk, next_uses);
 }
 
-std::map<std::pair<Operation*,LRID>,int>distance_map;
-int NextUse(Operation* op, LRID lrid)
+void AnnotateBlockWithDistances(Block* blk, std::map<LRID, int>& next_uses)
 {
-  using std::make_pair;
-  typedef std::map<std::pair<Operation*,LRID>,int>::iterator MIT;
-  MIT it = distance_map.find(make_pair(op,lrid));
-  if(it == distance_map.end()) return -1;
-  return (*it).second;
+  using Mapping::SSAName2OrigLRID;
+
+  Inst* inst;
+  Block_ForAllInstsReverse(inst, blk)
+  {
+    Operation** op;
+    Inst_ForAllOperations(op, inst)
+    {
+      Register* vreg;
+      Operation_ForAllUses(vreg, *op)
+      {
+        RecordDistance(*vreg, inst, next_uses);
+      }
+      Operation_ForAllDefs(vreg, *op)
+      {
+        RecordDistance(*vreg, inst, next_uses);
+      }
+    }
+    //update next_use map to be this inst
+    Inst_ForAllOperations(op, inst)
+    {
+      Register* vreg;
+      Operation_ForAllUses(vreg, *op)
+      {
+        next_uses[SSAName2OrigLRID(*vreg)] = inst_ids[inst];
+      }
+    }
+  }
+}
+
+void RecordDistance(
+  Register vreg,
+  Inst* inst,
+  std::map<LRID, int>& next_uses) 
+{
+  int next_use_from_here =  -1; //means it is not used again
+  LRID orig_lrid = Mapping::SSAName2OrigLRID(vreg);
+  if(next_uses.find(orig_lrid) != next_uses.end())
+    next_use_from_here = next_uses[orig_lrid]; //there is a use from here
+  distance_map[inst][orig_lrid] = next_use_from_here;
+}
+
+
+/*
+ *=====================
+ * BuildInstOrderingMap()
+ *=====================
+ * build a mapping from inst --> int that is used for local allocation
+ * decisions. the mapping must have the invariant that if instA and
+ * instB are in the same blocks, or are in blocks connected by a
+ * SingleSuccesorPath and instA occurs textually before instB, then
+ * id(instA) < id(instB)
+*/
+void BuildInstOrderingMap()
+{
+  int id = 0;
+  Block* blk;
+  ForAllBlocks_rPostorder(blk)
+  {
+    Inst* inst;
+    Block_ForAllInsts(inst, blk)
+    {
+      inst_ids[inst] = id++;
+    }
+  }
 }
 
 }//end anonymous namespace
