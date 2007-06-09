@@ -70,7 +70,7 @@ void Chow::Run()
 
   //--- Build live ranges ---//
   BuildInitialLiveRanges(arena);
-  CountLocals(live_ranges);
+  //CountLocals(live_ranges);
   if(Debug::dot_dump_lr){
     LiveRange* lr = live_ranges[Debug::dot_dump_lr];
     Debug::DotDumpLR(lr, "initial");
@@ -81,7 +81,6 @@ void Chow::Run()
   //compute loop nesting depth needed for computing priorities
   find_nesting_depths(arena); Globals::depths = depths;
   Spill::Init(arena);
-  Assign::Init(arena);
   if(Params::Algorithm::move_loads_and_stores)
   {
     //clear out edge extensions 
@@ -740,6 +739,7 @@ void RenameRegisters()
   using Assign::UnEvict;
 
   debug("allocation complete. renaming registers...");
+  Assign::Init(Chow::arena);
 
   //stack pointer is the initial size of the stack frame
   debug("STACK: %d", Spill::frame.stack_pointer);

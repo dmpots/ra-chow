@@ -65,6 +65,7 @@ struct RegisterContents
 
 /* local variables */
 std::vector<RegisterContents> reg_contents; 
+std::map<Inst*, int> inst_order;
 
 /* local functions */
 std::pair<Register,bool>
@@ -110,6 +111,9 @@ UpdateDistances(
   int startdist, 
   Inst* start_inst = NULL
 );
+
+//for local allocation
+void BuildInstOrderingMap();
 
 /* inline functions */
 inline unsigned int UB(unsigned int size, unsigned int width)
@@ -213,6 +217,9 @@ void Init(Arena arena)
       reg_contents[rc].assignable->push_back(rr);
     }
   }
+
+  //get an ordering of instructions for local allocation decisions
+  BuildInstOrderingMap();
 }
 
 
@@ -1092,12 +1099,12 @@ UpdateDistances(
 
 //FOR LOCAL ALLOCATION
 std::map<Inst*, std::map<LRID, int> >distance_map;
-std::map<Inst*, int> inst_ids;
 void RecordDistance(
   Register vreg,
   Inst* inst,
   std::map<LRID, int>& next_uses);
 void AnnotateBlockWithDistances(Block*, std::map<LRID, int>& next_uses);
+
 
 void ComputeDistanceMap(Block* start_blk)
 {
@@ -1145,7 +1152,7 @@ void AnnotateBlockWithDistances(Block* blk, std::map<LRID, int>& next_uses)
       Register* vreg;
       Operation_ForAllUses(vreg, *op)
       {
-        next_uses[SSAName2OrigLRID(*vreg)] = inst_ids[inst];
+        next_uses[SSAName2OrigLRID(*vreg)] = inst_order[inst];
       }
     }
   }
@@ -1183,7 +1190,7 @@ void BuildInstOrderingMap()
     Inst* inst;
     Block_ForAllInsts(inst, blk)
     {
-      inst_ids[inst] = id++;
+      inst_order[inst] = id++;
     }
   }
 }
