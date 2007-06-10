@@ -40,6 +40,9 @@ struct AssignedReg
   Boolean free;
   int index;
   bool is_reserved_reg;
+  bool dirty;
+  int next_use;
+  bool local;
 };
 
 //handy typedefs to save typing
@@ -112,8 +115,19 @@ UpdateDistances(
   Inst* start_inst = NULL
 );
 
+void AssignRegister(
+  AssignedReg* tmpReg,
+  AssignedRegList* reglist, 
+  LRID lrid, 
+  Inst* origInst, 
+  RegPurpose purpose,
+  unsigned int rwidth,
+  bool is_dirty
+);
+
 //for local allocation
 bool recompute_dist_map = true;
+std::map<Inst*, std::map<LRID, int> >distance_map;
 void BuildInstOrderingMap();
 void ComputeDistanceMap(Block* start_blk);
 
@@ -131,6 +145,9 @@ inline void ResetAssignedReg(AssignedReg* ar)
   ar->free = TRUE;
   ar->forLRID = NO_LRID;
   ar->forInst = NULL;
+  ar->dirty   = false;
+  ar->next_use = -1;
+  ar->local    = false;
 }
 inline bool SingleSuccessorPath(Block* blk)
 {
@@ -266,8 +283,8 @@ void EnsureReg(Register* reg,
   using Spill::InsertStore;
   using Chow::live_ranges;
 
-  debug("ensuring reg: %d for inst (0x%p): \n   %s",
-     *reg, origInst, Debug::StringOfInst(origInst));
+  debug("ensuring reg: %d for inst %d (0x%p): \n   %s",
+     *reg, inst_order[origInst], origInst, Debug::StringOfInst(origInst));
 
   LRID orig_lrid = Mapping::SSAName2OrigLRID(*reg);
   *reg = GetMachineRegAssignment(blk, orig_lrid);
@@ -655,7 +672,11 @@ GetFreeTmpReg(LRID lrid,
     (purpose == FOR_USE ? "FOR_USE" : "FOR_DEF"), lrid);
 
   std::pair<Register,bool> regXneedMem;
-  regXneedMem.second = true; //default is needs memory load/store
+
+  //a memory access is only needed if we are bringing a value from
+  //memory into a register, or we are evicting a register that is used
+  //for a def
+  regXneedMem.second = true; 
 
   //get the register contents struct for this lrid register class
   RegisterContents* regContents = RegContentsForLRID(lrid);
@@ -669,15 +690,12 @@ GetFreeTmpReg(LRID lrid,
   {
     debug("found the live range already in a temporary register");
     AssignedReg* rReg  = ((*it).second);
-    AssignedRegList& reglist = rReg->is_reserved_reg ?
-      (*regContents->reserved) : (*regContents->assignable);
-    for(unsigned int i = rReg->index; i < rReg->index + rwidth; i++)
-    {
-      reglist[i]->forInst = origInst;
-      reglist[i]->forPurpose = purpose;
-    }
+    AssignedRegList* reglist = rReg->is_reserved_reg ?
+      (regContents->reserved) : (regContents->assignable);
+    AssignRegister(rReg, reglist, lrid, origInst, purpose, rwidth, 
+                   rReg->dirty);
+    if(purpose == FOR_USE) regXneedMem.second = false;
     regXneedMem.first  = rReg->machineReg;
-    if(purpose == FOR_USE) {regXneedMem.second = false;}
     return regXneedMem;
   }
 
@@ -912,18 +930,40 @@ Register MarkRegisterUsed(AssignedReg* tmpReg,
     }
   }
 
-  for(unsigned int i = tmpReg->index; i< tmpReg->index + rwidth; i++)
-  {
-    //mark the temporary register as used
-    (*reglist)[i]->free = FALSE;
-    (*reglist)[i]->forInst = inst;
-    (*reglist)[i]->forPurpose = purpose;
-    (*reglist)[i]->forLRID = lrid;
-  }
+  //update info in AssignedReg structs
+  AssignRegister(tmpReg, reglist, lrid, inst, purpose, rwidth, 
+           (purpose == FOR_DEF));
   (*regMap)[lrid] = tmpReg;
 
   dump_map_contents(*regMap);
   return tmpReg->machineReg;
+}
+
+void AssignRegister(
+  AssignedReg* tmpReg,
+  AssignedRegList* reglist, 
+  LRID lrid, 
+  Inst* origInst, 
+  RegPurpose purpose,
+  unsigned int rwidth,
+  bool is_dirty
+)
+{
+  for(unsigned int i = tmpReg->index; i< tmpReg->index + rwidth; i++)
+  {
+    //mark the temporary register as used
+    (*reglist)[i]->free = FALSE;
+    (*reglist)[i]->forInst = origInst;
+    (*reglist)[i]->forPurpose = purpose;
+    (*reglist)[i]->forLRID = lrid;
+    (*reglist)[i]->dirty = is_dirty;
+    (*reglist)[i]->next_use = distance_map[origInst][lrid];
+    (*reglist)[i]->local = Chow::live_ranges[lrid]->is_local;
+  }
+  debug("assigned (%s) reg: %d for lrid: %d(%s), next use: %d",
+    tmpReg->dirty ? "dirty" : "clean",
+    tmpReg->machineReg, lrid, tmpReg->local ? "local" : "global",
+    tmpReg->next_use);
 }
 
 /*
@@ -1121,7 +1161,6 @@ UpdateDistances(
 
 
 //FOR LOCAL ALLOCATION
-std::map<Inst*, std::map<LRID, int> >distance_map;
 void RecordDistance(
   Register vreg,
   Inst* inst,

@@ -135,6 +135,7 @@ LiveRange::LiveRange(RegisterClass::RC reg_class,
   is_candidate  = TRUE;
   type = def_type; 
   num_colored_neighbors = 0;
+  is_local = false;
 
   //fields for rematerialization
   rematerializable = false;
@@ -708,6 +709,7 @@ LiveRange* LiveRange::Mitosis()
   newlr->type = type;
   newlr->blockmap = blockmap;
   newlr->splits =  splits;
+  newlr->is_local =  is_local;
 
   //some sanity checks
   assert(color == Coloring::NO_COLOR);

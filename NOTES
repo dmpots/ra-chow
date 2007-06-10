@@ -1736,19 +1736,29 @@ X add a call to InitLocalAllocation() that calls ComputeDistanceMap at
   the top of the block loop in RenameRegs(). This needs a flag that is
   set by ResetTmpRegs when the map needs to be computed. The flag is
   set when reset_all is true.
-+ add a next_use field to the AssignedReg struct.
-+ in MarkRegisterUsed() set the next_use field based on the contents
+X add a next_use,dirty,local field to the AssignedReg struct.
+X in MarkRegisterUsed() set the next_use field based on the contents
   of dist_map[inst][lrid]. (rename to AssignRegister())
-+ update ResetAssignedReg() to clear the next_use field
+X update ResetAssignedReg() to clear the next_use,dirty field
++ set default needMem to false, only need mem if dirty or evicted for
+  def
++ write the StoreIfNeeded() :: AssignedReg -> Void, which stores a
+  live range in an AssignedReg if it is dirty and needed later.
+  we should not be generating a store for every definition. we need to
+  push the store generation to when we are kicking a value out of a
+  register. in that case we should store if the kicked register contains
+  a live range that is dirty AND its next use is in the future or it is
+  non-local (could proably check live out here or something). this means
+  that when we are clearing tmp regs at the end of a block then we also
+  need to check if it is dirty and a non-local value and if so then
+  generate a store.
++ in ResetTmpReg() call StoreIfNeeded() for each reg 
++ in FindSuitableTmp() call StoreIfNeeded() for the evicted reg
 + update Bleady(). now you just need to look through the choices list
   and find the AssignedReg with the largest value for next_use. if any
   registers have a next_use of (-1) or have a next_use that is greater
   than the current inst should be Reset();
-+ TODO: you forgot to deal with dirty registers and how to store them.
-remember that with a local allocation you only want to store if the
-register is dirty. this means that for live ranges you should look to
-see if it is live out at the bottom of the block to know if you need
-to store (i think this works).
++ i see no reason why regMap is needed? let's get rid of it.
 AT THIS POINT YOU SHOULD BE ABLE TO ALLOCATE NORMALLY
 + add a param to say whether local live ranges should be removed
 + add a param to say how many local registers to reserve
