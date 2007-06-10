@@ -113,7 +113,9 @@ UpdateDistances(
 );
 
 //for local allocation
+bool recompute_dist_map = true;
 void BuildInstOrderingMap();
+void ComputeDistanceMap(Block* start_blk);
 
 /* inline functions */
 inline unsigned int UB(unsigned int size, unsigned int width)
@@ -222,6 +224,24 @@ void Init(Arena arena)
   BuildInstOrderingMap();
 }
 
+/*
+ *===================
+ * InitLocalAllocation()
+ *===================
+ * initializes the data structures needed to do local allocation. this
+ * is only done for blocks that are the head of a SingleSuccessorPath,
+ * otherwise the block is part of such a path and the information does
+ * not need to be recomputed.
+ **/
+void InitLocalAllocation(Block* blk)
+{
+  if(recompute_dist_map)
+  {
+    ComputeDistanceMap(blk);
+    recompute_dist_map = false;
+  }
+}
+
 
 /*
  *===================
@@ -313,6 +333,9 @@ void ResetFreeTmpRegs(Block* blk)
   //messy if you try to merge the cases.
   if(reset_all)
   {
+    //make sure that we update our distance map for the next block
+    recompute_dist_map = true;
+
     //take care of business for each register class
     debug("resetting all tmp regs to be free");
     for(unsigned int i = 0; i < reg_contents.size(); i++)
@@ -1106,8 +1129,20 @@ void RecordDistance(
 void AnnotateBlockWithDistances(Block*, std::map<LRID, int>& next_uses);
 
 
+/*
+ *=====================
+ * ComputeDistanceMap()
+ *=====================
+ * used to fill in the distance_map data structure which maps each
+ * instruction and the live ranges used in that instruction to an inst
+ * id of its next use or -1 if it is not used after this instruction.
+ * 
+ * the distances are computed for the +start_blk+ and any successor
+ * blocks which are SingleSuccessorPath blocks
+*/
 void ComputeDistanceMap(Block* start_blk)
 {
+  debug("computing distance map for block: %s", bname(start_blk));
   distance_map.clear();
 
   //find the end block
@@ -1126,6 +1161,14 @@ void ComputeDistanceMap(Block* start_blk)
   AnnotateBlockWithDistances(start_blk, next_uses);
 }
 
+/*
+ *=============================
+ * AnnotateBlockWithDistances()
+ *=============================
+ * handles details of filling in the distance for each live range and
+ * instruction. the +next_uses+ structure is updated with local
+ * information in the block.
+*/
 void AnnotateBlockWithDistances(Block* blk, std::map<LRID, int>& next_uses)
 {
   using Mapping::SSAName2OrigLRID;
@@ -1158,6 +1201,13 @@ void AnnotateBlockWithDistances(Block* blk, std::map<LRID, int>& next_uses)
   }
 }
 
+/*
+ *=================
+ * RecordDistance()
+ *=================
+ * fills in the +distance_map+ structure based on the +next_uses+
+ * variable.
+*/
 void RecordDistance(
   Register vreg,
   Inst* inst,
@@ -1193,10 +1243,6 @@ void BuildInstOrderingMap()
       inst_order[inst] = id++;
     }
   }
-}
-
-}//end anonymous namespace
-
-
+} }//end anonymous namespace 
 
 

@@ -27,5 +27,6 @@ namespace Assign {
                  const RegisterList& instDefs);
   void ResetFreeTmpRegs(Block*);
   void UnEvict(Inst** updatedInst);
+  void InitLocalAllocation(Block* blk);
 }
 #endif

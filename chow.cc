@@ -737,6 +737,7 @@ void RenameRegisters()
   using Assign::ResetFreeTmpRegs;
   using Assign::EnsureReg;
   using Assign::UnEvict;
+  using Assign::InitLocalAllocation;
 
   debug("allocation complete. renaming registers...");
   Assign::Init(Chow::arena);
@@ -753,6 +754,7 @@ void RenameRegisters()
 
   ForAllBlocks(b)
   {
+    InitLocalAllocation(b);
     Block_ForAllInsts(inst, b)
     {
       debug("renaming inst:\n%s", Debug::StringOfInst(inst));

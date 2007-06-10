@@ -1728,11 +1728,11 @@ Local allocation - change details
 Sat Jun  9 13:39:12 CDT 2007
 ========================================================
 How to implement local allocation
-+ Move Assign::Init() into the RenameRegisters() function in chow.cc
-+ In Assign::Init() issue a call to BuildInstOrderingMap() that
+X Move Assign::Init() into the RenameRegisters() function in chow.cc
+X In Assign::Init() issue a call to BuildInstOrderingMap() that
   computes an id for each inst that gives an ordering that can be used
   in local allocation
-+ add a call to InitLocalAllocation() that calls ComputeDistanceMap at
+X add a call to InitLocalAllocation() that calls ComputeDistanceMap at
   the top of the block loop in RenameRegs(). This needs a flag that is
   set by ResetTmpRegs when the map needs to be computed. The flag is
   set when reset_all is true.
@@ -1744,6 +1744,11 @@ How to implement local allocation
   and find the AssignedReg with the largest value for next_use. if any
   registers have a next_use of (-1) or have a next_use that is greater
   than the current inst should be Reset();
++ TODO: you forgot to deal with dirty registers and how to store them.
+remember that with a local allocation you only want to store if the
+register is dirty. this means that for live ranges you should look to
+see if it is live out at the bottom of the block to know if you need
+to store (i think this works).
 AT THIS POINT YOU SHOULD BE ABLE TO ALLOCATE NORMALLY
 + add a param to say whether local live ranges should be removed
 + add a param to say how many local registers to reserve
