@@ -7,6 +7,7 @@
  */
 
 /*--------------------------INCLUDES---------------------------*/
+#include <SSA.h>
 #include <list>
 #include <vector>
 #include <map>
@@ -1282,6 +1283,61 @@ void BuildInstOrderingMap()
       inst_order[inst] = id++;
     }
   }
-} }//end anonymous namespace 
+} 
+
+bool NeedStore(AssignedReg* tmpReg, Inst* inst, Block* blk);
+bool LiveOut(LRID lrid, Block* blk);
+void StoreIfNeeded(AssignedReg* tmpReg, Inst* origInst, Block* blk);
+
+void StoreIfNeeded(AssignedReg* tmpReg, Inst* origInst, Block* blk)
+{
+  using Spill::InsertStore;
+  if(NeedStore(tmpReg, origInst, blk))
+  {
+    LiveRange* lr = Chow::live_ranges[tmpReg->forLRID];
+    InsertStore(lr, origInst, tmpReg->machineReg, 
+                  Spill::REG_FP, BEFORE_INST);
+  }
+}
+
+bool NeedStore(AssignedReg* tmpReg, Inst* inst, Block* blk)
+{
+  bool need_store = false;
+  if(tmpReg->dirty)
+  {
+    if(tmpReg->next_use > inst_order[inst])
+    {
+      need_store = true;
+    }
+    else //may still need a store if it is a non-local variable
+    {
+      if(!tmpReg->local)
+      {
+        if(LiveOut(tmpReg->forLRID, blk)) need_store = true;
+      }
+    }
+  }
+
+  return need_store;
+}
+
+bool LiveOut(LRID lrid, Block* blk)
+{
+  using Mapping::SSAName2OrigLRID;
+  Liveness_Info info = SSA_live_out[id(blk)];
+  for(uint i = 0; i < info.size; i++)
+  {
+    if((info.names[i] < SSA_def_count))//avoid junk in live_out set
+    {
+      if(SSAName2OrigLRID(info.names[i]) == lrid)
+      {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+}//end anonymous namespace 
 
 

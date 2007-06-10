@@ -15,6 +15,7 @@ namespace Mapping {
 void CreateLiveRangeNameMap(Arena);
 LRID SSAName2OrigLRID(Variable v);
 void ConvertLiveInNamespaceSSAToLiveRange();
+void ConvertLiveOutNamespaceSSAToLiveRange();
 void CreateLiveRangeTypeMap(Arena, Unsigned_Int lr_count);
 Def_Type LiveRangeDefType(LRID lrid);
 void CreateSSANameTypeMap(Arena arena);

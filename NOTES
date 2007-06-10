@@ -1740,8 +1740,6 @@ X add a next_use,dirty,local field to the AssignedReg struct.
 X in MarkRegisterUsed() set the next_use field based on the contents
   of dist_map[inst][lrid]. (rename to AssignRegister())
 X update ResetAssignedReg() to clear the next_use,dirty field
-+ set default needMem to false, only need mem if dirty or evicted for
-  def
 + write the StoreIfNeeded() :: AssignedReg -> Void, which stores a
   live range in an AssignedReg if it is dirty and needed later.
   we should not be generating a store for every definition. we need to
@@ -1752,6 +1750,8 @@ X update ResetAssignedReg() to clear the next_use,dirty field
   that when we are clearing tmp regs at the end of a block then we also
   need to check if it is dirty and a non-local value and if so then
   generate a store.
++ set default needMem to false, only need mem if dirty or evicted for
+  def
 + in ResetTmpReg() call StoreIfNeeded() for each reg 
 + in FindSuitableTmp() call StoreIfNeeded() for the evicted reg
 + update Bleady(). now you just need to look through the choices list

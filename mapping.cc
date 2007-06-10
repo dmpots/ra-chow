@@ -15,6 +15,7 @@ namespace {
 LRID* ssa_name_to_lrid = NULL;
 Def_Type* mLrId_DefType = NULL;
 Def_Type* mSSAName_DefType = NULL;
+void ConvertLiveNamespace(Liveness_Info* SSA_live);
 }
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
@@ -84,30 +85,13 @@ LRID Mapping::SSAName2OrigLRID(Variable v)
  ***/
 void Mapping::ConvertLiveInNamespaceSSAToLiveRange() 
 {
-
-  Liveness_Info info;
-  Block* blk;
-  LOOPVAR j;
-  LRID lrid;
-  ForAllBlocks(blk)
-  {
-    //TODO: do we need to convert live out too?
-    info = SSA_live_in[id(blk)];
-    for(j = 0; j < info.size; j++)
-    {
-      Variable vLive = info.names[j];
-      if(!(vLive < SSA_def_count))
-      {
-        error("invalid live in name %d", vLive);
-        continue;
-      }
-      //debug("Converting LIVE: %d to LRID: %d",vLive,
-      //       SSAName2OrigLRID(vLive));
-      lrid = SSAName2OrigLRID(vLive);
-      info.names[j] = lrid;
-    }
-  }
+  ConvertLiveNamespace(SSA_live_in);
 }
+void Mapping::ConvertLiveOutNamespaceSSAToLiveRange() 
+{
+  ConvertLiveNamespace(SSA_live_out);
+}
+
 
 
 /*
@@ -184,6 +168,31 @@ Def_Type Mapping::LiveRangeDefType(LRID lrid)
   return mLrId_DefType[lrid];
 }
 
-
-
+/*-----------------BEGIN LOCAL DEFINITONS------------------*/
+namespace {
+void ConvertLiveNamespace(Liveness_Info* SSA_live)
+{
+  Liveness_Info info;
+  Block* blk;
+  LOOPVAR j;
+  LRID lrid;
+  ForAllBlocks(blk)
+  {
+    info = SSA_live[id(blk)];
+    for(j = 0; j < info.size; j++)
+    {
+      Variable vLive = info.names[j];
+      if(!(vLive < SSA_def_count))
+      {
+        error("invalid live name %d", vLive);
+        continue;
+      }
+      //debug("Converting LIVE: %d to LRID: %d",vLive,
+      //       SSAName2OrigLRID(vLive));
+      lrid = Mapping::SSAName2OrigLRID(vLive);
+      info.names[j] = lrid;
+    }
+  }
+}
+}
 

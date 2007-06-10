@@ -456,7 +456,6 @@ void BuildInterferences(Arena arena)
     {
       //add block to each live range
       lrid = SSAName2OrigLRID(info.names[j]);
-      //VectorSet_Insert(lrset, lrid);
       AddLiveUnitOnce(lrid, blk, lrset, info.names[j]);
       debug("(liveout) %d (lrid) as r%d", lrid, info.names[j]);
     }
