@@ -107,6 +107,7 @@ FindSutiableTmpReg(RegisterContents* regContents,
                    unsigned int reg_width);
 AssignedReg* 
 Belady(const AssignedRegList& choices, Block* startblk, Inst* updatedInst);
+uint ResetForRegWidth(AssignedRegList::const_iterator begin);
 
 int 
 UpdateDistances(
@@ -125,6 +126,7 @@ void AssignRegister(
   unsigned int rwidth,
   bool is_dirty
 );
+void StoreIfNeeded(AssignedReg* tmpReg, Inst* origInst, Block* blk);
 
 //for local allocation
 bool recompute_dist_map = true;
@@ -365,7 +367,8 @@ void ResetFreeTmpRegs(Block* blk)
       AssignedRegList::const_iterator resIT;
       for(resIT = reserved->begin(); resIT != reserved->end(); resIT++)
       {
-        ResetAssignedReg(*resIT);
+        StoreIfNeeded(*resIT, Block_LastInst(blk), blk);
+        ResetForRegWidth(resIT);
       }
 
       //4) clear the regMap
@@ -390,7 +393,9 @@ void ResetFreeTmpRegs(Block* blk)
           debug("resetting tmp reg: r%d for lrid: %d", 
             (*resIT)->machineReg, (*resIT)->forLRID);
           regContents->regMap->erase((*resIT)->forLRID);
-          ResetAssignedReg(*resIT);
+          StoreIfNeeded(*resIT, Block_LastInst(blk), blk);
+          ResetForRegWidth(resIT);
+          //could increment the iterator here to skip next width regs
         }
       }
     }
@@ -677,7 +682,7 @@ GetFreeTmpReg(LRID lrid,
   //a memory access is only needed if we are bringing a value from
   //memory into a register, or we are evicting a register that is used
   //for a def
-  regXneedMem.second = true; 
+  regXneedMem.second = false;
 
   //get the register contents struct for this lrid register class
   RegisterContents* regContents = RegContentsForLRID(lrid);
@@ -694,8 +699,7 @@ GetFreeTmpReg(LRID lrid,
     AssignedRegList* reglist = rReg->is_reserved_reg ?
       (regContents->reserved) : (regContents->assignable);
     AssignRegister(rReg, reglist, lrid, origInst, purpose, rwidth, 
-                   rReg->dirty);
-    if(purpose == FOR_USE) regXneedMem.second = false;
+                   rReg->dirty || purpose == FOR_DEF);
     regXneedMem.first  = rReg->machineReg;
     return regXneedMem;
   }
@@ -713,6 +717,7 @@ GetFreeTmpReg(LRID lrid,
       regXneedMem.first = 
         MarkRegisterUsed(tmpReg, origInst, purpose, lrid, regMap,
                          regContents->reserved, rwidth);
+      if(purpose == FOR_USE) regXneedMem.second = true;
       return regXneedMem;
     }
   }
@@ -804,6 +809,7 @@ GetFreeTmpReg(LRID lrid,
   regXneedMem.first = 
     MarkRegisterUsed(tmpReg, origInst, purpose, lrid, regMap,
                      regContents->assignable, rwidth);
+  regXneedMem.second = true; //always load uses and always store defs
   return regXneedMem;
 }
 
@@ -924,16 +930,13 @@ Register MarkRegisterUsed(AssignedReg* tmpReg,
       regMap->erase(rmIt);
       //if a previous mapping exists then free all of the registers
       //used by the liverange in the previous mapping
-      for(unsigned int j = i; j < i + RegWidth(prevLRID); j++)
-      {
-        ResetAssignedReg((*reglist)[j]);
-      }
+      ResetForRegWidth(reglist->begin() + i);
     }
   }
 
   //update info in AssignedReg structs
   AssignRegister(tmpReg, reglist, lrid, inst, purpose, rwidth, 
-           (purpose == FOR_DEF));
+                (purpose == FOR_DEF));
   (*regMap)[lrid] = tmpReg;
 
   dump_map_contents(*regMap);
@@ -1026,8 +1029,9 @@ FindSutiableTmpReg(RegisterContents* regContents,
     if(!kickable.empty())
     {
       debug("found a reserved register that we can evict");
-      //tmpReg = kickable.front();
-      tmpReg = Belady(kickable, blk, updatedInst->next_inst);
+      tmpReg = kickable.front();
+      //tmpReg = Belady(kickable, blk, updatedInst->next_inst);
+      StoreIfNeeded(tmpReg, origInst, blk); //MOVE TO BELADY...
     }
   }
 
@@ -1287,8 +1291,14 @@ void BuildInstOrderingMap()
 
 bool NeedStore(AssignedReg* tmpReg, Inst* inst, Block* blk);
 bool LiveOut(LRID lrid, Block* blk);
-void StoreIfNeeded(AssignedReg* tmpReg, Inst* origInst, Block* blk);
-
+/*
+ *=====================
+ * StoreIfNeeded()
+ *=====================
+ * Inserts a store for the live range in the AssignedReg only if one
+ * is necessary because it has a next use or is a global live range
+ * and the AssignedReg contains a def of the live range.
+ */
 void StoreIfNeeded(AssignedReg* tmpReg, Inst* origInst, Block* blk)
 {
   using Spill::InsertStore;
@@ -1300,23 +1310,45 @@ void StoreIfNeeded(AssignedReg* tmpReg, Inst* origInst, Block* blk)
   }
 }
 
+/*
+ *=====================
+ * NeedStore()
+ *=====================
+ * Predicate used to indicate when an AssingedReg contains a value
+ * that needs to be stored.
+ */
 bool NeedStore(AssignedReg* tmpReg, Inst* inst, Block* blk)
 {
   bool need_store = false;
-  if(tmpReg->dirty)
+  if(tmpReg->dirty && tmpReg->forLRID != NO_LRID)
   {
     if(tmpReg->next_use > inst_order[inst])
     {
+      debug("store needed for replacing tmpReg: r%d, "
+            "because next use is at: %d", tmpReg->machineReg,
+            tmpReg->next_use);
       need_store = true;
     }
     else //may still need a store if it is a non-local variable
     {
       if(!tmpReg->local)
       {
-        if(LiveOut(tmpReg->forLRID, blk)) need_store = true;
+        if(LiveOut(tmpReg->forLRID, blk))
+        {
+          debug("store needed for replacing tmpReg: r%d, "
+                "because its lr(%d) is  non-local and live out",
+                tmpReg->machineReg, tmpReg->forLRID);
+          need_store = true;
+        }
       }
     }
   }
+  else 
+  {
+    debug("no store needed for replacing tmpReg: r%d, it is clean",
+          tmpReg->machineReg);
+  }
+
 
   return need_store;
 }
@@ -1336,6 +1368,28 @@ bool LiveOut(LRID lrid, Block* blk)
     }
   }
   return false;
+}
+
+/*
+ *=====================
+ * ResetForRegWidth()
+ *=====================
+ * Resets the AssignedReg values for all regs in the list starting at
+ * the passed iterator and ending with the width of the live range
+ * stored in the AssignedReg pointed to by the iterator.
+ */
+uint ResetForRegWidth(AssignedRegList::const_iterator begin)
+{
+  uint rwidth = 1;  
+  if((*begin)->forLRID != NO_LRID) rwidth = RegWidth((*begin)->forLRID);
+
+  typedef AssignedRegList::const_iterator CI;
+  for(CI runner = begin; runner != begin + rwidth; runner++)
+  {
+    ResetAssignedReg(*runner);
+  }
+
+  return rwidth;
 }
 
 }//end anonymous namespace 

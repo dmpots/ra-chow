@@ -1740,7 +1740,7 @@ X add a next_use,dirty,local field to the AssignedReg struct.
 X in MarkRegisterUsed() set the next_use field based on the contents
   of dist_map[inst][lrid]. (rename to AssignRegister())
 X update ResetAssignedReg() to clear the next_use,dirty field
-+ write the StoreIfNeeded() :: AssignedReg -> Void, which stores a
+X write the StoreIfNeeded() :: AssignedReg -> Void, which stores a
   live range in an AssignedReg if it is dirty and needed later.
   we should not be generating a store for every definition. we need to
   push the store generation to when we are kicking a value out of a
@@ -1750,15 +1750,17 @@ X update ResetAssignedReg() to clear the next_use,dirty field
   that when we are clearing tmp regs at the end of a block then we also
   need to check if it is dirty and a non-local value and if so then
   generate a store.
-+ set default needMem to false, only need mem if dirty or evicted for
+X set default needMem to false, only need mem if dirty or evicted for
   def
-+ in ResetTmpReg() call StoreIfNeeded() for each reg 
-+ in FindSuitableTmp() call StoreIfNeeded() for the evicted reg
+X in ResetTmpReg() call StoreIfNeeded() for each reg 
+X in FindSuitableTmp() call StoreIfNeeded() for the evicted reg
 + update Bleady(). now you just need to look through the choices list
   and find the AssignedReg with the largest value for next_use. if any
   registers have a next_use of (-1) or have a next_use that is greater
   than the current inst should be Reset();
-+ i see no reason why regMap is needed? let's get rid of it.
++ i see no reason why regMap is needed? let's get rid of it. ok, well
+  it lets us do a quick lookup to see if the live range is already in
+  a register which would be a linear search otherwise.
 AT THIS POINT YOU SHOULD BE ABLE TO ALLOCATE NORMALLY
 + add a param to say whether local live ranges should be removed
 + add a param to say how many local registers to reserve
