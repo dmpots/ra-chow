@@ -40,10 +40,10 @@ struct AssignedReg
   LRID forLRID;
   Boolean free;
   int index;
-  bool is_reserved_reg;
   bool dirty;
   int next_use;
   bool local;
+  std::vector<AssignedReg*>* regpool;
 };
 
 //handy typedefs to save typing
@@ -106,8 +106,9 @@ FindSutiableTmpReg(RegisterContents* regContents,
                    const RegisterList& instUses,
                    unsigned int reg_width);
 AssignedReg* 
-Belady(const AssignedRegList& choices, Block* startblk, Inst* updatedInst);
+Belady(const AssignedRegList& choices, Block* blk, Inst* origInst);
 uint ResetForRegWidth(AssignedRegList::const_iterator begin);
+uint ResetForRegWidth(AssignedReg* tmpReg);
 
 int 
 UpdateDistances(
@@ -133,6 +134,11 @@ bool recompute_dist_map = true;
 std::map<Inst*, std::map<LRID, int> >distance_map;
 void BuildInstOrderingMap();
 void ComputeDistanceMap(Block* start_blk);
+void RecordDistance(
+  Register vreg,
+  Inst* inst,
+  std::map<LRID, int>& next_uses);
+void AnnotateBlockWithDistances(Block* blk, std::map<LRID, int>& next_uses);
 
 /* inline functions */
 inline unsigned int UB(unsigned int size, unsigned int width)
@@ -217,8 +223,8 @@ void Init(Arena arena)
       rr->machineReg = rri.regs[i];
       rr->free = TRUE; 
       rr->index = i;
-      rr->is_reserved_reg = true;
-      reg_contents[rc].reserved->push_back(rr);
+      rr->regpool = reg_contents[rc].reserved;
+      rr->regpool->push_back(rr);
     }
     //set starting point for round robin usage
     reg_contents[rc].roundRobinIt = reg_contents[rc].reserved->begin();
@@ -235,8 +241,8 @@ void Init(Arena arena)
       rr->machineReg = base+i;
       rr->free = TRUE; 
       rr->index = i;
-      rr->is_reserved_reg = false;
-      reg_contents[rc].assignable->push_back(rr);
+      rr->regpool = reg_contents[rc].assignable;
+      rr->regpool->push_back(rr);
     }
   }
 
@@ -696,8 +702,7 @@ GetFreeTmpReg(LRID lrid,
   {
     debug("found the live range already in a temporary register");
     AssignedReg* rReg  = ((*it).second);
-    AssignedRegList* reglist = rReg->is_reserved_reg ?
-      (regContents->reserved) : (regContents->assignable);
+    AssignedRegList* reglist = rReg->regpool;
     AssignRegister(rReg, reglist, lrid, origInst, purpose, rwidth, 
                    rReg->dirty || purpose == FOR_DEF);
     regXneedMem.first  = rReg->machineReg;
@@ -1029,9 +1034,8 @@ FindSutiableTmpReg(RegisterContents* regContents,
     if(!kickable.empty())
     {
       debug("found a reserved register that we can evict");
-      tmpReg = kickable.front();
-      //tmpReg = Belady(kickable, blk, updatedInst->next_inst);
-      StoreIfNeeded(tmpReg, origInst, blk); //MOVE TO BELADY...
+      //tmpReg = kickable.front(); StoreIfNeeded(tmpReg,origInst,blk);
+      tmpReg = Belady(kickable, blk, origInst);
     }
   }
 
@@ -1082,96 +1086,49 @@ FindCandidateRegs(const AssignedRegList* possibles,
  * chooses it for eviction.
  */
 AssignedReg* 
-Belady(const AssignedRegList& choices, Block* start_blk, Inst* start_inst)
+Belady(const AssignedRegList& choices, Block* blk, Inst* origInst)
 {
   debug("running belady to choose a temporary register to evict");
   typedef AssignedRegList::const_iterator LI;
-  std::map<LRID, int> distances;
-  //initialize map with distance of -1 for all our choices
-  for(LI i = choices.begin(); i != choices.end(); i++)
-  {
-    distances[(*i)->forLRID] = -1;
-  }
-  
-  //find distances for the given block
-  int dist = UpdateDistances(distances, start_blk, 0, start_inst);
-
-  //continue to look at distances as long as there is a single path
-  //from this block and a single path to the next block
-  if(SingleSuccessorPath(start_blk))
-  {
-    Block* blk = start_blk;
-    do {
-      blk = blk->succ->succ;
-      dist = UpdateDistances(distances, blk, dist);
-    }while(SingleSuccessorPath(blk));
-  }
-
-  //choose tmp reg with largest distance
   AssignedReg* tmpReg = NULL;
-  int max_dist = -2;
+
+  //look for regs with no further use from the current instruction
+  //if there is no further use for this tmpReg then set it free. of
+  //course there may still be a store needed if it holds a global lr
+  //we do this first as a garbage collection step to free up any regs
+  //that no longer should be holding a value
+  int cur_inst_num = inst_order[origInst];
   for(LI i = choices.begin(); i != choices.end(); i++)
   {
-    int cur_dist = distances[(*i)->forLRID];
-    if(cur_dist == -1) {tmpReg = *i; break;}
-    if(cur_dist > max_dist){tmpReg = *i; max_dist = cur_dist;}
+    int next_use = (*i)->next_use;
+    if(next_use == -1)
+    {
+      StoreIfNeeded(*i, origInst, blk); 
+      ResetForRegWidth(*i);
+      tmpReg = tmpReg ? tmpReg : *i; //take the first available
+      debug("gc dead register: %d", (*i)->machineReg);
+    }
+    else{assert(next_use > cur_inst_num);}
   }
 
+  //choose tmp reg with furthest next use if GC did not give any
+  if(tmpReg == NULL)
+  {
+    debug("searching for furthest next use");
+    int max_next_use = -2;
+    for(LI i = choices.begin(); i != choices.end(); i++)
+    {
+      int next_use = (*i)->next_use;
+      if(next_use > max_next_use) {tmpReg = *i; max_next_use = next_use;}
+    }
+
+    assert(tmpReg != NULL);
+    StoreIfNeeded(tmpReg, origInst, blk); 
+    ResetForRegWidth(tmpReg);
+  }
   debug("finished belady");
-  assert(tmpReg != NULL);
   return tmpReg;
 } 
-
-/*
- *=====================
- * UpdateDistances()
- *=====================
- * Updates the passed distance map with the distances that each live
- * range is used. counting begins from +start_inst+ starting with the
- * distance +start_dist+. The distance is incremented for each
- * instruction and returned to the caller.
- */
-int 
-UpdateDistances(
-  std::map<LRID, int>& distances,
-  Block* blk, 
-  int start_dist, 
-  Inst* start_inst
-)
-{
-  using Mapping::SSAName2OrigLRID;
-  debug("updating distances for block: %s(%d)", bname(blk), id(blk));
-
-  if(start_inst == NULL) start_inst = blk->inst->next_inst;
-  int dist = start_dist;
-
-  //run through all instructions in the block and update the distances
-  for(Inst* inst = start_inst; inst != blk->inst; inst = inst->next_inst)
-  {
-    debug("checking inst for distances: %s", Debug::StringOfInst(inst));
-    Operation** op;
-    Inst_ForAllOperations(op, inst)
-    {
-      Register* reg;
-      Operation_ForAllUses(reg, *op)
-      {
-        distances[SSAName2OrigLRID(*reg)] = dist;
-      }
-    }
-    dist++;
-  }
-
-  return dist;
-}
-
-
-//FOR LOCAL ALLOCATION
-void RecordDistance(
-  Register vreg,
-  Inst* inst,
-  std::map<LRID, int>& next_uses);
-void AnnotateBlockWithDistances(Block*, std::map<LRID, int>& next_uses);
-
 
 /*
  *=====================
@@ -1378,6 +1335,11 @@ bool LiveOut(LRID lrid, Block* blk)
  * the passed iterator and ending with the width of the live range
  * stored in the AssignedReg pointed to by the iterator.
  */
+uint ResetForRegWidth(AssignedReg* tmpReg)
+{
+  return ResetForRegWidth(tmpReg->regpool->begin() + tmpReg->index);
+}
+
 uint ResetForRegWidth(AssignedRegList::const_iterator begin)
 {
   uint rwidth = 1;  
@@ -1391,7 +1353,6 @@ uint ResetForRegWidth(AssignedRegList::const_iterator begin)
 
   return rwidth;
 }
-
 }//end anonymous namespace 
 
 
