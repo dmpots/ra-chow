@@ -60,7 +60,6 @@ struct RegisterContents
 {
   EvictedList* evicted;       //currently evicted registers
   AssignedRegList* assignable;//all non-reserved registers
-  AssignedRegMap* regMap;     //map from lrid -> AssignedReg*
   AssignedRegList* reserved;  //all reserved registers
   RegisterClass::RC rc;       //register class for these contents
   //iterator for using reserved regs in a round robin fashion
@@ -86,7 +85,6 @@ Register MarkRegisterUsed(AssignedReg* tmpReg,
                         Inst* inst, 
                         RegPurpose purpose,
                         LRID lrid,
-                        AssignedRegMap* regMap,
                         AssignedRegList* reglist,
                         unsigned int rwidth);
 
@@ -106,7 +104,7 @@ FindSutiableTmpReg(RegisterContents* regContents,
                    const RegisterList& instUses,
                    unsigned int reg_width);
 AssignedReg* 
-Belady(const AssignedRegList& choices, Block* blk, Inst* origInst);
+Belady(const AssignedRegList& choices, Block* blk, Inst* origInst, uint);
 uint ResetForRegWidth(AssignedRegList::const_iterator begin);
 uint ResetForRegWidth(AssignedReg* tmpReg);
 
@@ -128,6 +126,9 @@ void AssignRegister(
   bool is_dirty
 );
 void StoreIfNeeded(AssignedReg* tmpReg, Inst* origInst, Block* blk);
+AssignedReg* FindInRegPool(LRID lrid, AssignedRegList* regpool);
+void ResetRegSpan(AssignedReg* startingReg, uint width);
+void StoreAndResetRegSpan( AssignedReg* , Inst* , Block* , uint );
 
 //for local allocation
 bool recompute_dist_map = true;
@@ -145,10 +146,18 @@ inline unsigned int UB(unsigned int size, unsigned int width)
 {
   return size - width + 1;
 }
+unsigned int RegWidth(LRID lrid);
+inline unsigned int RegWidth(AssignedReg* tmpReg)
+{
+  return RegWidth(tmpReg->forLRID);
+}
 inline unsigned int RegWidth(LRID lrid)
 {
-  return Chow::live_ranges[lrid]->RegWidth();
+  int rwidth = 1; 
+  if(lrid != NO_LRID){rwidth = Chow::live_ranges[lrid]->RegWidth();}
+  return rwidth;
 }
+
 inline void ResetAssignedReg(AssignedReg* ar)
 {
   ar->free = TRUE;
@@ -173,7 +182,6 @@ FindCandidateRegs(const AssignedRegList* possibles,
 class AssignedReg_Usable;
 
 /* for debugging */
-void dump_map_contents(AssignedRegMap& regMap);
 void dump_assignedlist_contents(const AssignedRegList& arList);
 }
 
@@ -205,7 +213,6 @@ void Init(Arena arena)
 
     reg_contents[rc].evicted = new EvictedList;
     reg_contents[rc].assignable= new AssignedRegList;
-    reg_contents[rc].regMap = new AssignedRegMap;
     reg_contents[rc].reserved= new AssignedRegList;
     reg_contents[rc].rc = rc;
 
@@ -370,15 +377,9 @@ void ResetFreeTmpRegs(Block* blk)
       //3) set all reserved registers to be FREE so they can be used in
       //the next block
       AssignedRegList* reserved = regContents->reserved;
-      AssignedRegList::const_iterator resIT;
-      for(resIT = reserved->begin(); resIT != reserved->end(); resIT++)
-      {
-        StoreIfNeeded(*resIT, Block_LastInst(blk), blk);
-        ResetForRegWidth(resIT);
-      }
-
-      //4) clear the regMap
-      regContents->regMap->clear();
+      StoreAndResetRegSpan(
+        reserved->front(), Block_LastInst(blk), blk, reserved->size()
+      );
     }
   }
   else
@@ -398,9 +399,9 @@ void ResetFreeTmpRegs(Block* blk)
         {
           debug("resetting tmp reg: r%d for lrid: %d", 
             (*resIT)->machineReg, (*resIT)->forLRID);
-          regContents->regMap->erase((*resIT)->forLRID);
-          StoreIfNeeded(*resIT, Block_LastInst(blk), blk);
-          ResetForRegWidth(resIT);
+          StoreAndResetRegSpan(
+            *resIT, Block_LastInst(blk), blk, RegWidth(*resIT)
+          );
           //could increment the iterator here to skip next width regs
         }
       }
@@ -469,7 +470,6 @@ void UnEvict(Inst** updatedInst)
     if(evicted->size() > 0)
     {
       debug("some registers need unevicting");
-      AssignedRegMap* regMap = reg_contents[i].regMap;
       //1) anyone that was evicted needs to be loaded back in
       //TODO: this is bullshit!! (says tim).
       //we can do better than just reloading the register because it is
@@ -493,19 +493,6 @@ void UnEvict(Inst** updatedInst)
                               *updatedInst, kicked->machineReg, 
                               Spill::REG_FP, AFTER_INST);
         }
-
-        //find the lrid that is in our register and remove it from map
-        RegMapIterator rmIt = regMap->find(kicked->forLRID);
-        // ---- DEBUG ----->
-        if(rmIt == regMap->end())
-        {
-          debug("expected to find lrid: %d in reg: %d, but didn't",
-                kicked->forLRID, kicked->machineReg);
-          dump_map_contents(*regMap);
-        }
-        // ---- DEBUG -----<
-        assert(rmIt != regMap->end());
-        regMap->erase(rmIt);
       }
 
       //reset values on assigned regs. this is needed in case a
@@ -533,17 +520,6 @@ void UnEvict(Inst** updatedInst)
 /*-------------------BEGIN LOCAL DEFINITIONS-------------------*/
 namespace {
 /* debug routines */
-void dump_map_contents(AssignedRegMap& regMap)
-{
-  debug("-- map contents --");
-  AssignedRegMap::iterator rmIt;
-  for(rmIt = regMap.begin(); rmIt != regMap.end(); rmIt++)
-    debug("  %d --> %d (width: %d) (forInst: 0x%p)", (*rmIt).first, 
-    ((*rmIt).second)->machineReg, RegWidth((*rmIt).first),
-    ((*rmIt).second)->forInst);
-  debug("-- end map contents --");
-}
-
 void dump_reglist_contents(const RegisterList& regList, Block* blk)
 {
   debug("-- reglist contents --");
@@ -559,8 +535,10 @@ void dump_assignedlist_contents(const AssignedRegList& arList)
   debug("-- assigned reglist contents --");
   AssignedRegList::const_iterator rmIt;
   for(rmIt = arList.begin(); rmIt != arList.end(); rmIt++)
-    debug("  r%d (%d lrid at inst %p)", 
-      (*rmIt)->machineReg, (*rmIt)->forLRID, (*rmIt)->forInst);
+    debug("  r%d (%d lrid %s for inst %p(%d) nxU: %d)", 
+      (*rmIt)->machineReg, (*rmIt)->forLRID, 
+      ((*rmIt)->dirty ? "dirty" : "clean"),
+      (*rmIt)->forInst, inst_order[(*rmIt)->forInst],(*rmIt)->next_use);
   debug("-- end assigned reglist contents --");
 }
 
@@ -622,6 +600,23 @@ class AssignedReg_IsFree : public std::unary_function<AssignedReg*, bool>
   bool operator() (const AssignedReg* rReg) const 
   {
     return rReg->free;
+  }
+};
+
+/*
+ *=======================
+ * AssignedReg_LridEq()
+ *=======================
+ * predicate for whether a temporary register has a matching LRID
+ **/
+class AssignedReg_LridEq : public std::unary_function<AssignedReg*, bool>
+{
+  LRID lrid;
+  public:
+  AssignedReg_LridEq(LRID _lrid) : lrid(_lrid){};
+  bool operator() (const AssignedReg* rReg) const 
+  {
+    return rReg->forLRID == lrid;
   }
 };
 
@@ -693,20 +688,20 @@ GetFreeTmpReg(LRID lrid,
   //get the register contents struct for this lrid register class
   RegisterContents* regContents = RegContentsForLRID(lrid);
   unsigned int rwidth = RegWidth(lrid);
+  dump_assignedlist_contents(*regContents->reserved);
 
   //1) check to see if this lrid is already stored in one of our
   //temporary registers.
-  AssignedRegMap* regMap = (regContents->regMap);
-  RegMapIterator it = regMap->find(lrid);
-  if(it != regMap->end()) //found it
   {
-    debug("found the live range already in a temporary register");
-    AssignedReg* rReg  = ((*it).second);
-    AssignedRegList* reglist = rReg->regpool;
-    AssignRegister(rReg, reglist, lrid, origInst, purpose, rwidth, 
-                   rReg->dirty || purpose == FOR_DEF);
-    regXneedMem.first  = rReg->machineReg;
-    return regXneedMem;
+    AssignedReg* tmpReg = FindInRegPool(lrid, regContents->reserved);
+    if(tmpReg != NULL)
+    {
+      debug("found the live range already in a temporary register");
+      AssignRegister(tmpReg, tmpReg->regpool, lrid, origInst, purpose, 
+                     rwidth, tmpReg->dirty || (purpose == FOR_DEF));
+      regXneedMem.first  = tmpReg->machineReg;
+      return regXneedMem;
+    }
   }
 
   //find a sutiable temporary register to use, either
@@ -720,7 +715,7 @@ GetFreeTmpReg(LRID lrid,
     if(tmpReg != NULL)
     {
       regXneedMem.first = 
-        MarkRegisterUsed(tmpReg, origInst, purpose, lrid, regMap,
+        MarkRegisterUsed(tmpReg, origInst, purpose, lrid,
                          regContents->reserved, rwidth);
       if(purpose == FOR_USE) regXneedMem.second = true;
       return regXneedMem;
@@ -751,6 +746,18 @@ GetFreeTmpReg(LRID lrid,
 //  return regXneedMem;
 //DROP <<<<
 
+  //first we have to seach through the assignable registers since it
+  //may be the case that we have already evicted a register for the
+  //lrid and it appears twice in the JSR call
+  {
+    AssignedReg* tmpReg = FindInRegPool(lrid, regContents->assignable);
+    if(tmpReg != NULL)
+    {
+      regXneedMem.first  = tmpReg->machineReg;
+      return regXneedMem;
+    }
+  }
+
   //evict a live range from a register and record the fact that the
   //register has been commandeered
   //to find a suitable register to evict we start with the list of all
@@ -771,7 +778,6 @@ GetFreeTmpReg(LRID lrid,
   //it and use it now.
   //dump_reglist_contents(instUses, blk);
   //dump_assignedlist_contents(*regContents->assignable);
-  //dump_map_contents(*regContents->regMap);
   assert(potentials.size() > 0);
   AssignedReg* tmpReg = potentials.front();
   debug("evicting machine register: %d", tmpReg->machineReg);
@@ -812,7 +818,7 @@ GetFreeTmpReg(LRID lrid,
   regContents->evicted->push_back(std::make_pair(evictedLRID,tmpReg));
 
   regXneedMem.first = 
-    MarkRegisterUsed(tmpReg, origInst, purpose, lrid, regMap,
+    MarkRegisterUsed(tmpReg, origInst, purpose, lrid, 
                      regContents->assignable, rwidth);
   regXneedMem.second = true; //always load uses and always store defs
   return regXneedMem;
@@ -917,34 +923,19 @@ Register MarkRegisterUsed(AssignedReg* tmpReg,
                           Inst* inst, 
                           RegPurpose purpose,
                           LRID lrid,
-                          AssignedRegMap*  regMap,
                           AssignedRegList* reglist,
                           unsigned int rwidth)
 {
   debug("marking reg: %d used for lrid: %d",tmpReg->machineReg, lrid);
 
-  //remove any previous mapping that may exist for the live range in
-  //this temporary register
-  for(unsigned int i = tmpReg->index; i< tmpReg->index + rwidth; i++)
-  {
-    LRID prevLRID = (*reglist)[i]->forLRID;
-    RegMapIterator rmIt = regMap->find(prevLRID);
-    if(rmIt != regMap->end()){
-      debug("removing previous mapping reg: %d for lrid: %d",
-            (*rmIt).second->machineReg, prevLRID);
-      regMap->erase(rmIt);
-      //if a previous mapping exists then free all of the registers
-      //used by the liverange in the previous mapping
-      ResetForRegWidth(reglist->begin() + i);
-    }
-  }
-
+  //remove any previous mappings that may exist for the live range in
+  //the span of registers that will be assigned starting with the head 
+  //temporary register
+  ResetRegSpan(tmpReg, rwidth);
+  
   //update info in AssignedReg structs
   AssignRegister(tmpReg, reglist, lrid, inst, purpose, rwidth, 
                 (purpose == FOR_DEF));
-  (*regMap)[lrid] = tmpReg;
-
-  dump_map_contents(*regMap);
   return tmpReg->machineReg;
 }
 
@@ -1035,7 +1026,7 @@ FindSutiableTmpReg(RegisterContents* regContents,
     {
       debug("found a reserved register that we can evict");
       //tmpReg = kickable.front(); StoreIfNeeded(tmpReg,origInst,blk);
-      tmpReg = Belady(kickable, blk, origInst);
+      tmpReg = Belady(kickable, blk, origInst, reg_width);
     }
   }
 
@@ -1086,7 +1077,12 @@ FindCandidateRegs(const AssignedRegList* possibles,
  * chooses it for eviction.
  */
 AssignedReg* 
-Belady(const AssignedRegList& choices, Block* blk, Inst* origInst)
+Belady(
+  const AssignedRegList& choices, 
+  Block* blk, 
+  Inst* origInst, 
+  uint rwidth
+)
 {
   debug("running belady to choose a temporary register to evict");
   typedef AssignedRegList::const_iterator LI;
@@ -1103,10 +1099,9 @@ Belady(const AssignedRegList& choices, Block* blk, Inst* origInst)
     int next_use = (*i)->next_use;
     if(next_use == -1)
     {
-      StoreIfNeeded(*i, origInst, blk); 
-      ResetForRegWidth(*i);
+      StoreAndResetRegSpan(*i, origInst, blk, rwidth); 
       tmpReg = tmpReg ? tmpReg : *i; //take the first available
-      debug("gc dead register: %d", (*i)->machineReg);
+      debug("gc dead register: %d (+ %d)", (*i)->machineReg, rwidth);
     }
     else{assert(next_use > cur_inst_num);}
   }
@@ -1123,8 +1118,7 @@ Belady(const AssignedRegList& choices, Block* blk, Inst* origInst)
     }
 
     assert(tmpReg != NULL);
-    StoreIfNeeded(tmpReg, origInst, blk); 
-    ResetForRegWidth(tmpReg);
+    StoreAndResetRegSpan(tmpReg, origInst, blk, rwidth); 
   }
   debug("finished belady");
   return tmpReg;
@@ -1342,9 +1336,7 @@ uint ResetForRegWidth(AssignedReg* tmpReg)
 
 uint ResetForRegWidth(AssignedRegList::const_iterator begin)
 {
-  uint rwidth = 1;  
-  if((*begin)->forLRID != NO_LRID) rwidth = RegWidth((*begin)->forLRID);
-
+  uint rwidth = RegWidth((*begin)->forLRID);
   typedef AssignedRegList::const_iterator CI;
   for(CI runner = begin; runner != begin + rwidth; runner++)
   {
@@ -1352,6 +1344,68 @@ uint ResetForRegWidth(AssignedRegList::const_iterator begin)
   }
 
   return rwidth;
+}
+
+/*
+ *=======================
+ * StoreAndResetRegSpan()
+ *=======================
+ * Works with a span of registers from the regpool. Beginning with
+ * +startingReg+ the pool is examined in order up to the length
+ * specified. Each tmp reg is stored if needed and then its values are
+ * reset and the next tmp reg is processed skipping the width of the
+ * previous tmp reg that was just reset.
+ *
+ */
+void 
+StoreAndResetRegSpan(
+  AssignedReg* startingReg, 
+  Inst* origInst, 
+  Block* blk,
+  uint width
+)
+{
+  for(uint i = startingReg->index; i < startingReg->index + width;)
+  {
+    AssignedReg* tmpReg = (*startingReg->regpool)[i];
+    uint tmpRegWidth = RegWidth(tmpReg);
+    StoreIfNeeded(tmpReg, origInst, blk); 
+    ResetForRegWidth(tmpReg);
+    i += tmpRegWidth;
+  }
+}
+/*
+ *=======================
+ * ResetRegSpan()
+ *=======================
+ * see StoreAndRestRegSpan()
+ */
+void ResetRegSpan(AssignedReg* startingReg, uint width)
+{
+  for(uint i = startingReg->index; i < startingReg->index + width;)
+  {
+    AssignedReg* tmpReg = (*startingReg->regpool)[i];
+    uint tmpRegWidth = RegWidth(tmpReg);
+    ResetForRegWidth(tmpReg);
+    i += tmpRegWidth;
+  }
+}
+
+/*
+ *=======================
+ * FindInRegPool()
+ *=======================
+ * Searches the +regpool+ for a register that holds the given +lrid+ 
+ */
+AssignedReg* FindInRegPool(LRID lrid, AssignedRegList* regpool)
+{
+  AssignedReg* tmpReg = NULL;
+
+  AssignedRegList::iterator it = 
+    find_if(regpool->begin(), regpool->end(), AssignedReg_LridEq(lrid));
+  if(it != regpool->end()) tmpReg = *it;
+
+  return tmpReg;
 }
 }//end anonymous namespace 
 
