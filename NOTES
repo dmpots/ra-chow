@@ -1754,11 +1754,11 @@ X set default needMem to false, only need mem if dirty or evicted for
   def
 X in ResetTmpReg() call StoreIfNeeded() for each reg 
 X in FindSuitableTmp() call StoreIfNeeded() for the evicted reg
-+ update Bleady(). now you just need to look through the choices list
+X update Bleady(). now you just need to look through the choices list
   and find the AssignedReg with the largest value for next_use. if any
   registers have a next_use of (-1) or have a next_use that is greater
   than the current inst should be Reset();
-+ i see no reason why regMap is needed? let's get rid of it. ok, well
+X i see no reason why regMap is needed? let's get rid of it. ok, well
   it lets us do a quick lookup to see if the live range is already in
   a register which would be a linear search otherwise.
 AT THIS POINT YOU SHOULD BE ABLE TO ALLOCATE NORMALLY

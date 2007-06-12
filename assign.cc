@@ -1270,8 +1270,15 @@ void StoreIfNeeded(AssignedReg* tmpReg, Inst* origInst, Block* blk)
  */
 bool NeedStore(AssignedReg* tmpReg, Inst* inst, Block* blk)
 {
+  if(tmpReg->forLRID == NO_LRID)
+  {
+    debug("no store needed for tmpReg: %d, it is not allocated",
+          tmpReg->machineReg);
+    return false;
+  }
+
   bool need_store = false;
-  if(tmpReg->dirty && tmpReg->forLRID != NO_LRID)
+  if(tmpReg->dirty)
   {
     if(tmpReg->next_use > inst_order[inst])
     {
@@ -1291,6 +1298,18 @@ bool NeedStore(AssignedReg* tmpReg, Inst* inst, Block* blk)
                 tmpReg->machineReg, tmpReg->forLRID);
           need_store = true;
         }
+        else
+        {
+          debug("no store needed for replacing tmpReg: r%d, "
+                "because its lr(%d) is  not live out",
+                tmpReg->machineReg, tmpReg->forLRID);
+        }
+      }
+      else
+      {
+          debug("no store needed for replacing tmpReg: r%d, "
+                "because its lr(%d) is local and has no next use",
+                tmpReg->machineReg, tmpReg->forLRID);
       }
     }
   }
