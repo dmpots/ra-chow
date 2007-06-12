@@ -188,14 +188,14 @@ void LiveRange::AddInterference(LiveRange* lr2)
 bool LiveRange::IsConstrained() const
 {
   bool constrained;
-  if (fear_list->size() >= 
+  if (((int)fear_list->size()) >= 
       (RegisterClass::NumMachineReg(rc)/RegisterClass::RegWidth(type)))
   {
     constrained = true;
   }
   else
   {
-    unsigned int total_width = 0;
+    int total_width = 0;
     for(LRSet::iterator it = fear_list->begin(); 
         it != fear_list->end(); 
         it++)
@@ -248,7 +248,7 @@ void LiveRange::AssignColor()
 
   color = Coloring::SelectColor(this);
   is_candidate = FALSE; //no longer need a color
-  assert(color < RegisterClass::NumMachineReg(rc));
+  assert(((int)color) < RegisterClass::NumMachineReg(rc));
   debug("assigning color: %d to lr: %d", color, this->id);
 
   //update the interfering live ranges forbidden set

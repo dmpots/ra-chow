@@ -14,11 +14,11 @@ namespace RegisterClass {
   struct ReservedRegsInfo
   {
     Register* regs;         /* array of temporary registers */
-    Unsigned_Int cReserved; /* count of number reserved */
+    int cReserved;          /* count of number reserved */
     /* count of number hidden at the front, for all but INT reg  class
      * this is the same as reserved, but ints need an extra hidden reg
      * for the frame pointer */
-    Unsigned_Int cHidden;
+    int cHidden;
 
   }; 
 
@@ -29,15 +29,15 @@ namespace RegisterClass {
   const ReservedRegsInfo& GetReservedRegInfo(RC rc);
 
   void Init(Arena arena, 
-            Unsigned_Int cReg,
+            int cReg,
             Boolean fEnableClasses,
-            Unsigned_Int* cReserved);
+            int* cReserved);
   void InitRegWidths();
   RC InitialRegisterClassForLRID(LRID lrid);
-  unsigned int NumMachineReg(RC);
+  int NumMachineReg(RC);
   Register MachineRegForColor(RC, Color);
   VectorSet TmpVectorSet(RC rc);
-  Register FirstRegister(RegisterClass::RC);
+  int FirstRegister(RegisterClass::RC);
   Color ColorForMachineReg(RC rc, Register r);
   int RegWidth(Def_Type dt);
 }

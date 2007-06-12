@@ -8,6 +8,8 @@
 #include <Shared.h>
 #include <SSA.h>
 #include <map>
+#include <string>
+#include <vector>
 #include "chow.h"
 #include "params.h"
 #include "shared_globals.h" 
@@ -25,7 +27,8 @@ typedef enum
 {
   INT_PARAM,
   FLOAT_PARAM,
-  BOOL_PARAM
+  BOOL_PARAM,
+  INT_ARRAY_PARAM
 } Param_Type;
 
 /* index for help messages */
@@ -56,11 +59,9 @@ typedef struct param_details
 {
   char name;
   int (*func)(struct param_details*, char*);
-  //union {
-    Int      idefault;
-    float    fdefault;
-    bool     bdefault;
-  //};
+  Int      idefault;
+  float    fdefault;
+  bool     bdefault;
   void* value;
   Param_Type type;
   Param_Help usage;
@@ -70,6 +71,7 @@ typedef struct param_details
 /* functions to process parameters */
 static int process_(Param_Details*, char*);
 static int process_heuristic(Param_Details* param, char* arg);
+static int process_locals(Param_Details* param, char* arg);
 static const char* get_usage(Param_Help idx);
 static void usage(bool);
 static void Param_InitDefaults(void);
@@ -106,6 +108,7 @@ static const bool    B = false;
  */
 using Params::Machine::num_registers;
 using Params::Machine::enable_register_classes;
+using Params::Machine::num_register_classes;
 using Params::Algorithm::bb_max_insts;
 using Params::Algorithm::loop_depth_weight;
 using Params::Algorithm::move_loads_and_stores;
@@ -116,6 +119,7 @@ using Params::Algorithm::color_choice;
 using Params::Algorithm::include_in_split;
 using Params::Algorithm::when_to_split;
 using Params::Algorithm::how_to_split;
+using Params::Algorithm::num_reserved_registers;
 using Params::Program::force_minimum_register_count;
 using Params::Program::dump_params_only;
 static Param_Details param_table[] = 
@@ -148,10 +152,12 @@ static Param_Details param_table[] =
   {'w', process_heuristic, when_to_split,F,B,&when_to_split,
          INT_PARAM, HELP_SPLITWHENSTRATEGY},
   {'s', process_heuristic, how_to_split,F,B,&how_to_split,
-         INT_PARAM, NO_HELP}
+         INT_PARAM, NO_HELP},
+  {'l', process_locals,num_register_classes,F,B,num_reserved_registers,
+         INT_ARRAY_PARAM, NO_HELP}
 };
 const unsigned int NPARAMS = (sizeof(param_table) / sizeof(param_table[0]));
-const char* PARAMETER_STRING  = ":b:r:d:c:i:w:s:mpefyzt";
+const char* PARAMETER_STRING  = ":b:r:d:c:i:w:s:l:mpefyzt";
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
 /*
@@ -374,6 +380,40 @@ int process_heuristic(Param_Details* param, char* arg)
   return SUCCESS;
 }
 
+/* sets the number of registers reserved for local allocation */
+int process_locals(Param_Details* param, char* arg)
+{
+  using Params::Machine::num_register_classes;
+  if(arg == NULL) return SUCCESS; //no initialization needed
+
+  
+  std::string locals_str(arg);
+  std::vector<int> nlocals(param->idefault, 0);
+
+  //check to see if locals are specified for multiple classes
+  if(locals_str.rfind(",") == std::string::npos)
+  {
+    int locals = atoi(arg);
+    for(uint i = 0; i < nlocals.size(); i++) nlocals[i] = locals;
+  }
+  else
+  {
+    char* str;
+    int i = 0;
+    str = strtok(arg,",");
+    while(str != NULL)
+    {
+      nlocals[i++] = atoi(str);
+      str = strtok(NULL, ",");
+    }
+  }
+
+  for(uint i = 0; i < nlocals.size(); i++) 
+    ((int*)param->value)[i] += nlocals[i];
+  
+  return SUCCESS;
+}
+
 /*
  *===========
  * usage()
@@ -469,6 +509,11 @@ void DumpParamTable(FILE* outfile)
       case BOOL_PARAM:
         fprintf(outfile, "%s", *((bool*)param.value) ? "true":"false" );
         break;
+      case INT_ARRAY_PARAM: /* here idefault is the array size */
+        fprintf(outfile, "\n");
+        for(int i = 0; i < param.idefault; i++)
+          fprintf(outfile, "  - %d\n", ((int*)param.value)[i]);
+        break;
       default:
         error("unknown type");
         abort();
@@ -506,6 +551,20 @@ void EnforceParameterConsistency()
   if(!Params::Machine::enable_register_classes)
   {
     Params::Machine::num_register_classes = 1;
+  }
+
+  for(int i = 0; i < Params::Machine::num_register_classes; i++)
+  {
+    if(Params::Algorithm::num_reserved_registers[i] >
+        Params::Machine::num_registers)
+    {
+      fprintf(stderr,
+        "ERROR: num reserved regs > num machine regs (%d > %d)\n",
+        Params::Algorithm::num_reserved_registers[i],
+        Params::Machine::num_registers
+      );
+      abort(); 
+    }
   }
 }
 

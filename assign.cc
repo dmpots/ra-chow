@@ -222,7 +222,7 @@ void Init(Arena arena)
     //to be used as a temporary register so we must remember this when
     //building the reserved regs list
     RegisterClass::ReservedRegsInfo rri = RegisterClass::GetReservedRegInfo(rc);
-    for(unsigned int i = 0; i < rri.cReserved; i++)
+    for(int i = 0; i < rri.cReserved; i++)
     {
       AssignedReg* rr = (AssignedReg*)
         Arena_GetMemClear(arena, sizeof(AssignedReg));
@@ -239,8 +239,8 @@ void Init(Arena arena)
     //now build the list of all remaining machine registers for this
     //register class.
     Register base = FirstRegister(rc) + rri.cHidden;
-    unsigned int num_assignable = RegisterClass::NumMachineReg(rc);
-    for(unsigned int i = 0; i < num_assignable; i++)
+    int num_assignable = RegisterClass::NumMachineReg(rc);
+    for(int i = 0; i < num_assignable; i++)
     {
       AssignedReg* rr = (AssignedReg*)
         Arena_GetMemClear(arena, sizeof(AssignedReg));

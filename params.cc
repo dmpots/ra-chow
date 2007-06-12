@@ -25,7 +25,7 @@ bool  double_takes_two_regs = true;
 /* algorithm parameters */
 namespace Algorithm {
 int   bb_max_insts = 0;
-unsigned int   num_reserved_registers[] = {2,4};
+int   num_reserved_registers[] = {2,4};
 float loop_depth_weight = 10.0;
 bool  enhanced_code_motion = false;
 bool  move_loads_and_stores = false;

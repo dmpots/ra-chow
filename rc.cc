@@ -23,7 +23,7 @@ namespace {
 /* local functions */
 
 /* local variables */
-unsigned int* mRc_CReg;
+int* mRc_CReg;
 Boolean fEnableMultipleClasses = FALSE;
 VectorSet* mRc_VsTmp; 
 RegisterClass::ReservedRegsInfo* mRc_ReservedRegs;
@@ -44,7 +44,7 @@ int mDefType_RegWidth[] = {
 //space between sequential allocation of registers per class.
 //each register class will be allocated registers starting from
 //rc*REGCLASS_SPACE 
-const Unsigned_Int REGCLASS_SPACE = 100;
+const int REGCLASS_SPACE = 100;
 }
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
@@ -63,9 +63,9 @@ const ReservedRegsInfo& GetReservedRegInfo(RC rc)
  *========================
  */
 void Init(Arena arena, 
-          Unsigned_Int cReg, 
+          int cReg, 
           Boolean fEnableClasses,
-          Unsigned_Int* cReserved)
+          int* cReserved)
 {
   unsigned int cRegisterClass = 1;
   fEnableMultipleClasses = fEnableClasses;
@@ -81,8 +81,8 @@ void Init(Arena arena,
 
   //for now we have all register classes use the same number of
   //registers 
-  mRc_CReg = (Unsigned_Int*)
-    Arena_GetMemClear(arena, sizeof(Unsigned_Int)* cRegisterClass);
+  mRc_CReg = (int*)
+    Arena_GetMemClear(arena, sizeof(int)* cRegisterClass);
   for(unsigned int i = 0; i < all_classes.size(); i++)
   {
     mRc_CReg[all_classes[i]] = cReg - cReserved[i];
@@ -101,7 +101,7 @@ void Init(Arena arena,
     ReservedRegsInfo* reserved = &(mRc_ReservedRegs[rc]);
     reserved->regs = (Register*)
       Arena_GetMemClear(arena, sizeof(Register) * cReserved[i]);
-    for(LOOPVAR j = 0; j < cReserved[i]; j++)
+    for(int j = 0; j < cReserved[i]; j++)
     {
       reserved->regs[j] = FirstRegister(rc)+j;
     }
@@ -120,12 +120,12 @@ void Init(Arena arena,
   //little silly and most machines would have a special register
   //already reserved for this purpose.
   ReservedRegsInfo* reservedIntRegs = &(mRc_ReservedRegs[INT]);
-  for(LOOPVAR i = 0; i < cReserved[INT]; i++)
+  for(int i = 0; i < cReserved[INT]; i++)
   {
     reservedIntRegs->regs[i]++;
   }  
   reservedIntRegs->cHidden++;
-  mRc_CReg[0]--;
+  mRc_CReg[INT]--;
 
   //allocate temporary vector sets sized to the number of available
   //registers for a given class. used in various live range
@@ -135,6 +135,13 @@ void Init(Arena arena,
   for(unsigned int i = 0; i < all_classes.size(); i++)
   {
     RC rc  = all_classes[i];
+    //sanity check
+    if(mRc_CReg[rc] <= 0)
+    {
+      error("number of machine regs <= 0 (%d) for RC %d",
+        mRc_CReg[rc], rc);
+      abort();
+    }
     mRc_VsTmp[rc] = VectorSet_Create(arena, mRc_CReg[rc]);
   }
 }
@@ -196,7 +203,7 @@ RC InitialRegisterClassForLRID(LRID lrid)
  * Returns the number of machine registers available for a given
  * register class
  */
-Unsigned_Int NumMachineReg(RC rc)
+int NumMachineReg(RC rc)
 {
   return mRc_CReg[rc];
 }
@@ -247,7 +254,7 @@ VectorSet TmpVectorSet(RC rc)
  * The remaining registers should be sequential starting from this
  * base regiser.
  */
-Unsigned_Int FirstRegister(RegisterClass::RC rc)
+int FirstRegister(RegisterClass::RC rc)
 {
   return rc*REGCLASS_SPACE;
 }
