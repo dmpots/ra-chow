@@ -299,7 +299,7 @@ void EnsureReg(Register* reg,
   using Spill::InsertStore;
   using Chow::live_ranges;
 
-  debug("ensuring reg: %d for inst %d (0x%p): \n   %s",
+  debug("ensuring r%d for inst %d (0x%p): \n   %s",
      *reg, inst_order[origInst], origInst, Debug::StringOfInst(origInst));
 
   LRID orig_lrid = Mapping::SSAName2OrigLRID(*reg);
