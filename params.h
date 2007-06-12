@@ -26,6 +26,7 @@ namespace Params {
     extern bool move_loads_and_stores;
     extern bool rematerialize;
     extern bool trim_useless_blocks;
+    extern bool  allocate_locals;
 
     using namespace Chow::Heuristics;
     extern WhenToSplit when_to_split;

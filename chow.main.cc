@@ -120,6 +120,7 @@ using Params::Algorithm::include_in_split;
 using Params::Algorithm::when_to_split;
 using Params::Algorithm::how_to_split;
 using Params::Algorithm::num_reserved_registers;
+using Params::Algorithm::allocate_locals;
 using Params::Program::force_minimum_register_count;
 using Params::Program::dump_params_only;
 static Param_Details param_table[] = 
@@ -154,10 +155,12 @@ static Param_Details param_table[] =
   {'s', process_heuristic, how_to_split,F,B,&how_to_split,
          INT_PARAM, NO_HELP},
   {'l', process_locals,num_register_classes,F,B,num_reserved_registers,
-         INT_ARRAY_PARAM, NO_HELP}
+         INT_ARRAY_PARAM, NO_HELP},
+  {'g', process_, I,F,allocate_locals, &allocate_locals,
+         BOOL_PARAM, NO_HELP}
 };
 const unsigned int NPARAMS = (sizeof(param_table) / sizeof(param_table[0]));
-const char* PARAMETER_STRING  = ":b:r:d:c:i:w:s:l:mpefyzt";
+const char* PARAMETER_STRING  = ":b:r:d:c:i:w:s:l:mpefyztg";
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
 /*
@@ -228,7 +231,7 @@ int main(Int argc, Char **argv)
   //some paramerters should implicitly set other params, and this
   //function takse care of making sure our flags are consistent
   EnforceParameterConsistency();
-  FindLocalOnlyNames();
+  FindLocalOnlyNames(); //must do this before splitting blocks
 
   //build ssa for register requirement analysis and chow allocation
   Chow::arena = Arena_Create();
@@ -480,7 +483,7 @@ static const char* get_usage(Param_Help idx)
       return "         trim useless blocks after splitting";
 
     default:
-      return " UNKNOWN PARAMETER\n";
+      return "         NO HELP AVAILABLE";
   }
 }
 
@@ -512,7 +515,10 @@ void DumpParamTable(FILE* outfile)
       case INT_ARRAY_PARAM: /* here idefault is the array size */
         fprintf(outfile, "\n");
         for(int i = 0; i < param.idefault; i++)
-          fprintf(outfile, "  - %d\n", ((int*)param.value)[i]);
+        {
+          fprintf(outfile, "  - %d", ((int*)param.value)[i]);
+          if(i != (param.idefault -1)) fprintf(outfile, "\n");
+        }
         break;
       default:
         error("unknown type");

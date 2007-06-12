@@ -1762,14 +1762,14 @@ X i see no reason why regMap is needed? let's get rid of it. ok, well
   it lets us do a quick lookup to see if the live range is already in
   a register which would be a linear search otherwise.
 AT THIS POINT YOU SHOULD BE ABLE TO ALLOCATE NORMALLY
-+ add a param to say whether local live ranges should be removed
-+ add a param to say how many local registers to reserve
-+ call FindLocalOnlyNames() in chow.main.cc
+X add a param to say whether local live ranges should be removed
+X add a param to say how many local registers to reserve
+X call FindLocalOnlyNames() in chow.main.cc
 + when computing ssa for the second time (DataFlowAnalysis) check to
   make sure the SSA names are the same (if removing locals)
-+ add field to live range for local_only live ranges
+X add field to live range for local_only live ranges
 + in AddLiveUnitOnce, if the orig_name is a local_name then mark the
   live range as local
 + after BuildInitialLiveRanges() you should remove local live ranges
-  from the interference graph
+  from the interference graph (if removing locals)
 
