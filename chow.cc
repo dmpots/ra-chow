@@ -51,7 +51,8 @@ namespace {
   void RenameRegisters();
   bool ShouldSplitLiveRange(LiveRange* lr);
   inline void AddToCorrectConstrainedList(LRSet*,LRSet*,LiveRange*);
-  void CountLocals(const std::vector<LiveRange*>& lrs);
+  void CountLocals();
+  void DumpLocals();
 }
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
@@ -60,6 +61,7 @@ namespace Chow {
   Arena arena;
   LRVec live_ranges;
   std::vector<std::vector<LiveUnit*> > live_units;
+  std::map<Variable,bool> local_names;
 }
 
 void Chow::Run()
@@ -70,7 +72,7 @@ void Chow::Run()
 
   //--- Build live ranges ---//
   BuildInitialLiveRanges(arena);
-  //CountLocals(live_ranges);
+  //DumpLocals();
   if(Debug::dot_dump_lr){
     LiveRange* lr = live_ranges[Debug::dot_dump_lr];
     Debug::DotDumpLR(lr, "initial");
@@ -975,13 +977,54 @@ inline void AddToCorrectConstrainedList(LRSet* constr_lrs,
   }
 }
 
-void CountLocals(const std::vector<LiveRange*>& lrs)
+void DumpLocals()
+{ 
+  using Chow::live_ranges;
+  using Chow::local_names;
+
+  printf("LIVE RANGE\n");
+  printf("LIVE RANGE LOCAL NAMES\n");
+  printf("LIVE RANGE\n");
+  int sum = 0;
+  for(uint i = 0; i < live_ranges.size(); i++)
+  {
+    LiveRange* lr = live_ranges[i];
+    if(lr->units->size() == 1)
+    {
+      sum++;
+      printf("LR: %d\n", live_ranges[i]->id);
+    }
+  }
+  printf("---------------------\n");
+  printf("LR Total:  %d\n", sum);
+
+  printf("DOM\n");
+  printf("DOM TREE LOCAL NAMES\n");
+  printf("DOM\n");
+  sum = 0;
+  for(uint i = 0; i < local_names.size(); i++)
+  {
+    Variable ssa_name = i;
+    if(local_names[ssa_name])
+    {
+      sum++;
+      printf("LR: %d, SSA: %d\n", 
+        Mapping::SSAName2OrigLRID(ssa_name), ssa_name);
+    }
+  }
+  printf("---------------------\n");
+  printf("DOM Total: %d\n", sum);
+  exit(EXIT_SUCCESS);
+}
+
+void CountLocals()
 {
+  using Chow::live_ranges;
   typedef unsigned int uint;
   std::map<Block*, int> lcnt;
-  for(uint i = 0; i < lrs.size(); i++)
+  for(uint i = 0; i < live_ranges.size(); i++)
   {
-    LiveRange* lr = lrs[i];
+    LiveRange* lr = live_ranges[i];
     if(lr->units->size() == 1)
     {
       lcnt[lr->units->front()->block]++;

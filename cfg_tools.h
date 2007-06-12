@@ -25,4 +25,9 @@ Edge* FindEdge(Block* blkPred, Block* blkSucc, EdgeOwner owner);
 bool Block_IsLoopHeader(Block* blk);
 Operation* GetFrameOperation();
 
+inline bool SingleSuccessorPath(Block* blk)
+{
+  return (Block_SuccCount(blk) == 1) &&
+         (Block_PredCount(blk->succ->succ) == 1);
+}
 #endif

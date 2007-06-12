@@ -1773,3 +1773,11 @@ X add field to live range for local_only live ranges
 + after BuildInitialLiveRanges() you should remove local live ranges
   from the interference graph (if removing locals)
 
+
+1) why does not splitting bbs to 5 make fpppp run much better when i
+give it a whole mess of registers for local allocation? seems like it
+should be the same.
+2) you allocate unconstrained live ranges no matter what, even if the
+priority may not be worth it. should you reconsider?
+3) move EnforceParam() to before dumping params so that params are
+real

@@ -19,6 +19,7 @@
 #include "cleave.h"
 #include "reach.h"
 #include "heuristics.h"
+#include "cfg_tools.h"
 
 /*------------------MODULE LOCAL DEFINITIONS-------------------*/
 /*#### module types ####*/
@@ -81,13 +82,14 @@ static void EnforceParameterConsistency();
 static void CheckRegisterLimitFeasibility(Arena);
 static void SetupMachineParams(Arena arena);
 static void  DataFlowAnalysis(Arena);
-static void FindLocalOnlyNames();
+static void FindLocalOnlyNames(Arena arena);
 static inline int max(int a, int b) { return a > b ? a : b;}
 
 /*#### module variables ####*/
 static const int SUCCESS = 0;
 static const int ERROR = -1;
 static const char EMPTY_NAME = '\0';
+static std::map<Variable,Variable> orig_ssa_name_map;
 
 /* define these values to "block out" useless columns in the param
  * table. we can not use a union for the default value since only one
@@ -231,7 +233,6 @@ int main(Int argc, Char **argv)
   //some paramerters should implicitly set other params, and this
   //function takse care of making sure our flags are consistent
   EnforceParameterConsistency();
-  FindLocalOnlyNames(); //must do this before splitting blocks
 
   //build ssa for register requirement analysis and chow allocation
   Chow::arena = Arena_Create();
@@ -680,46 +681,69 @@ void DataFlowAnalysis(Arena arena)
   ssa_options |= SSA_CONSERVE_LIVE_OUT_INFO;
   ssa_options |= SSA_IGNORE_TAGS;
   SSA_Build(ssa_options);
+  if(!Params::Algorithm::allocate_locals)
+  {
+    //find local names so they can be removed from the graph
+    FindLocalOnlyNames(arena); 
+  }
 
   Reach::ComputeReachability(arena);
 }
 
-void FindLocalOnlyNames()
+void FindLocalOnlyNames(Arena arena)
 {
-  Unsigned_Int ssa_options = 0;
-  ssa_options |= SSA_PRUNED;
-  ssa_options |= SSA_CONSERVE_LIVE_OUT_INFO;
-  ssa_options |= SSA_IGNORE_TAGS;
-  SSA_Build(ssa_options);
-
-  //find which names are only used in one block
-  std::map<Variable,bool> local_names;
+  using Chow::local_names;
   for(uint i = 1; i < SSA_def_count; i++)
   {
-    Liveness_Info info = SSA_live_out[id(SSA_block_map[i])];
-    bool isLocal = true;
-    for(uint j = 0; j < info.size; j++)
+    local_names[i] = false;
+  }
+
+  //walk dom tree to find names that are not used outside of straight
+  //line code (including blks with only 1 path from pred to succ)
+  Dominator_CalcDom(arena, false);
+  int i = 0;
+  Block* blk;
+  SparseSet defs = SparseSet_Create(arena, SSA_def_count);
+  Dominator_ForAllBlocks_Preorder(i,blk)
+  {
+    //add defs from this block
+    Inst* inst;
+    Block_ForAllInsts(inst, blk)
     {
-      if(info.names[j] == i) {isLocal = false; break;}
+      Operation** op;
+      Inst_ForAllOperations(op, inst)
+      {
+        Register* reg;
+        Operation_ForAllDefs(reg, *op)
+        {
+          SparseSet_Insert(defs, *reg);
+        }
+      }
     }
-    local_names[i] = isLocal;
+    //if this block has multiple succs or succ has multiple preds
+    //then check to see which defs are not in live out. any def not
+    //in live out qualifys as a local name
+    if(!SingleSuccessorPath(blk))
+    {
+      Variable v;
+      Liveness_Info info;
+      info = SSA_live_out[id(blk)];
+      SparseSet_ForAll(v, defs)
+      {
+        bool liveOut = false;
+        for(uint j = 0; j < info.size; j++)
+        {
+          if(v == info.names[j]) {liveOut = true; break;}
+        }
+        if(!liveOut)
+        {
+           debug("(localname) %d" , v);
+           local_names[v] = true;
+        }
+      }
+      SparseSet_Clear(defs);
+    }
   }
-
-  //TODO: the lazy thing to do is to revert the original name space,
-  //for now we will be lazy and make a check that conversion to ssa
-  //gives the same mapping, so the second time we convert to ssa make
-  //sure orig_ssa_name_map == SSA_name_map. you can be not lazy by
-  //rewriting the necessary code structures such as SSA_live_out as
-  //well as anything that relies on a Block (since splitting may add
-  //more blocks). i don't do this also because i'm not sure if these
-  //structures get used by something else.
-  //revert back to original namespace
-  std::map<Variable,Variable> orig_ssa_name_map;
-  for(uint i = 1; i < SSA_def_count; i++)
-  {
-    orig_ssa_name_map[i] = SSA_name_map[i];
-  }
-  SSA_Restore();
 }
 
 

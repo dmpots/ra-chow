@@ -167,11 +167,6 @@ inline void ResetAssignedReg(AssignedReg* ar)
   ar->next_use = -1;
   ar->local    = false;
 }
-inline bool SingleSuccessorPath(Block* blk)
-{
-  return (Block_SuccCount(blk) == 1) &&
-         (Block_PredCount(blk->succ->succ) == 1);
-}
 
 /* used as predicates for seaching reg lists */
 template<class Predicate> 
