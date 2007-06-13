@@ -31,7 +31,7 @@ bool  enhanced_code_motion = false;
 bool  move_loads_and_stores = false;
 bool  rematerialize = false;
 bool  trim_useless_blocks = false;
-bool  allocate_locals = true;
+bool  allocate_locals = false;
 
 /* default heuristics */
 ColorChoice color_choice = CHOOSE_FIRST_COLOR;
