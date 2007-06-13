@@ -1765,12 +1765,10 @@ AT THIS POINT YOU SHOULD BE ABLE TO ALLOCATE NORMALLY
 X add a param to say whether local live ranges should be removed
 X add a param to say how many local registers to reserve
 X call FindLocalOnlyNames() in chow.main.cc
-+ when computing ssa for the second time (DataFlowAnalysis) check to
-  make sure the SSA names are the same (if removing locals)
 X add field to live range for local_only live ranges
-+ in AddLiveUnitOnce, if the orig_name is a local_name then mark the
+X in AddLiveUnitOnce, if the orig_name is a local_name then mark the
   live range as local
-+ after BuildInitialLiveRanges() you should remove local live ranges
+X after BuildInitialLiveRanges() you should remove local live ranges
   from the interference graph (if removing locals)
 
 

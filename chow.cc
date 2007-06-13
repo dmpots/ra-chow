@@ -133,7 +133,10 @@ void AllocateRegisters()
   for(LRVec::size_type i = 1; i < live_ranges.size(); i++)
   {
     lr = live_ranges[i];
-    AddToCorrectConstrainedList(&constr_lrs, &unconstr_lrs, lr);
+    if(Params::Algorithm::allocate_locals || !lr->is_local)
+      AddToCorrectConstrainedList(&constr_lrs, &unconstr_lrs, lr);
+    else
+      lr->MarkNonCandidateAndDelete();
   }
 
 
@@ -470,7 +473,6 @@ void BuildInterferences(Arena arena)
     SparseSet_ForAll(v, lrset)
     {
       lr = live_ranges[v];
-      (*(lr->blockmap))[id(blk)] = lr;
 
       //update the interference lists
       SparseSet_ForAll(i, lrset)
@@ -555,11 +557,22 @@ AddLiveUnitOnce(LRID lrid, Block* b, SparseSet lrset, Variable orig_name)
   LiveUnit* new_unit = NULL;
   if(!SparseSet_Member(lrset, lrid))
   {
+    bool do_add = true;
     LiveRange* lr = Chow::live_ranges[lrid];
-    SparseSet_Insert(lrset, lrid);
-    Stats::BBStats bbstat = Stats::GetStatsForBlock(b, lr->id);
-    new_unit = lr->AddLiveUnitForBlock(b, orig_name, bbstat);
-    Chow::live_units[id(b)].push_back(new_unit);
+    if(Chow::local_names[orig_name])
+    {
+      lr->is_local = true;
+      do_add = Params::Algorithm::allocate_locals;
+    }
+    if(do_add)
+    {
+      SparseSet_Insert(lrset, lrid);
+      Stats::BBStats bbstat = Stats::GetStatsForBlock(b, lr->id);
+      new_unit = lr->AddLiveUnitForBlock(b, orig_name, bbstat);
+      Chow::live_units[id(b)].push_back(new_unit);
+    }
+    //block map must be initialized regardless of local or not
+    (*(lr->blockmap))[id(b)] = lr; 
   }
 
   return new_unit;
