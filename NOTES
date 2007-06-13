@@ -1779,3 +1779,39 @@ should be the same.
 priority may not be worth it. should you reconsider?
 3) move EnforceParam() to before dumping params so that params are
 real
+
+========================================================
+Local allocaiton observations
+Wed Jun 13 15:53:39 CDT 2007
+========================================================
+Some interesting outcomes from having implemented local allocation
+
+1) codes are very specific about how many local registers are needed.
+this means that having a single set of paramerters for a program are
+not going to work. You will need to be able to give each function its
+own set of paramerters to get the best performance.
+
+2) (seval.i) trimming blocks combined with blindly allocating
+unconstrained live ranges can hurt performance. this can happen when a
+live range is allocated for a block where there is only a single def.
+this causes a store at the end of the block so there is no total
+savings. if it was unallocated then the local allocation could handle
+it properly. see for example LR 48 in chow -r16 -b5 -g -t 1.i.
+
+
+3) (seval.i) Global allocation of locals is not always able to make
+the correct decisions. it may spill some global name because too many
+local names are active in a block. if instead we only allocate global
+regiseters and then use separate registers for locals we may in fact
+be able to allocate without spilling. see for example LR 8 in
+
+chow -r16 -b5 -g  1.i  (no alloc)
+chow -r16 -b5 -l0,6 1.i 
+
+4) if we strictly partition the registers into global and local then
+it is likely that there will be some global registers that go unused
+in a block. we should look for these unused registers and take
+advantage of them. also, there may be some global registers which die
+somewhere in the block. we should take advantage of those registers as
+well.
+
