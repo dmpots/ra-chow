@@ -514,12 +514,13 @@ void DumpParamTable(FILE* outfile)
         fprintf(outfile, "%s", *((bool*)param.value) ? "true":"false" );
         break;
       case INT_ARRAY_PARAM: /* here idefault is the array size */
-        fprintf(outfile, "\n");
+        fprintf(outfile, "[");
         for(int i = 0; i < param.idefault; i++)
         {
-          fprintf(outfile, "  - %d", ((int*)param.value)[i]);
-          if(i != (param.idefault -1)) fprintf(outfile, "\n");
+          fprintf(outfile, "%d", ((int*)param.value)[i]);
+          if(i != (param.idefault -1)) fprintf(outfile, ", ");
         }
+        fprintf(outfile, "]");
         break;
       default:
         error("unknown type");
