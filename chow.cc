@@ -109,7 +109,7 @@ void Chow::Run()
 namespace {
 /*
  *=======================
- * RunChow()
+ * AllocateRegisters()
  *=======================
  *
  * Does the actual register allocation

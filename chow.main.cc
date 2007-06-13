@@ -544,34 +544,9 @@ void EnforceParameterConsistency()
   if(Params::Algorithm::enhanced_code_motion) 
       Params::Algorithm::move_loads_and_stores = true;
 
-
-  //have to reserve five in this case because frame pointer takes one
-  //and doubles must be aligned and we need at least two places for
-  //temporary doubles and one extra is always added for frame pointer
-  if(!Params::Machine::enable_register_classes &&
-      Params::Machine::double_takes_two_regs &&
-      Params::Algorithm::num_reserved_registers[RegisterClass::INT] < 5)
-  {
-    Params::Algorithm::num_reserved_registers[RegisterClass::INT] = 5;
-  }
-
   if(!Params::Machine::enable_register_classes)
   {
     Params::Machine::num_register_classes = 1;
-  }
-
-  for(int i = 0; i < Params::Machine::num_register_classes; i++)
-  {
-    if(Params::Algorithm::num_reserved_registers[i] >
-        Params::Machine::num_registers)
-    {
-      fprintf(stderr,
-        "ERROR: num reserved regs > num machine regs (%d > %d)\n",
-        Params::Algorithm::num_reserved_registers[i],
-        Params::Machine::num_registers
-      );
-      abort(); 
-    }
   }
 }
 
@@ -601,6 +576,17 @@ void CheckRegisterLimitFeasibility(Arena arena)
   //need to know how wide each register type is
   Mapping::CreateSSANameTypeMap(arena);
   RegisterClass::InitRegWidths();
+
+  //check to see if we have to increase the minimum reserved
+  //have to reserve five in this case because frame pointer takes one
+  //and doubles must be aligned and we need at least two places for
+  //temporary doubles and one extra is always added for frame pointer
+  if(!Params::Machine::enable_register_classes &&
+      Params::Machine::double_takes_two_regs &&
+      Params::Algorithm::num_reserved_registers[RegisterClass::INT] < 5)
+  {
+    Params::Algorithm::num_reserved_registers[RegisterClass::INT] = 5;
+  }
 
   //compute absolute minimum. there must be at least one register to
   //allocate otherwise the vectorsets freak out on universe size of 0
@@ -658,6 +644,21 @@ You asked me to allocate with %d registers, but I found an operation\n\
 that needs %d registers. Sorry, but this is a research compiler not \n\
 a magic wand.\n", Params::Machine::num_registers, cRegMax);
           exit(EXIT_FAILURE);
+    }
+  }
+
+  //make sure we take into account the number of reserved registers
+  for(int i = 0; i < Params::Machine::num_register_classes; i++)
+  {
+    if(Params::Algorithm::num_reserved_registers[i] >
+        Params::Machine::num_registers)
+    {
+      fprintf(stderr,
+        "ERROR: num reserved regs > num machine regs (%d > %d)\n",
+        Params::Algorithm::num_reserved_registers[i],
+        Params::Machine::num_registers
+      );
+      abort(); 
     }
   }
 }
