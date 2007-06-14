@@ -165,8 +165,17 @@ void AllocateRegisters()
     assert(lr->is_candidate);
 
     debug("choose color for unconstrained LR: %d", lr->id);
-    lr->AssignColor();
-    debug("LR: %d is given color:%d", lr->id, lr->color);
+    //if(lr->GetPriority() > 0)
+    //{
+      lr->AssignColor();
+      debug("LR: %d is given color:%d", lr->id, lr->color);
+    //}
+    //else
+    //{
+    //  debug("LR: %d is has bad priority: %.3f, no color given",
+    //        lr->id, lr->priority);
+    //  //do i need to MarkNonCandidate and delete here?
+    //}
   }
 
   //record some statistics about the allocation

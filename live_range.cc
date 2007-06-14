@@ -688,8 +688,20 @@ Priority LiveRange::ComputePriority()
     pr += LiveUnit_ComputePriority(this, *luIT);
     clu++;
   }
-  //TODO: set priority in this function
   priority = pr/clu;
+  return priority;
+}
+
+/*
+ *=======================================
+ * LiveRange::GetPriority()
+ *=======================================
+ * copmutes priority if it is undefined, otherwise returns previously
+ * computed priority.
+ ***/
+Priority LiveRange::GetPriority()
+{
+  if(priority == UNDEFINED_PRIORITY) ComputePriority();
   return priority;
 }
 

@@ -84,6 +84,7 @@ struct LiveRange
   void RemoveLiveUnit(LiveUnit*);
   unsigned int RegWidth() const;
   bool IsZeroOccurrence() const;
+  Priority GetPriority();
 
   /* iterators */
   /* for live units in this live range */
