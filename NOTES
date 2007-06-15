@@ -1815,3 +1815,69 @@ advantage of them. also, there may be some global registers which die
 somewhere in the block. we should take advantage of those registers as
 well.
 
+
+
+========================================================
+Detailed look at codes where chow is worse
+Thu Jun 14 22:04:11 CDT 2007
+========================================================
+A look at some cases where chow is getting worse performance
+using command:
+chow -r32 -b5 -et
+
++ ilsw.i (3 spill insts)
+chow -r32 -b5 -et -l2
+gets rid of all spill insts
+
++ si.i (7 spill insts)
+chow -r32 -b5 -et -l2 
+gets rid of all but one spill for uninitialized local value
+
++ urand.i (0 spill insts)
+here chaitin wins by rematerializaiton. even though no spilling is
+necessary, rematerialization moves a loadI down to a different part of
+the graph. this causes the block that held the loadI to be empty which
+clean then took away. i am left with an extra JMP for that block and
+thus incur an extra penalty for each call of urand.
+
++ zeroin.i (34 spill insts)
+chow -r32 -b4 -etz -l0,4 1.i
+this took some searching to find this string and it is interesting
+that remat actually helps in this situation. ra has 10 spills here.
+dynamic count gets us withing 3%
+how not assigning unconstrained live ranges that have negative
+priority can hurt you:
+1) miss an opportuninty for ld/st --> cp 
+2) miss opportunity for remat so that a store of the live range now
+reaches a load of the live range where as the remat uses ldI so the
+store reaches nothing and is removed by dead (not sure exactly what
+this means, but it shows up in zeroin.i. it should go away if we
+improve remat).
+
+
+========================================================
+Things you need to do to improve performance
+Thu Jun 14 22:19:02 CDT 2007
+========================================================
+1) make use of unused global registers.
+
+2) beef up rematerialization so that it does not kill you all the
+time. i think the way to do this is to not split a remat live range
+and give a remat live range lower priority so that if needed, it will
+be more likely to be spilled. also need to take another look at how we
+can improve how we insert spills for remat live ranges. we should not
+insert stores in any remat live range. why not just say that the point
+where we split the live range actually has a def so that it will
+insert the needed stores for downstream live ranges. then we can put a
+remat copy on the edge from the remat to non-remat and either do the
+copy or use a loadI to load the value into the reg or insert a loadI
+at the top of the block.
+
+3) I do see a case where you are getting bit by having a live range
+allocated in a block below you when it is in  a temp reg and you
+insert a store and they insert a load instead of doing a copy. this
+means you should probably insert that store onto the edge or insert a
+copy instead.
+
+
+
