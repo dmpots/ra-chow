@@ -1879,5 +1879,59 @@ insert a store and they insert a load instead of doing a copy. this
 means you should probably insert that store onto the edge or insert a
 copy instead.
 
+=======================================================
+Some observations from exhaustive search
+Mon Jun 25 13:37:05 CDT 2007
+========================================================
++ fmin
+  1269 vs. 1225 (chow vs. ra)
+  a number of configurations gave 1269, but that was the best that
+  could be seen in the top 1000 results.
 
++ urand
+  urand.i: get to 767 dynamic count which is no spilling, but as
+  mentioned above ra wins by rematerialization code motion.
+
++ rkf45
+was able to get rkf45 to perform better, but still not matchin ra.
+  - fehl.i: got down to zero spills and same dynamic count(179,256) as
+    ra with the params  -r32 -b10 -c3 -s1 -l 4,10 -e (among others)
+  - rkfs.i: got down to 25 spills, though a param with 27 spills
+    performed better in dynamic count. the lowest dynamic i saw
+    (by just testing some low static spill params) was 80803 which is
+    still higher than ra at (80483)
+  - rkf45.i: same count as ra before starting
+
++ zeroin  
+  944 vs. 916 (chow vs. ra)
+  - zeroin.i: get to 944 dynamic count (although not with the top
+    results in the zeroin results file which does not mean much).
+    tried the top 1000 results. this is still more than the dynamic
+    count for ra which is 916.
++ svd
+  5427 vs. 5414 (chow vs. ra)
+  several strings in the top 1000 (closer to the end starting around
+  line 432). minimum 11 static spills.
+
++ fpppp
+  - efill:
+    2,778,807 vs. 2,753,388 (chow vs. ra)
+
++ doduc
+  - colbur:
+    349,011 vs. 343,239 (chow vs. ra)
+    string is in the top 60 (#47)
+  - repvid:
+    194,860 vs. 189,298 (chow vs. ra)
+  - ddeflu
+    625,133 vs. 586,840 (chow vs. ra)
+
+-- next runs --
+file: ddeflu(3s), debflu(3s)
+
+Q: why does fmin.i have 28 spill instructions when no opts are applied an
+46 when standard opts are applied? what does the dynamic count
+look like i wonder?
+A: the dynamic count for no ops is much worse. not sure how it
+compares to chaitin though.
 
