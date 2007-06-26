@@ -1,0 +1,6 @@
+#!/bin/env bash
+
+echo require \'tests/paths\'
+cat $* | awk -F"|" '{print $2}' | sed 's/^[ ]*[0123456789]*//' | sed "s/^/test SPEC+'\/doduc', :args => '/" | sed "s/$/'/" 
+
+
