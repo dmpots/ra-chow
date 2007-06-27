@@ -15,87 +15,97 @@
 \title{Best of Chow}
 \begin{document}
 
-\begin{tabular}{|l|r|r|r|r|r|r|}
+\begin{tabular}{|l|r|r|r|r|r|r|r|}
 \hline
-\multicolumn{7}{|c|}{32 registers}\\
+\multicolumn{8}{|c|}{16 registers}\\
 \hline
-&\multicolumn{3}{c}{static}&\multicolumn{3}{|c|}{dynamic}\\
+&\multicolumn{3}{c}{static}&\multicolumn{3}{|c|}{dynamic}&old \%\\
 \hline
-file&chow&ra&\%&chow&ra&\%\\
+file&chow&ra&\%&chow&ra&\%&\%\\
 \hline
+
+
+
 %
 % FMIN
 %
-\multicolumn{7}{|l|}{fmin}\\
+\multicolumn{8}{|l|}{fmin}\\
 \hline
-\texttt{fmin.i}&&92&&1,471&1,440&-2.15 \\
+\texttt{fmin.i}&99&92&-7.61&1471&1440&-2.15&-5.69 \\
 \hline
 %
 % RKF45
 %
-\multicolumn{7}{|l|}{rkf45}\\
+\multicolumn{8}{|l|}{rkf45}\\
 \hline
-\texttt{fehl.i}&&18&&&191,928& \\
-\texttt{rkfs.i}&&72&&&83,286& \\
-\texttt{rkf45.i}&&0&&&975& \\
+\texttt{fehl.i}&24&18&-33.33&190,080&191,928&0.96&-17.06 \\
+\hline
+\texttt{rkfs.i}&81&72&-12.50&83,104&83,286&0.22&-6.43 \\
+\hline
+\texttt{rkf45.i}&0&0&nan&975&975&0.00&-20.51 \\
+\hline
 %
 % SEVAL
 %
+\multicolumn{8}{|l|}{seval}\\
 \hline
-\multicolumn{7}{|l|}{seval}\\
+\texttt{spline.i}&12&12&0.00&&1,179&-&-11.45 \\
 \hline
-\texttt{spline.i}&&12&&&1,179& \\
-\texttt{seval.i}&&0&&&105& \\
+\texttt{seval.i}&0&0&nan&&105&-&-5.71 \\
+\hline
 %
 % SOLVE
 %
+\multicolumn{8}{|l|}{solve}\\
 \hline
-\multicolumn{7}{|l|}{solve}\\
+\texttt{decomp.i}&25&27&7.41&794&811&2.10&-10.60 \\
 \hline
-\texttt{decomp.i}&&27&&&811& \\
-\texttt{solve.i}&&0&&&412& \\
+\texttt{solve.i}&0&0&nan&412&412&0.00&-7.28 \\
 \hline
 %
 % SVD
 %
-\multicolumn{7}{|l|}{svd}\\
+\multicolumn{8}{|l|}{svd}\\
 \hline
-\texttt{svd.i}&&206&&&5,981& \\
+\texttt{svd.i}&&206&-&&5,981&-&-12.36 \\
 \hline
 %
 % URAND
 %
-\multicolumn{7}{|l|}{urand}\\
+\multicolumn{8}{|l|}{urand}\\
 \hline
-\texttt{urand.i}&&4&&&808& \\
+\texttt{urand.i}&10&4&-150.00&867&808&-7.30&-14.73 \\
 \hline
 %
 % ZEROIN
 %
-\multicolumn{7}{|l|}{zeroin}\\
+\multicolumn{8}{|l|}{zeroin}\\
 \hline
-\texttt{zeroin.i}&&45&&&1,147& \\
+\texttt{zeroin.i}&56&45&-24.44&1,117&1,147&2.62&-13.95 \\
 \hline
 %
 % DODUC
 %
-\multicolumn{7}{|l|}{doduc}\\
+\multicolumn{8}{|l|}{doduc}\\
 \hline
-\texttt{bilan.i}&&63&&&258,361& \\
-\texttt{colbur.i}&&73&&&411,710& \\
-\texttt{ddeflu.i}&&476&&&692,169& \\
-\texttt{drigl.i}&&58&&&143,284& \\
-\texttt{repvid.i}&&108&&&234,600& \\
+\texttt{bilan.i}&&63&-&&258,361&-&-10.07 \\
+\hline
+\texttt{colbur.i}&&73&-&&411,710&-&-6.10 \\
+\hline
+\texttt{ddeflu.i}&&476&-&&692,169&-&-14.16 \\
+\hline
+\texttt{drigl.i}&&58&-&&143,284&-&-5.33 \\
+\hline
+\texttt{repvid.i}&&108&-&&234,600&-&-10.07 \\
 \hline
 %
 % FPPPP
 %
-\multicolumn{7}{|l|}{fpppp}\\
+\multicolumn{8}{|l|}{fpppp}\\
 \hline
-\texttt{efill.i}&&208&&&3,339,217& \\
+\texttt{efill.i}&&208&-&&3,339,217&-&-2.65 \\
 \hline
 
-\hline
 \end{tabular}
 
 \end{document} 
