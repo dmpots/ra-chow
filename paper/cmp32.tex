@@ -15,84 +15,84 @@
 \title{Best of Chow}
 \begin{document}
 
-\begin{tabular}{|l|r|r|r|r|r|r|}
+\begin{tabular}{|l|r|r|r|r|r|r|r|}
 \hline
-\multicolumn{7}{|c|}{32 registers}\\
+\multicolumn{8}{|c|}{32 registers}\\
 \hline
-&\multicolumn{3}{c}{static}&\multicolumn{3}{|c|}{dynamic}\\
+&\multicolumn{3}{c}{static(spills)}&\multicolumn{3}{|c|}{dynamic(ops)}&old \%\\
 \hline
-file&chow&ra&\%&chow&ra&\%\\
+file&chow&ra&\%&chow&ra&\%&\%\\
 \hline
 %
 % FMIN
 %
-\multicolumn{7}{|l|}{fmin}\\
+\multicolumn{8}{|l|}{fmin}\\
 \hline
-\texttt{fmin.i}&46&27&&&1,225& \\
+\texttt{fmin.i}&46&27&70.4&1,269&1,225&3.6 \\
 \hline
 %
 % RKF45
 %
-\multicolumn{7}{|l|}{rkf45}\\
+\multicolumn{8}{|l|}{rkf45}\\
 \hline
-\texttt{fehl.i}&0&0&&&179,256& \\
-\texttt{rkfs.i}&25&18&&&80,493& \\
-\texttt{rkf45.i}&0&0&&&975& \\
+\texttt{fehl.i}&0&0&0.0&179,256&179,256&0.0 \\
+\texttt{rkfs.i}&25&18&38.9&80,803&80,493&0.4 \\
+\texttt{rkf45.i}&0&0&0.0&975&975&0.0\\
 %
 % SEVAL
 %
 \hline
-\multicolumn{7}{|l|}{seval}\\
+\multicolumn{8}{|l|}{seval}\\
 \hline
-\texttt{spline.i}&0&0&&&1,166& \\
-\texttt{seval.i}&0&0&&&105& \\
+\texttt{spline.i}&&&-&&1,166&-\\
+\texttt{seval.i}&&&-&&105&-\\
 %
 % SOLVE
 %
 \hline
-\multicolumn{7}{|l|}{solve}\\
+\multicolumn{8}{|l|}{solve}\\
 \hline
-\texttt{decomp.i}&&0&&&770& \\
-\texttt{solve.i}&&0&&&412& \\
+\texttt{decomp.i}&&&-&&770&-\\
+\texttt{solve.i}&&&-&&412&-\\
 \hline
 %
 % SVD
 %
-\multicolumn{7}{|l|}{svd}\\
+\multicolumn{8}{|l|}{svd}\\
 \hline
-\texttt{svd.i}&11&2&&&5,414& \\
+\texttt{svd.i}&11&2&450.0&5,427&5,414&0.2 \\
 \hline
 %
 % URAND
 %
-\multicolumn{7}{|l|}{urand}\\
+\multicolumn{8}{|l|}{urand}\\
 \hline
-\texttt{urand.i}&0&0&0&767&758&-1.18\\
+\texttt{urand.i}&0&0&0&767&758&1.2\\
 \hline
 %
 % ZEROIN
 %
-\multicolumn{7}{|l|}{zeroin}\\
+\multicolumn{8}{|l|}{zeroin}\\
 \hline
-\texttt{zeroin.i}&12&10&&&916& \\
+\texttt{zeroin.i}&12&10&20.0&944&916&3.1 \\
 \hline
 %
 % DODUC
 %
-\multicolumn{7}{|l|}{doduc}\\
+\multicolumn{8}{|l|}{doduc}\\
 \hline
-\texttt{bilan.i}&26&4&&&222,061& \\
-\texttt{colbur.i}&37&26&&&343,239& \\
-\texttt{ddeflu.i}&307&179&&&586,840& \\
-\texttt{drigl.i}&6&0&&&122,982& \\
-\texttt{repvid.i}&47&16&&&189,298& \\
+\texttt{bilan.i}&26&4&550.0&226,956&222,061&2.2\\
+\texttt{colbur.i}&37&26&43.3&349,011&343,239&1.7 \\
+\texttt{ddeflu.i}&307&179&71.5&625,133&586,840&6.5 \\
+\texttt{drigl.i}&6&0&$\infty$&124,740&122,982&1.4 \\
+\texttt{repvid.i}&47&16&194.0&194,860&189,298&2.9 \\
 \hline
 %
 % FPPPP
 %
-\multicolumn{7}{|l|}{fpppp}\\
+\multicolumn{8}{|l|}{fpppp}\\
 \hline
-\texttt{efill.i}&148&126&&&2,753,388& \\
+\texttt{efill.i}&148&126&17.5&2,778,807&2,753,388&0.9 \\
 \hline
 
 \hline
