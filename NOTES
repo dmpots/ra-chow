@@ -1935,3 +1935,19 @@ look like i wonder?
 A: the dynamic count for no ops is much worse. not sure how it
 compares to chaitin though.
 
+
+=======================================================
+Why I think chow should not do better with less registers
+Mon Jul  2 20:47:30 CDT 2007
+========================================================
+It makes no sense that chow would perform better when there are less
+registers. He must reserve 4 regs for local allocation and code
+generation. He says himself that it might lead to inefficency, but it
+is only a factor if the number of registers available is small.
+
+
+I think a fair statement about chow is that it achieves good
+allocation, but not the best. If my implementation was better we could
+see how fast it is compared to others.
+
+
