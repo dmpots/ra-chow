@@ -1951,3 +1951,86 @@ allocation, but not the best. If my implementation was better we could
 see how fast it is compared to others.
 
 
+=======================================================
+Optimistic chow
+Tue Jul  3 14:16:01 CDT 2007
+========================================================
+I talked today with Tim about making chow optimisitic in its coloring.
+The basic idea is that instead of constantly updating the constrained
+lists we just optimistically remove them from the graph and if a split
+would put them back on then don't do it, but just leave them
+unconstrained. An example of where not pulling unconstrained nodes out
+of the graph can hurt you is:
+
+GRAPH:      ORDER:      COLOR:
+A            -           
+|
+B            2           R
+|
+C            3           B
+|
+D            -
+|
+E            1           R
+|
+F            -
+
+Here we see that D can not be given a color since C,E are both
+assigned different colors. However we could color the graph just by
+pulling out the nodes and pushing them onto a stack then coloring the
+stack from top to bottom.
+
+=======================================================
+Implementing optimistic chow
+Tue Jul  3 16:18:14 CDT 2007
+=======================================================
+Need to have some way to simplify the interference graph so that the
+unconstrained live ranges cascade and continue to remove nodes that
+become unconstrained by removing some of their neighbors. Then during
+execution we optimistically keep all live ranges on the unconstrained
+list and hope that splitting does not make it so they can not be
+colored. This means that the constrained lists should not be updated
+at all except to move constrained nodes over to the unconstrained
+stack.
+
+We still have to keep track of which nodes interfere and which colors
+are forbidden so that we can correctly assign colors to unconstrained
+nodes.  Now to assign colors to unconstrained we have to go in stack
+order and at each point check to see if a color is available and if so
+assigne it, otherwise mark it for spilling.
+
+In order to find out which nodes can be simplified it would be best to
+keep a count of simplified neighbors and how many colors they make
+available to you. So basically just the simplified color count would
+be sufficent. 
+
+live_range.cc
++ add fileds to live_range class:
+  simplified_neighbor_count
+  simplified_width
+
+chow.cc
++ create variable color_stack to be used for coloring on simplified
+  graphs
++ when separating out the initial constr and unconstr live ranges you
+  should check each live range to see if it is constrained. if not
+  then put it on the color stack and update any neighbors to have
+  another simplified neighbor. need to think about how to simplify the
+  graph as it may need to be done in the correct order, that is to
+  process the simplified nodes as they come up and then process thier
+  neighbors that become simple as a result of removing them from the
+  graph.
++ update functions so that we are no longer monkeying with constrained
+  lists. any deletes from the constr_lrs should be preserved and 
+  additions to unconstr_lrs should be changed to add to the coloring
+  stack; at that point also you should try to add nodes that become
+  unconstrained to the coloring stack as you go. deletes from
+  unconstr_lrs should not be implemented.
+    UpdateConstrainedLists
+    UpdateConstrainedListsAfterDelete
+    AddToCorrectConstrainedList
++ update the final coloring for unconstrained live ranges so that we
+  first check to see if there is a color available and assign it if
+  possible, otherwise mark the live range as spilled.
+
+
