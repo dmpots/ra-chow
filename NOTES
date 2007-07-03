@@ -1936,6 +1936,19 @@ A: the dynamic count for no ops is much worse. not sure how it
 compares to chaitin though.
 
 
+========================================================
+Twords better local allocation
+Mon Jul  2 16:29:35 CDT 2007
+========================================================
++ need to be able to have a free list of registers that are available
+at any time. perhaps the thing to do is just to mark registers used in
+both lists. currently only the temp reg list is maintained to not
+which regs are free and which are used. one strategy would be to also
+maintain the assignable list so that it knows which regs are free and
+used. this would mean that you would need to mark the registers that
+are used on entry to the block? 
+
+
 =======================================================
 Why I think chow should not do better with less registers
 Mon Jul  2 20:47:30 CDT 2007
