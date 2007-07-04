@@ -140,6 +140,10 @@ LiveRange::LiveRange(RegisterClass::RC reg_class,
   //fields for rematerialization
   rematerializable = false;
   remat_op = false;
+
+  //fields for optimistic coloring
+  simplified_neighbor_count = 0;
+  simplified_width = 0;
 }
 
 /*
@@ -188,6 +192,9 @@ void LiveRange::AddInterference(LiveRange* lr2)
 bool LiveRange::IsConstrained() const
 {
   bool constrained;
+/*
+//  comment this out for now. its probably really slow to always compute
+//  constrained using the second method, but oh well its slow anyway
   if (((int)fear_list->size()) >= 
       (RegisterClass::NumMachineReg(rc)/RegisterClass::RegWidth(type)))
   {
@@ -195,6 +202,7 @@ bool LiveRange::IsConstrained() const
   }
   else
   {
+*/
     int total_width = 0;
     for(LRSet::iterator it = fear_list->begin(); 
         it != fear_list->end(); 
@@ -202,9 +210,11 @@ bool LiveRange::IsConstrained() const
     {
       total_width += RegisterClass::RegWidth((*it)->type);
     }
-    constrained = total_width >= RegisterClass::NumMachineReg(rc);
-
+    constrained = 
+      (total_width - simplified_width) >= RegisterClass::NumMachineReg(rc);
+/*
   }
+*/
   return constrained;
 }
 

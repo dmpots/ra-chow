@@ -123,6 +123,7 @@ using Params::Algorithm::when_to_split;
 using Params::Algorithm::how_to_split;
 using Params::Algorithm::num_reserved_registers;
 using Params::Algorithm::allocate_locals;
+using Params::Algorithm::optimistic;
 using Params::Program::force_minimum_register_count;
 using Params::Program::dump_params_only;
 static Param_Details param_table[] = 
@@ -159,10 +160,12 @@ static Param_Details param_table[] =
   {'l', process_locals,num_register_classes,F,B,num_reserved_registers,
          INT_ARRAY_PARAM, NO_HELP},
   {'g', process_, I,F,allocate_locals, &allocate_locals,
+         BOOL_PARAM, NO_HELP},
+  {'o', process_, I,F,optimistic, &optimistic,
          BOOL_PARAM, NO_HELP}
 };
 const unsigned int NPARAMS = (sizeof(param_table) / sizeof(param_table[0]));
-const char* PARAMETER_STRING  = ":b:r:d:c:i:w:s:l:mpefyztg";
+const char* PARAMETER_STRING  = ":b:r:d:c:i:w:s:l:mpefyztgo";
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
 /*

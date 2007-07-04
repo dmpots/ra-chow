@@ -53,6 +53,8 @@ struct LiveRange
   Operation* remat_op;
   int num_colored_neighbors;
   bool is_local;
+  int simplified_neighbor_count;
+  int simplified_width;
 
   /* maps from block id --> live range, for keeping track of splits */
   std::map<unsigned int, LiveRange*> *blockmap; 

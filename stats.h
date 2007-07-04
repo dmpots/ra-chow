@@ -36,6 +36,8 @@ struct ChowStats
   Unsigned_Int cChowLoads;
   Unsigned_Int cInsertedCopies;
   Unsigned_Int cThwartedCopies;
+  Unsigned_Int cSpilledOptimist;
+  Unsigned_Int cFoundOptimist;
 };
 
 class Timer

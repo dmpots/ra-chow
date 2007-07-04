@@ -113,6 +113,8 @@ void DumpAllocationStats()
   fprintf(stderr, " Number of Splits: %d\n", chowstats.cSplits);
   fprintf(stderr, " Inserted Copies : %d\n", chowstats.cInsertedCopies);
   fprintf(stderr, " Thwarted Copies : %d\n", chowstats.cThwartedCopies);
+  fprintf(stderr, " Found   Optimist: %d\n", chowstats.cFoundOptimist);
+  fprintf(stderr, " Spilled Optimist: %d\n", chowstats.cSpilledOptimist);
 
   fprintf(stderr, "\n");
   fprintf(stderr, "----------- allocation times -------------\n");

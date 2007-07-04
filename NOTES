@@ -2018,14 +2018,14 @@ available to you. So basically just the simplified color count would
 be sufficent. 
 
 live_range.cc
-+ add fileds to live_range class:
+X add fileds to live_range class:
   simplified_neighbor_count
   simplified_width
 
 chow.cc
-+ create variable color_stack to be used for coloring on simplified
+X create variable color_stack to be used for coloring on simplified
   graphs
-+ when separating out the initial constr and unconstr live ranges you
+X when separating out the initial constr and unconstr live ranges you
   should check each live range to see if it is constrained. if not
   then put it on the color stack and update any neighbors to have
   another simplified neighbor. need to think about how to simplify the
@@ -2042,7 +2042,7 @@ chow.cc
     UpdateConstrainedLists
     UpdateConstrainedListsAfterDelete
     AddToCorrectConstrainedList
-+ update the final coloring for unconstrained live ranges so that we
+X update the final coloring for unconstrained live ranges so that we
   first check to see if there is a color available and assign it if
   possible, otherwise mark the live range as spilled.
 

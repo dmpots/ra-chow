@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <utility>
 #include <map>
+#include <stack>
+#include <queue>
 
 #include "chow.h"
 #include "chow_extensions.h"
@@ -53,6 +55,8 @@ namespace {
   inline void AddToCorrectConstrainedList(LRSet*,LRSet*,LiveRange*);
   void CountLocals();
   void DumpLocals();
+  void SeparateConstrainedLiveRanges(LRSet*, LRSet*);
+  void ColorUnconstrained(LRSet* unconstr_lrs);
 }
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
@@ -62,6 +66,7 @@ namespace Chow {
   LRVec live_ranges;
   std::vector<std::vector<LiveUnit*> > live_units;
   std::map<Variable,bool> local_names;
+  std::stack<LiveRange*> color_stack;
 }
 
 void Chow::Run()
@@ -129,16 +134,8 @@ void AllocateRegisters()
   live_ranges[Spill::frame.lrid]->MarkNonCandidateAndDelete();
 
 
-  //separate unconstrained live ranges, skipping lrid 0 (frame lr)
-  for(LRVec::size_type i = 1; i < live_ranges.size(); i++)
-  {
-    lr = live_ranges[i];
-    if(Params::Algorithm::allocate_locals || !lr->is_local)
-      AddToCorrectConstrainedList(&constr_lrs, &unconstr_lrs, lr);
-    else
-      lr->MarkNonCandidateAndDelete();
-  }
-
+  //separate unconstrained live ranges
+  SeparateConstrainedLiveRanges(&constr_lrs, &unconstr_lrs);
 
   //assign registers to constrained live ranges
   lr = NULL;
@@ -158,25 +155,7 @@ void AllocateRegisters()
 
   //assign registers to unconstrained live ranges
   debug("assigning unconstrained live ranges colors");
-  for(LRSet::iterator i = 
-      unconstr_lrs.begin(); i != unconstr_lrs.end(); i++)
-  {
-    lr = *i;
-    assert(lr->is_candidate);
-
-    debug("choose color for unconstrained LR: %d", lr->id);
-    //if(lr->GetPriority() > 0)
-    //{
-      lr->AssignColor();
-      debug("LR: %d is given color:%d", lr->id, lr->color);
-    //}
-    //else
-    //{
-    //  debug("LR: %d is has bad priority: %.3f, no color given",
-    //        lr->id, lr->priority);
-    //  //do i need to MarkNonCandidate and delete here?
-    //}
-  }
+  ColorUnconstrained(&unconstr_lrs);
 
   //record some statistics about the allocation
   Stats::chowstats.clrFinal = live_ranges.size();
@@ -1066,6 +1045,149 @@ void CountLocals()
   exit(EXIT_SUCCESS);
 }
 
+
+/****************************************************************
+ *                     NEW STUFF
+ ****************************************************************/
+void SimplifyGraph(LRSet* constr_lrs);
+void ColorFromStack();
+void SeparateConstrainedLiveRanges(LRSet* constr_lrs, LRSet* unconstr_lrs)
+{
+  using Chow::live_ranges;
+
+  if(Params::Algorithm::optimistic)
+  {
+    SimplifyGraph(constr_lrs);
+  }
+  else
+  {
+    // skipping lrid 0 (frame lr)
+    for(LRVec::size_type i = 1; i < live_ranges.size(); i++)
+    {
+      LiveRange* lr = live_ranges[i];
+      if(Params::Algorithm::allocate_locals || !lr->is_local)
+        AddToCorrectConstrainedList(constr_lrs, unconstr_lrs, lr);
+      else
+        lr->MarkNonCandidateAndDelete();
+    }
+  }
+}
+
+void ColorUnconstrained(LRSet* unconstr_lrs)
+{
+  if(Params::Algorithm::optimistic)
+  {
+    ColorFromStack();
+  }
+  else
+  {
+    for(LRSet::iterator i = 
+        unconstr_lrs->begin(); i != unconstr_lrs->end(); i++)
+    {
+      LiveRange* lr = *i;
+      assert(lr->is_candidate);
+
+      debug("choose color for unconstrained LR: %d", lr->id);
+      //if(lr->GetPriority() > 0)
+      //{
+        lr->AssignColor();
+        debug("LR: %d is given color:%d", lr->id, lr->color);
+      //}
+      //else
+      //{
+      //  debug("LR: %d is has bad priority: %.3f, no color given",
+      //        lr->id, lr->priority);
+      //  //do i need to MarkNonCandidate and delete here?
+      //}
+    }
+  }
+}
+
+void SimplifyGraph(LRSet* constr_lrs)
+{
+  using Chow::live_ranges;
+  using Chow::color_stack;
+  typedef LRSet::iterator LRSI;
+
+  LRSet pulled;
+  std::queue<LiveRange*> worklist;
+
+  //pull out initial unconstrained live ranges
+  for(LRVec::size_type i = 1; i < live_ranges.size(); i++)
+  {
+    LiveRange* lr = live_ranges[i];
+    if(!lr->IsConstrained())
+    {
+      if(Params::Algorithm::allocate_locals || !lr->is_local)
+      {
+        debug("initial unconstrained LR: %d", lr->id);
+        pulled.insert(lr);
+        worklist.push(lr);
+      }
+      else
+      {
+        lr->MarkNonCandidateAndDelete();
+      }
+    }
+  }
+
+  //pull out live ranges that become unconstrained when others are
+  //pulled from the live range becuase their degree goes down
+  while(!worklist.empty())
+  {
+    //remove from graph and add any neighbors that can now be removed
+    LiveRange* lr = worklist.front(); worklist.pop();
+    color_stack.push(lr);
+    for(LRSI it = lr->fear_list->begin(); it != lr->fear_list->end(); it++)
+    {
+      LiveRange* fear_lr = *it;
+      fear_lr->simplified_neighbor_count++;
+      fear_lr->simplified_width += RegisterClass::RegWidth(lr->type);
+
+      if(!fear_lr->IsConstrained() && 
+         (pulled.find(fear_lr) == pulled.end()))
+      {
+        debug("pulling additional unconstrained LR: %d", fear_lr->id);
+        Stats::chowstats.cFoundOptimist++;
+        pulled.insert(fear_lr);
+        worklist.push(fear_lr);
+      }
+    }
+  }
+
+  //fill in constrained list with any node not removed
+  for(LRVec::size_type i = 1; i < live_ranges.size(); i++)
+  {
+    LiveRange* lr = live_ranges[i];
+    if(lr->IsConstrained())
+    {
+      debug("CONSTR: LR: %d", lr->id);
+      constr_lrs->insert(lr);
+    }
+  }
+}
+
+void ColorFromStack()
+{
+  using Chow::color_stack;
+  while(!color_stack.empty())
+  {
+    debug("assigning color for unconstrained LR: %d", lr->id);
+    LiveRange* lr = color_stack.top(); color_stack.pop();
+    if(Coloring::NumColorsAvailable(lr, lr->forbidden) > 0)
+    {
+      lr->AssignColor();
+    }
+    else
+    {
+      //have to spill
+      debug("LR: %d could not be colored, optimist failed", lr->id);
+      lr->MarkNonCandidateAndDelete();
+      Stats::chowstats.cSpills++;
+      Stats::chowstats.cSpilledOptimist++;
+    }
+  }
+}
 }
 
 /*

@@ -28,6 +28,7 @@ namespace Params {
     extern bool trim_useless_blocks;
     extern bool  allocate_locals;
     extern bool  spill_instead_of_split;
+    extern bool  optimistic;
 
     using namespace Chow::Heuristics;
     extern WhenToSplit when_to_split;
