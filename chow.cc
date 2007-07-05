@@ -688,6 +688,7 @@ void UpdateConstrainedLists(LiveRange* newlr,
   AddToCorrectConstrainedList(constr_lrs, unconstr_lrs, newlr);
   if(!origlr->IsConstrained())
   {
+    debug("shifting LR: %d to unconstrained", origlr->id);
     constr_lrs->erase(origlr);
     unconstr_lrs->insert(origlr);
   }
@@ -1085,9 +1086,9 @@ void ColorUnconstrained(LRSet* unconstr_lrs)
         unconstr_lrs->begin(); i != unconstr_lrs->end(); i++)
     {
       LiveRange* lr = *i;
-      assert(lr->is_candidate);
 
       debug("choose color for unconstrained LR: %d", lr->id);
+      assert(lr->is_candidate);
       //if(lr->GetPriority() > 0)
       //{
         lr->AssignColor();
@@ -1172,8 +1173,8 @@ void ColorFromStack()
   using Chow::color_stack;
   while(!color_stack.empty())
   {
-    debug("assigning color for unconstrained LR: %d", lr->id);
     LiveRange* lr = color_stack.top(); color_stack.pop();
+    debug("assigning color for unconstrained LR: %d", lr->id);
     if(Coloring::NumColorsAvailable(lr, lr->forbidden) > 0)
     {
       lr->AssignColor();

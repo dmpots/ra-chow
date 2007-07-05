@@ -191,10 +191,13 @@ void LiveRange::AddInterference(LiveRange* lr2)
  ***/
 bool LiveRange::IsConstrained() const
 {
+  using RegisterClass::NumMachineReg;
+  using RegisterClass::RegWidth;
   bool constrained;
 /*
 //  comment this out for now. its probably really slow to always compute
 //  constrained using the second method, but oh well its slow anyway
+//  and it is now the old buggy way of computing constrained.
   if (((int)fear_list->size()) >= 
       (RegisterClass::NumMachineReg(rc)/RegisterClass::RegWidth(type)))
   {
@@ -202,19 +205,35 @@ bool LiveRange::IsConstrained() const
   }
   else
   {
-*/
-    int total_width = 0;
+    int neighbor_width = 0;
     for(LRSet::iterator it = fear_list->begin(); 
         it != fear_list->end(); 
         it++)
     {
-      total_width += RegisterClass::RegWidth((*it)->type);
+      neighbor_width += RegWidth((*it)->type);
     }
-    constrained = 
-      (total_width - simplified_width) >= RegisterClass::NumMachineReg(rc);
-/*
+    int available_width =
+      (NumMachineReg(rc) - neighbor_width + simplified_width);
+    constrained = available_width < RegWidth(type); 
   }
 */
+  //weight each neighbor by its width and then divide total registers
+  //by our width to get our comparison of k(olors) VS N(eighbors)
+  //also we subtract simplified weight which is the weight of
+  //neighbors who have been removed from the graph because they are
+  //garanteed to get a color
+  int weighted_neighbor_cnt = 0;
+  for(LRSet::iterator it = fear_list->begin(); 
+      it != fear_list->end(); 
+      it++)
+  {
+    weighted_neighbor_cnt += RegWidth((*it)->type);
+  }
+  int k = NumMachineReg(rc) / RegWidth(type);
+  constrained = k <= (weighted_neighbor_cnt - simplified_width);
+
+  debug("k: %d, weighted_neighbors: %d, simplified_width: %d", 
+    k, weighted_neighbors, simplified_width);
   return constrained;
 }
 
@@ -266,9 +285,11 @@ void LiveRange::AssignColor()
   {
     LiveRange* intf_lr = *it;
     for(int i = 0; i < RegisterClass::RegWidth(type); i++)
+    {
       VectorSet_Insert(intf_lr->forbidden, color+i);
+      debug("adding color: %d to forbid list for LR: %d",color+i,intf_lr->id);
+    }
     intf_lr->num_colored_neighbors++;
-    debug("adding color: %d to forbid list for LR: %d", color, intf_lr->id)
   }
 
   //update the basic block taken set and add loads and stores

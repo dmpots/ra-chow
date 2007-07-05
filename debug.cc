@@ -109,6 +109,12 @@ void LiveRange_Dump(LiveRange* lr)
   fprintf(stderr,"candidate?: %c\n", lr->is_candidate ? 'T' : 'F');
   fprintf(stderr,"rematerializable?: %c\n", lr->rematerializable 
                                             ? 'T' : 'F');
+  fprintf(stderr,"local?: %c\n", lr->is_local ? 'T' : 'F');
+  fprintf(stderr,"num_neighbors: %d\n", lr->fear_list->size());
+  fprintf(stderr,"num_colored_neighbors: %d\n", lr->num_colored_neighbors);
+  fprintf(stderr,"simplified_neighbor_count: %d\n",
+                                  lr->simplified_neighbor_count);
+  fprintf(stderr,"simplified_width: %d\n", lr->simplified_width);
   fprintf(stderr,"forbidden colors: \n");
     VectorSet_Dump(lr->forbidden);
   fprintf(stderr, "BB LIST:\n");
