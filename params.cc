@@ -34,6 +34,7 @@ bool  trim_useless_blocks = false;
 bool  allocate_locals = false;
 bool  spill_instead_of_split = false;
 bool  optimistic = false;
+bool  allocate_all_unconstrained = false;
 
 /* default heuristics */
 ColorChoice color_choice = CHOOSE_FIRST_COLOR;

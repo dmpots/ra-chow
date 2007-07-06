@@ -1118,6 +1118,8 @@ void SeparateConstrainedLiveRanges(LRSet* constr_lrs, LRSet* unconstr_lrs)
 
 void ColorUnconstrained(LRSet* unconstr_lrs)
 {
+  using Params::Algorithm::allocate_all_unconstrained;
+
   if(Params::Algorithm::optimistic)
   {
     ColorFromStack();
@@ -1131,17 +1133,18 @@ void ColorUnconstrained(LRSet* unconstr_lrs)
 
       debug("choose color for unconstrained LR: %d", lr->id);
       assert(lr->is_candidate);
-      //if(lr->GetPriority() > 0)
-      //{
+      if(allocate_all_unconstrained || (lr->GetPriority() > 0))
+      {
         lr->AssignColor();
         debug("LR: %d is given color:%d", lr->id, lr->color);
-      //}
-      //else
-      //{
-      //  debug("LR: %d is has bad priority: %.3f, no color given",
-      //        lr->id, lr->priority);
-      //  //do i need to MarkNonCandidate and delete here?
-      //}
+      }
+      else
+      {
+        debug("LR: %d is has bad priority: %.3f, no color given",
+              lr->id, lr->priority);
+        lr->MarkNonCandidateAndDelete();
+        Stats::chowstats.cSpills++;
+      }
     }
   }
 }
@@ -1256,13 +1259,22 @@ void PullNodesFromGraph(
 void ColorFromStack()
 {
   using Chow::color_stack;
+  using Params::Algorithm::allocate_all_unconstrained;
   while(!color_stack.empty())
   {
     LiveRange* lr = color_stack.top(); color_stack.pop();
     debug("assigning color for unconstrained LR: %d", lr->id);
     if(Coloring::NumColorsAvailable(lr, lr->forbidden) > 0)
     {
-      lr->AssignColor();
+      if(allocate_all_unconstrained || (lr->GetPriority() > 0))
+      {
+        lr->AssignColor();
+      }
+      else
+      {
+        lr->MarkNonCandidateAndDelete();
+        Stats::chowstats.cSpills++;
+      }
     }
     else
     {

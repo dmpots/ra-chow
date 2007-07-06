@@ -29,6 +29,7 @@ namespace Params {
     extern bool  allocate_locals;
     extern bool  spill_instead_of_split;
     extern bool  optimistic;
+    extern bool  allocate_all_unconstrained;
 
     using namespace Chow::Heuristics;
     extern WhenToSplit when_to_split;
