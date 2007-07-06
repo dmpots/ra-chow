@@ -1,0 +1,78 @@
+#------------ ORIG  ------------#
+_main:	0	FRAME	0 => r0 r1 [ i i ]	# function prologue
+	3	iLDI	2 => r2
+	4	iLDI	3 => r3
+	13	iADD	r3 r3 => r4
+	8	JMPl	L2_loop
+L2_loop:	11	NOP
+	13	iADD	r2 r2 => r4
+	13	iADD	r3 r3 => r4
+	13	iADD	r3 r3 => r4
+	12	iCMPge	r2 r3 => r5
+	12	BR	L2_loop L3_loop r5
+L3_loop:	12	NOP
+	16	iRTN	r0 r35
+
+
+#------------ CHOW -r 0 -gf ------------#
+_main:	0	FRAME	8 => r555 r4  [ i i ] 	# function prologue
+	3	iLDI	2 => r1 
+	4	iLDI	3 => r3 
+	13	iADD	r3 r3 => r2 
+	0	iSSTor	@SPILL_2(0) 4 4 r555 r1 	#STORE 2_2
+	8	JMPl	L2_loop 
+
+L2_loop:	0	iSLDor	@SPILL_2(0) 4 4 r555 => r1 	#LOAD 2_2
+	13	iADD	r1 r1 => r2 
+	13	iADD	r3 r3 => r2 
+	13	iADD	r3 r3 => r2 
+	12	iCMPge	r1 r3 => r4 
+	12	BR	L2_loop L3_loop r4 
+
+L3_loop:	16	iRTN	r555 r555  [ ] 
+
+#------------ CHOW -r 0 -f ------------#
+_main:	0	FRAME	0 => r555 r1  [ i i ] 	# function prologue
+	3	iLDI	2 => r3 
+	4	iLDI	3 => r4 
+	13	iADD	r4 r4 => r2 
+	8	JMPl	L2_loop 
+
+L2_loop:	13	iADD	r3 r3 => r1 
+	13	iADD	r4 r4 => r2 
+	13	iADD	r4 r4 => r1 
+	12	iCMPge	r3 r4 => r2 
+	12	BR	L2_loop L3_loop r2 
+
+L3_loop:	16	iRTN	r555 r555  [ ] 
+
+#------------ RA -r 5 -q ------------#
+_main:	0	FRAME	0 => r0 r1  [ i i ] 	# function prologue
+	3	iLDI	2 => r3 
+	4	iLDI	3 => r2 
+	13	iADD	r2 r2 => r1 
+	8	JMPl	L2_loop 
+
+L2_loop:	13	iADD	r3 r3 => r1 
+	13	iADD	r2 r2 => r1 
+	13	iADD	r2 r2 => r1 
+	12	iCMPge	r3 r2 => r1 
+	12	BR	L3 L3_loop r1 
+
+L3:	0	JMPl	L2_loop 
+
+L3_loop:	16	iRTN	r0 r0  [ ] 
+
+#------------ NOTES ------------#
+uses 5 regs (4 for double spill + 1)
+when global allocation of locals is on
+top priorities (r in orig):
+r2  - 15.5
+r3  - 26.5
+r8  - 20.0
+1. LR 2 (r2 in orig) is split by chow then both parts are spilled.
+Top is spilled b/c priority == 0.0, bottom is uncolorable.
+2. LR 8 (r5 in orig) gets  prio 20 because of def and use in inner
+loop.
+
+

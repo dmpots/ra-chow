@@ -1,0 +1,4 @@
+00.i|showing lr's in loop get higher priorities and assigned regs
+01.i|showing how splitting can color with less regs
+02.i|same as 01.i but using LD instead of LDI
+03.i|showing how optimistic chow can color some graphs that regular chow can not

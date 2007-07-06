@@ -1,0 +1,94 @@
+
+#------------ ORIG  ------------#
+	NAME _main
+_main:	0	FRAME	0 => r0 [ i ]	# function prologue
+	3	iLDI	1 => r1
+	4	iLDI	2 => r2
+	13	iADD	r1 r1 => r99
+	13	iADD	r1 r1 => r99
+	13	iADD	r2 r2 => r99
+	8	JMPl	L2_loop
+L2_loop:	11	NOP
+	4	iLDI	3 => r3
+	13	iADD	r3 r3 => r99
+	13	iADD	r3 r3 => r99
+	13	iADD	r2 r2 => r99
+	8	JMPl	L3_loop
+L3_loop:	12	NOP
+	4	iLDI	4 => r4
+	13	iADD	r3 r3 => r99
+	13	iADD	r4 r4 => r99
+	13	iADD	r4 r4 => r99
+	8	JMPl	L4_loop
+L4_loop:	12	NOP
+	16	iRTN	r0 r25
+
+#------------ CHOW -r 5 -g ------------#
+_main:	0	FRAME	8 => r555  [ i ] 	# function prologue
+	3	iLDI	1 => r3 
+	4	iLDI	2 => r4 
+	13	iADD	r3 r3 => r1 
+	13	iADD	r3 r3 => r2 
+	13	iADD	r4 r4 => r1 
+	0	iSSTor	@SPILL_2(0) 4 4 r555 r4 	#STORE 2_14
+	8	JMPl	L2_loop 
+
+L2_loop:	0	iSLDor	@SPILL_2(0) 4 4 r555 => r3 	#LOAD 2_2
+	4	iLDI	3 => r4 
+	13	iADD	r4 r4 => r2 
+	13	iADD	r4 r4 => r1 
+	13	iADD	r3 r3 => r2 
+	8	JMPl	L3_loop 
+
+L3_loop:	4	iLDI	4 => r3 
+	13	iADD	r4 r4 => r1 
+	13	iADD	r3 r3 => r2 
+	13	iADD	r3 r3 => r1 
+	8	JMPl	L4_loop 
+
+L4_loop:	16	iRTN	r555 r555  [ ] 
+
+#------------ CHOW -r 5 -ge ------------#
+_main:	0	FRAME	8 => r555  [ i ] 	# function prologue
+	3	iLDI	1 => r3 
+	4	iLDI	2 => r4 
+	13	iADD	r3 r3 => r1 
+	13	iADD	r3 r3 => r2 
+	13	iADD	r4 r4 => r1 
+	8	JMPl	L3 
+
+L3:	0	iSSTor	@SPILL_2(0) 4 4 r555 r4 	#STORE 2_14
+	0	i2i	r4 => r3 	#RR COPY for 2_14 --> 2_2
+	0	JMPl	L2_loop 
+
+L2_loop:	4	iLDI	3 => r4 
+	13	iADD	r4 r4 => r2 
+	13	iADD	r4 r4 => r1 
+	13	iADD	r3 r3 => r2 
+	8	JMPl	L3_loop 
+
+L3_loop:	4	iLDI	4 => r3 
+	13	iADD	r4 r4 => r1 
+	13	iADD	r3 r3 => r2 
+	13	iADD	r3 r3 => r1 
+	8	JMPl	L4_loop 
+
+L4_loop:	16	iRTN	r555 r555  [ ] 
+
+#------------ NOTES ------------#
+Here's the scoop:
+This example fails to color, even though it could be colored with no
+problem.
+INTF_GRAPH: 1 --- 2 --- 3 --- 4
+the graph is easily colored by assigning 1 and 4 different colors.
+chow will assign them the same color
+
+this example shows both how chow is at a disadvantage by assigning in
+prioirity order and how he can take advanatge of splitting to fully
+color the graph after splitting.
+as expected LR-2 is split and then can be colored. coloring order:
+LR-1, LR-4, LR-3, LR-2
+in the second run, -e is used to make a RR copy out of the store load
+pair. the store is not known to be deletable (perhaps we could know by
+looking at blocks the store reaches) but we rely on dead to do so.
+

@@ -1,0 +1,220 @@
+#------------ CHOW -r5 ------------#	
+  NAME	_main
+
+_main:	0	FRAME	8 => r555  [ i ] 	# function prologue
+	0	iSLDor	@A 0 0 r555 => r4 
+	0	iSLDor	@B 0 0 r555 => r3 
+	12	BR	L2 L3 r555 
+
+L2:	3	iLDI	1 => r1 
+	8	JMPl	L4 
+
+L3:	3	iLDI	1 => r1 
+	8	JMPl	L4 
+
+L4:	13	iADD	r4 r4 => r1 
+	13	iADD	r3 r3 => r2 
+	13	iADD	r3 r3 => r1 
+	13	iADD	r3 r3 => r2 
+	13	iADD	r3 r3 => r1 
+	13	iADD	r3 r3 => r2 
+	13	iADD	r3 r3 => r1 
+	13	iADD	r3 r3 => r2 
+	13	iADD	r3 r3 => r1 
+	13	iADD	r3 r3 => r2 
+	13	iADD	r3 r3 => r1 
+	13	iADD	r3 r3 => r2 
+	12	BR	L5 L6 r555 
+
+L5:	3	iLDI	1 => r1 
+	8	JMPl	L7 
+
+L6:	3	iLDI	1 => r1 
+	8	JMPl	L7 
+
+L7:	0	iSLDor	@C 0 0 r555 => r4 
+	13	iADD	r3 r3 => r1 
+	12	BR	L8 L9 r555 
+
+L8:	3	iLDI	1 => r1 
+	8	JMPl	L10 
+
+L9:	3	iLDI	1 => r1 
+	8	JMPl	L10 
+
+L10:	0	iSLDor	@D 0 0 r555 => r3 
+	13	iADD	r4 r4 => r1 
+	13	iADD	r4 r4 => r2 
+	13	iADD	r4 r4 => r1 
+	13	iADD	r4 r4 => r2 
+	13	iADD	r4 r4 => r1 
+	13	iADD	r4 r4 => r2 
+	12	BR	L11 L12 r555 
+
+L11:	3	iLDI	1 => r1 
+	0	iSSTor	@SPILL_23(0) 4 4 r555 r3 	#STORE 23_61
+	8	JMPl	L13 
+
+L12:	3	iLDI	1 => r1 
+	0	iSSTor	@SPILL_23(0) 4 4 r555 r3 	#STORE 23_61
+	8	JMPl	L13 
+
+L13:	0	iSLDor	@SPILL_23(0) 4 4 r555 => r4 	#LOAD 23_23
+	0	iSLDor	@E 0 0 r555 => r3 
+	13	iADD	r4 r4 => r1 
+	12	BR	L14 L15 r555 
+
+L14:	3	iLDI	1 => r1 
+	8	JMPl	L16 
+
+L15:	3	iLDI	1 => r1 
+	8	JMPl	L16 
+
+L16:	0	iSLDor	@F 0 0 r555 => r4 
+	12	BR	L17 L18 r555 
+
+L18:	3	iLDI	1 => r1 
+	8	JMPl	L19 
+
+L19:	13	iADD	r3 r3 => r1 
+	13	iADD	r3 r3 => r2 
+	13	iADD	r3 r3 => r1 
+	13	iADD	r3 r3 => r2 
+	13	iADD	r3 r3 => r1 
+	13	iADD	r3 r3 => r2 
+	13	iADD	r3 r3 => r1 
+	13	iADD	r3 r3 => r2 
+	13	iADD	r3 r3 => r1 
+	13	iADD	r3 r3 => r2 
+	13	iADD	r3 r3 => r1 
+	13	iADD	r3 r3 => r2 
+	13	iADD	r3 r3 => r1 
+	13	iADD	r3 r3 => r2 
+	13	iADD	r3 r3 => r1 
+	13	iADD	r3 r3 => r2 
+	13	iADD	r3 r3 => r1 
+	13	iADD	r3 r3 => r2 
+	13	iADD	r3 r3 => r1 
+	13	iADD	r3 r3 => r2 
+	13	iADD	r3 r3 => r1 
+	13	iADD	r4 r4 => r2 
+	12	BR	L17 L18 r555 
+
+L17:	3	iLDI	1 => r1 
+	8	JMPl	L19 
+	NAME	_main
+
+#------------ CHOW -r5 -o ------------#	
+_main:	0	FRAME	0 => r555  [ i ] 	# function prologue
+	0	iSLDor	@A 0 0 r555 => r4 
+	0	iSLDor	@B 0 0 r555 => r3 
+	12	BR	L2 L3 r555 
+
+L2:	3	iLDI	1 => r1 
+	8	JMPl	L4 
+
+L3:	3	iLDI	1 => r1 
+	8	JMPl	L4 
+
+L4:	13	iADD	r4 r4 => r1 
+	13	iADD	r3 r3 => r2 
+	13	iADD	r3 r3 => r1 
+	13	iADD	r3 r3 => r2 
+	13	iADD	r3 r3 => r1 
+	13	iADD	r3 r3 => r2 
+	13	iADD	r3 r3 => r1 
+	13	iADD	r3 r3 => r2 
+	13	iADD	r3 r3 => r1 
+	13	iADD	r3 r3 => r2 
+	13	iADD	r3 r3 => r1 
+	13	iADD	r3 r3 => r2 
+	12	BR	L5 L6 r555 
+
+L5:	3	iLDI	1 => r1 
+	8	JMPl	L7 
+
+L6:	3	iLDI	1 => r1 
+	8	JMPl	L7 
+
+L7:	0	iSLDor	@C 0 0 r555 => r4 
+	13	iADD	r3 r3 => r1 
+	12	BR	L8 L9 r555 
+
+L8:	3	iLDI	1 => r1 
+	8	JMPl	L10 
+
+L9:	3	iLDI	1 => r1 
+	8	JMPl	L10 
+
+L10:	0	iSLDor	@D 0 0 r555 => r3 
+	13	iADD	r4 r4 => r1 
+	13	iADD	r4 r4 => r2 
+	13	iADD	r4 r4 => r1 
+	13	iADD	r4 r4 => r2 
+	13	iADD	r4 r4 => r1 
+	13	iADD	r4 r4 => r2 
+	12	BR	L11 L12 r555 
+
+L11:	3	iLDI	1 => r1 
+	8	JMPl	L13 
+
+L12:	3	iLDI	1 => r1 
+	8	JMPl	L13 
+
+L13:	0	iSLDor	@E 0 0 r555 => r4 
+	13	iADD	r3 r3 => r1 
+	12	BR	L14 L15 r555 
+
+L14:	3	iLDI	1 => r1 
+	8	JMPl	L16 
+
+L15:	3	iLDI	1 => r1 
+	8	JMPl	L16 
+
+L16:	0	iSLDor	@F 0 0 r555 => r3 
+	12	BR	L17 L18 r555 
+
+L18:	3	iLDI	1 => r1 
+	8	JMPl	L19 
+
+L19:	13	iADD	r4 r4 => r1 
+	13	iADD	r4 r4 => r2 
+	13	iADD	r4 r4 => r1 
+	13	iADD	r4 r4 => r2 
+	13	iADD	r4 r4 => r1 
+	13	iADD	r4 r4 => r2 
+	13	iADD	r4 r4 => r1 
+	13	iADD	r4 r4 => r2 
+	13	iADD	r4 r4 => r1 
+	13	iADD	r4 r4 => r2 
+	13	iADD	r4 r4 => r1 
+	13	iADD	r4 r4 => r2 
+	13	iADD	r4 r4 => r1 
+	13	iADD	r4 r4 => r2 
+	13	iADD	r4 r4 => r1 
+	13	iADD	r4 r4 => r2 
+	13	iADD	r4 r4 => r1 
+	13	iADD	r4 r4 => r2 
+	13	iADD	r4 r4 => r1 
+	13	iADD	r4 r4 => r2 
+	13	iADD	r4 r4 => r1 
+	13	iADD	r3 r3 => r2 
+	12	BR	L17 L18 r555 
+
+L17:	3	iLDI	1 => r1 
+	8	JMPl	L19 
+
+#------------NOTES------------#	
+This example shows how optimisitic chow can color some graphs that
+regular chow can not. the interference graph is
+A - B - C - D - E -F
+the priority coloring gives order (E, B, C, ...)
+this means that in the original chow, E and B will get the same color
+(r3) forcing C to get color (r4) which leaves no color for D which
+must be split (as shown).
+
+Using optimisitic chow we see that the colors are are assigned in
+alternating order which is the simple way to color the graph. This is
+possible due to pulling nodes from the graph and using the color stack
+to color unconstrained nodes.
+
