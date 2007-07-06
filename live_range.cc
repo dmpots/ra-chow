@@ -144,6 +144,7 @@ LiveRange::LiveRange(RegisterClass::RC reg_class,
   //fields for optimistic coloring
   simplified_neighbor_count = 0;
   simplified_width = 0;
+  simplified = false;
 }
 
 /*
@@ -233,7 +234,7 @@ bool LiveRange::IsConstrained() const
   constrained = k <= (weighted_neighbor_cnt - simplified_width);
 
   debug("k: %d, weighted_neighbors: %d, simplified_width: %d", 
-    k, weighted_neighbors, simplified_width);
+    k, weighted_neighbor_cnt, simplified_width);
   return constrained;
 }
 

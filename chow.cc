@@ -57,6 +57,7 @@ namespace {
   void DumpLocals();
   void SeparateConstrainedLiveRanges(LRSet*, LRSet*);
   void ColorUnconstrained(LRSet* unconstr_lrs);
+  void PullNodeFromGraph(LiveRange* lr, LRSet* constr_lrs);
 }
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
@@ -625,7 +626,10 @@ void SplitNeighbors(LiveRange* lr, LRSet* constr_lr, LRSet* unconstr_lr)
         {
           intf_lr->MarkNonCandidateAndDelete(); chowstats.cZeroOccurrence++;
           UpdateConstrainedListsAfterDelete(intf_lr, constr_lr, unconstr_lr);
-          AddToCorrectConstrainedList(constr_lr, unconstr_lr, newlr);
+          if(Params::Algorithm::optimistic && !newlr->IsConstrained())
+            PullNodeFromGraph(newlr, constr_lr);
+          else
+            AddToCorrectConstrainedList(constr_lr, unconstr_lr, newlr);
         }
         else
         {
@@ -634,7 +638,14 @@ void SplitNeighbors(LiveRange* lr, LRSet* constr_lr, LRSet* unconstr_lr)
           //if the remainder of the live range we just split from
           //interferes with the live range we assigned a color to then 
           //add it to the work list because it may need to be split more
-          if(intf_lr->InterferesWith(lr)) worklist.push_back(intf_lr);
+          if(intf_lr->InterferesWith(lr))
+          {
+            if(!Params::Algorithm::optimistic  ||
+               (Params::Algorithm::optimistic && !intf_lr->simplified))
+            {
+                    worklist.push_back(intf_lr);
+            }
+          }
         }
 
         debug("split complete for LR: %d", intf_lr->id);
@@ -662,6 +673,29 @@ void UpdateConstrainedLists(LiveRange* newlr,
                             LRSet* constr_lrs, 
                             LRSet* unconstr_lrs)
 {
+  //if optimistic
+  //if origlr is no longer constraiend then remove from constraiend
+  //and pull the node out of the graph. next check what needs to be
+  //done with the new live range.
+  if(Params::Algorithm::optimistic)
+  {
+    if(!origlr->IsConstrained())
+    {
+      constr_lrs->erase(origlr);
+      PullNodeFromGraph(origlr, constr_lrs);
+    }
+    if(newlr->IsConstrained())
+    {
+      constr_lrs->insert(newlr);
+    }
+    else
+    {
+      PullNodeFromGraph(newlr, constr_lrs);
+    }
+
+    return; //exit early
+  }
+
   //update constrained lists, only need to update for any live range
   //that interferes with both the new and original live range because
   //those are the only live ranges that could have changed status
@@ -720,8 +754,13 @@ void UpdateConstrainedListsAfterDelete(LiveRange* lr,
     }
     else
     {
-      if(constr_lrs->erase(fear_lr))
-        unconstr_lrs->insert(fear_lr);
+      if(constr_lrs->erase(fear_lr)) 
+      {
+        if(Params::Algorithm::optimistic)
+          PullNodeFromGraph(fear_lr, constr_lrs);
+        else
+          unconstr_lrs->insert(fear_lr);
+      }
     }
   }
   constr_lrs->erase(lr);
@@ -961,6 +1000,8 @@ void MoveLoadsAndStores()
 //bool ShouldSplitLiveRange(LiveRange* lr, WhenToSplitStrategy& strategy)
 bool ShouldSplitLiveRange(LiveRange* lr)
 {
+  debug("should split LR: %d ?", lr->id);
+  if(Params::Algorithm::optimistic && lr->simplified) return false;
   return (*Chow::Heuristics::when_to_split_strategy)(lr);
 }
 
@@ -1052,6 +1093,7 @@ void CountLocals()
  ****************************************************************/
 void SimplifyGraph(LRSet* constr_lrs);
 void ColorFromStack();
+void PullNodesFromGraph(std::list<LiveRange*>&, LRSet* constr_lrs, LRSet* init=NULL);
 void SeparateConstrainedLiveRanges(LRSet* constr_lrs, LRSet* unconstr_lrs)
 {
   using Chow::live_ranges;
@@ -1108,10 +1150,9 @@ void SimplifyGraph(LRSet* constr_lrs)
 {
   using Chow::live_ranges;
   using Chow::color_stack;
-  typedef LRSet::iterator LRSI;
 
+  std::list<LiveRange*> worklist;
   LRSet pulled;
-  std::queue<LiveRange*> worklist;
 
   //pull out initial unconstrained live ranges
   for(LRVec::size_type i = 1; i < live_ranges.size(); i++)
@@ -1122,8 +1163,8 @@ void SimplifyGraph(LRSet* constr_lrs)
       if(Params::Algorithm::allocate_locals || !lr->is_local)
       {
         debug("initial unconstrained LR: %d", lr->id);
+        worklist.push_back(lr);
         pulled.insert(lr);
-        worklist.push(lr);
       }
       else
       {
@@ -1132,29 +1173,8 @@ void SimplifyGraph(LRSet* constr_lrs)
     }
   }
 
-  //pull out live ranges that become unconstrained when others are
-  //pulled from the live range becuase their degree goes down
-  while(!worklist.empty())
-  {
-    //remove from graph and add any neighbors that can now be removed
-    LiveRange* lr = worklist.front(); worklist.pop();
-    color_stack.push(lr);
-    for(LRSI it = lr->fear_list->begin(); it != lr->fear_list->end(); it++)
-    {
-      LiveRange* fear_lr = *it;
-      fear_lr->simplified_neighbor_count++;
-      fear_lr->simplified_width += RegisterClass::RegWidth(lr->type);
-
-      if(!fear_lr->IsConstrained() && 
-         (pulled.find(fear_lr) == pulled.end()))
-      {
-        debug("pulling additional unconstrained LR: %d", fear_lr->id);
-        Stats::chowstats.cFoundOptimist++;
-        pulled.insert(fear_lr);
-        worklist.push(fear_lr);
-      }
-    }
-  }
+  //note that the nodes are pulled from the graph
+  PullNodesFromGraph(worklist, constr_lrs, &pulled);
 
   //fill in constrained list with any node not removed
   for(LRVec::size_type i = 1; i < live_ranges.size(); i++)
@@ -1164,6 +1184,71 @@ void SimplifyGraph(LRSet* constr_lrs)
     {
       debug("CONSTR: LR: %d", lr->id);
       constr_lrs->insert(lr);
+    }
+  }
+}
+
+void PullNodeFromGraph(LiveRange* lr, LRSet* constr_lrs)
+{
+  std::list<LiveRange*> worklist;
+  worklist.push_back(lr);
+  PullNodesFromGraph(worklist, constr_lrs);
+}
+
+void PullNodesFromGraph(
+ std::list<LiveRange*>& worklist,
+ LRSet* constr_lrs,
+ LRSet* initial_pulled
+)
+{
+  typedef LRSet::iterator LRSI;
+  typedef std::list<LiveRange*>::iterator LI;
+  static LRSet pulled;
+  if(initial_pulled) { pulled = *initial_pulled;}
+  else 
+  {
+    for(LI i = worklist.begin(); i != worklist.end();) 
+    {
+      debug("checking pull worklist LR: %d", (*i)->id);
+      if((*i)->simplified)
+      {
+        debug("lr has already been pulled from the graph");
+        LI del = i++;
+        worklist.erase(del);
+      }
+      else {pulled.insert(*i); i++;}
+    }
+  }
+
+  //pull out live ranges that become unconstrained when others are
+  //pulled from the live range becuase their degree goes down
+  while(!worklist.empty())
+  {
+    //remove from graph and add any neighbors that can now be removed
+    LiveRange* lr = worklist.back(); worklist.pop_back();
+    debug("pulling LR: %d from graph", lr->id);
+    assert(!lr->simplified);
+    Chow::color_stack.push(lr);
+    lr->simplified = true;
+
+    //pull any neighbors that become unconstrained when this node is
+    //removed
+    for(LRSI it = lr->fear_list->begin(); it != lr->fear_list->end(); it++)
+    {
+      LiveRange* fear_lr = *it;
+      fear_lr->simplified_neighbor_count++;
+      fear_lr->simplified_width += RegisterClass::RegWidth(lr->type);
+
+      if(fear_lr->is_candidate &&
+        !fear_lr->IsConstrained() && 
+        (pulled.find(fear_lr) == pulled.end()))
+      {
+        debug("pulling additional unconstrained LR: %d", fear_lr->id);
+        pulled.insert(fear_lr);
+        constr_lrs->erase(fear_lr);
+        worklist.push_back(fear_lr);
+        Stats::chowstats.cFoundOptimist++;
+      }
     }
   }
 }

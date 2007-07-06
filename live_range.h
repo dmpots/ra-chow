@@ -55,6 +55,7 @@ struct LiveRange
   bool is_local;
   int simplified_neighbor_count;
   int simplified_width;
+  bool simplified; //been pulled from the graph
 
   /* maps from block id --> live range, for keeping track of splits */
   std::map<unsigned int, LiveRange*> *blockmap; 
