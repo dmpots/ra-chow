@@ -2033,7 +2033,7 @@ X when separating out the initial constr and unconstr live ranges you
   process the simplified nodes as they come up and then process thier
   neighbors that become simple as a result of removing them from the
   graph.
-+ update functions so that we are no longer monkeying with constrained
+X update functions so that we are no longer monkeying with constrained
   lists. any deletes from the constr_lrs should be preserved and 
   additions to unconstr_lrs should be changed to add to the coloring
   stack; at that point also you should try to add nodes that become
@@ -2045,5 +2045,39 @@ X when separating out the initial constr and unconstr live ranges you
 X update the final coloring for unconstrained live ranges so that we
   first check to see if there is a color available and assign it if
   possible, otherwise mark the live range as spilled.
+
+=======================================================
+Conversation with Tim
+Fri Jul  6 16:10:29 CDT 2007
+=======================================================
+Finish up a few things with the allocator:
+1) change LD into the source of a copy to just load into the
+destination of the copy and delete the copy
+2) when you are doing local allocation and you have promoted a
+non-allocated global register into a temporary register and you need
+to store the global b/c it is live out in the block then instead of
+generating a store you should make a copy.
+3) find a smart way of automatically setting the number of local
+registers that should be reserved for allocation. Look at the maximum
+number of live locals vs. maximum number of live globals to give you a
+good idea (or something else not sure what).
+4) fix remateraialization so that you are not inserting useless
+stores. remember that you should never need to store a
+rematerializable value. you can fix this by inserting a special "remat
+copy" on to the successor edge and then look at that to see if you
+need to store because the live range is not allocated or a copy will
+do the trick just fine.
+
+
+writing
+* write the introduction and the related work first. show how the
+  related work has followed different paths and where yours fits into
+  the mix.
+* show that you are filling a hole in the literature
+* figure out what your story is and tell it
+* read papers on register allocation and adaptive compilation.
+* chow and briggs tried to compare thier allocators but it was not an
+  apples to apples comparison. see briggs thesis for what he has done.
+
 
 
