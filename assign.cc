@@ -344,6 +344,66 @@ void EnsureReg(Register* reg,
 
 /*
  *===================
+ * HandleCopy()
+ *===================
+ * Assigns registers for a copy instruction.
+ *
+ * Copies are handled separately because we want to catch the case
+ * where the source of the copy is not allocated a register and would
+ * require a load. 
+ **/
+void HandleCopy(Block* blk,
+               Inst*  origInst,
+               Inst** updatedInst, 
+               Operation** op,
+               const RegisterList& instUses, 
+               const RegisterList& instDefs)
+{
+  debug("handling copy for inst %d (0x%p): \n   %s",
+     inst_order[origInst], origInst, Debug::StringOfInst(origInst));
+
+  bool delete_copy = false;
+  Register* srcp =  &((*op)->arguments[0]);
+  Register* destp = &((*op)->arguments[1]);
+  
+  LRID src_lrid = Mapping::SSAName2OrigLRID(*srcp);
+  *srcp = GetMachineRegAssignment(blk, src_lrid);
+  if(*srcp == REG_UNALLOCATED)
+  {
+    //check to see if its already in a tmp reg
+    if(FindInRegPool(src_lrid, RegContentsForLRID(src_lrid)->reserved))
+    {
+      //and call GetFreeTmpReg so that the data structures get updated
+      //as necessary for belady
+      std::pair<Register,bool> regXneedMem =
+        GetFreeTmpReg(src_lrid, blk, origInst, *updatedInst, 
+                      *op, FOR_USE, instUses, instDefs);
+
+      assert(regXneedMem.second == false);
+      *srcp = regXneedMem.first;
+    }
+    else
+    {
+      delete_copy = true;
+    }
+  }
+  //we always need a register for the dest of the copy
+  EnsureReg(destp, blk, origInst, updatedInst,
+            *op, FOR_DEF, instUses, instDefs);
+
+  if(delete_copy)
+  {
+    //insert load from src to dest reg
+    LiveRange* lr = (*Chow::live_ranges[src_lrid]->blockmap)[id(blk)];
+    Spill::InsertLoad(lr, *updatedInst, *destp, Spill::REG_FP);
+    
+    //delete copy
+    *op = NULL;
+  }
+}
+
+/*
+ *===================
  * ResetFreeTmpRegs()
  *===================
  * used to reset the count of which temporary registers are in use for

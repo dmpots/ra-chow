@@ -779,6 +779,7 @@ void RenameRegisters()
   using Assign::GetMachineRegAssignment;
   using Assign::ResetFreeTmpRegs;
   using Assign::EnsureReg;
+  using Assign::HandleCopy;
   using Assign::UnEvict;
   using Assign::InitLocalAllocation;
 
@@ -832,20 +833,30 @@ void RenameRegisters()
       Inst** updatedInst = &inst;
       Inst_ForAllOperations(op, inst)
       {
-        Operation_ForAllUses(reg, *op)
+        //treat copies special so that we don't load and then copy,
+        //but rather just load into the dest if needed
+        if(opcode_specs[(*op)->opcode].details & COPY)
         {
-          //make sure the live range is in a register
-          EnsureReg(reg, b, origInst, updatedInst,
-                    *op, FOR_USE,
-                    instUses, instDefs);
+          HandleCopy(b, origInst, updatedInst, op, instUses, instDefs);
         }
-
-        Operation_ForAllDefs(reg, *op)
+       else
         {
-          //make sure the live range is in a register
-          EnsureReg(reg, b, origInst, updatedInst,
-                    *op, FOR_DEF,
-                    instUses, instDefs);
+
+          Operation_ForAllUses(reg, *op)
+          {
+            //make sure the live range is in a register
+            EnsureReg(reg, b, origInst, updatedInst,
+                      *op, FOR_USE,
+                      instUses, instDefs);
+          }
+
+          Operation_ForAllDefs(reg, *op)
+          {
+            //make sure the live range is in a register
+            EnsureReg(reg, b, origInst, updatedInst,
+                      *op, FOR_DEF,
+                      instUses, instDefs);
+          }
         }
       } 
       UnEvict(updatedInst);

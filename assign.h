@@ -28,5 +28,11 @@ namespace Assign {
   void ResetFreeTmpRegs(Block*);
   void UnEvict(Inst** updatedInst);
   void InitLocalAllocation(Block* blk);
+  void HandleCopy(Block* blk,
+                Inst*  origInst,
+                Inst** updatedInst, 
+                Operation** op,
+                const RegisterList& instUses, 
+                const RegisterList& instDefs);
 }
 #endif
