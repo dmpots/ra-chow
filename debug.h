@@ -9,6 +9,7 @@
 #ifndef __DEBUG_H
 #define __DEBUG_H
 #include<vector>
+#include<cassert>
 #include "types.h"
 
 #ifdef __DEBUG

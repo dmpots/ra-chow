@@ -802,7 +802,22 @@ void LiveRange::RemoveLiveUnit(LiveUnit* unit)
   }
 }
 
-
+/*
+ *==================================
+ * LiveRange::RebuildForbiddenList()
+ *==================================
+ *
+ ***/
+void LiveRange::RebuildForbiddenList()
+{
+  VectorSet_Clear(forbidden);
+  for(LiveRange::iterator it = begin(); it != end(); it++)
+  {
+    LiveUnit* unit = *it;
+    VectorSet vsUsed = Coloring::UsedColors(rc, unit->block);
+    VectorSet_Union(forbidden, forbidden, vsUsed);
+  }
+}
 
 /*------------------INTERNAL MODULE FUNCTIONS--------------------*/
 namespace {
@@ -1068,22 +1083,6 @@ void LiveRange_UpdateAfterSplit(LiveRange* newlr, LiveRange* origlr)
   origlr->priority = LiveRange::UNDEFINED_PRIORITY;
 }
 
-/*
- *==================================
- * LiveRange::RebuildForbiddenList()
- *==================================
- *
- ***/
-void LiveRange::RebuildForbiddenList()
-{
-  VectorSet_Clear(forbidden);
-  for(LiveRange::iterator it = begin(); it != end(); it++)
-  {
-    LiveUnit* unit = *it;
-    VectorSet vsUsed = Coloring::UsedColors(rc, unit->block);
-    VectorSet_Union(forbidden, forbidden, vsUsed);
-  }
-}
  
 /*
  *============================

@@ -80,7 +80,7 @@ struct LiveRange
   Boolean HasColorAvailable() const;
   Boolean InterferesWith(LiveRange* lr2) const;
   LiveUnit* AddLiveUnitForBlock(Block*, Variable, const Stats::BBStats& );
-  Priority LiveRange::ComputePriority();
+  Priority ComputePriority();
   LiveRange* Mitosis();
   void TransferLiveUnitTo(LiveRange* to, LiveUnit* unit);
   void RebuildForbiddenList();

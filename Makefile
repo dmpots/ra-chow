@@ -49,6 +49,7 @@ CXXFLAGS = -g -Wall $(OPT) $(DEFS)
 # Flags to pass to the linker/loader
 #
 ##LDFLAGS = -pg
+LDFLAGS=-Xlinker -R/usr/site/gcc/lib
 
 # 
 # GENERATED EXECUTABLES
