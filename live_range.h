@@ -122,12 +122,16 @@ inline void LRName(const LiveRange* lr, char* buf)
 /*-------------------SPILLING DATA STRUCTURES-----------------------*/
 /* for moving loads and stores onto edges so that we can do code
  * motion as described in chow */
-enum SpillType  {STORE_SPILL, LOAD_SPILL};
+enum SpillType  {STORE_SPILL, LOAD_SPILL, COPY_SPILL, COPYDEF_SPILL};
 struct MovedSpillDescription
 {
   LiveRange* lr;
   SpillType spill_type;
   Block* orig_blk;
+  //only for COPY_SPILL, COPYDEF_SPILL
+  Register cp_src; 
+  Register cp_dest;
+  LiveRange* lr_dest;
 };
 
 /* edge extension must be defined to attach this on edges so that we

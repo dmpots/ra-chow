@@ -79,15 +79,21 @@ void EnhancedCodeMotion(Edge* edg, Block* blkLD)
         //its value from a copy. we need to keep the store
         //since its value may need to be loaded somewhere else
         //in the live range
-        if(ee->spill_type == STORE_SPILL)
-        {
-          rr_copies.push_back(make_pair(*ee, *eeT));
-          removals.push_back(eeT);
-        }
-        else
-        {
-          rr_copies.push_back(make_pair(*eeT, *ee));
-          removals.push_back(ee);
+        switch(ee->spill_type){
+          case STORE_SPILL:
+          {
+            rr_copies.push_back(make_pair(*ee, *eeT));
+            removals.push_back(eeT);
+          }
+          case LOAD_SPILL:
+          {
+            rr_copies.push_back(make_pair(*eeT, *ee));
+            removals.push_back(ee);
+          }
+          default:
+            //ignore if it is not a load or a store that we can change
+            //into a copy
+            ;
         }
         Stats::chowstats.cInsertedCopies++;
       }

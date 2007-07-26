@@ -960,6 +960,9 @@ void AddEdgeExtensionNode(Edge* e, LiveRange* lr, LiveUnit* unit,
   msd.lr = lr;
   msd.spill_type = spillType;
   msd.orig_blk = unit->block;
+  msd.lr_dest = NULL;//put junk values here 
+  msd.cp_src  = -1;  //put junk values here
+  msd.cp_dest = -1;  //put junk values here
   ee->spill_list->push_back(msd);
 }
 

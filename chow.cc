@@ -939,18 +939,24 @@ void MoveLoadsAndStores()
                ee++)
         {
           MovedSpillDescription msd = (*ee);
-          if( msd.spill_type == STORE_SPILL && 
-              Block_PredCount(edg->succ) > 1)
-          {
-            need_split = TRUE;
-            break;
+          switch(msd.spill_type){
+            case STORE_SPILL:
+              if(Block_PredCount(edg->succ) > 1)
+              {
+                need_split = TRUE;
+              }
+              break;
+            case LOAD_SPILL:
+              if(Block_SuccCount(edg->pred) > 1)
+              {
+                need_split = TRUE;
+                break;
+              }
+              break;
+            default:
+              assert(false);
           }
-          else if(msd.spill_type == LOAD_SPILL &&
-                  Block_SuccCount(edg->pred) > 1)
-          {
-            need_split = TRUE;
-            break;
-          }
+          if(need_split) break; //out of loop
         }
 
         //split edge if needed
@@ -979,36 +985,40 @@ void MoveLoadsAndStores()
           //use machine registers for these loads/stores 
           Register mReg =
             Assign::GetMachineRegAssignment(msd.orig_blk, msd.lr->orig_lrid);
-          if(msd.spill_type == STORE_SPILL)
-          {
-            debug("moving store from %s to %s for lrid: %d_%d",
-                   bname(msd.orig_blk), bname(blkST),
-                   msd.lr->orig_lrid, msd.lr->id);
-            Spill::InsertStore(msd.lr, Block_FirstInst(blkST),
-                               mReg, Spill::REG_FP,
-                               BEFORE_INST);
-          }
-          else
-          {
-            debug("moving load from %s to %s for lrid: %d_%d",
-                   bname(msd.orig_blk), bname(blkLD),
-                   msd.lr->orig_lrid, msd.lr->id);
-            LiveRange* lr = msd.lr;
-            if(Params::Algorithm::rematerialize)
+          switch(msd.spill_type) {
+            case STORE_SPILL:
             {
-              if(lr->blockmap->find(bid(edg->pred)) != lr->blockmap->end())
+              debug("moving store from %s to %s for lrid: %d_%d",
+                    bname(msd.orig_blk), bname(blkST),
+                    msd.lr->orig_lrid, msd.lr->id);
+              Spill::InsertStore(msd.lr, Block_FirstInst(blkST),
+                                mReg, Spill::REG_FP,
+                                BEFORE_INST);
+              break;
+            }
+            case LOAD_SPILL:
+            {
+              if(lr->blockmap->find(id(edg->pred)) != lr->blockmap->end())
               {
                 debug("remat OPPORTUNITY");
-                LiveRange* lrPred = (*lr->blockmap)[bid(edg->pred)];
+                LiveRange* lrPred = (*lr->blockmap)[id(edg->pred)];
                 if(lrPred->rematerializable)
                 {
-                  debug("remat SUCCESS");
-                  lr = lrPred;
+                  debug("remat OPPORTUNITY");
+                  LiveRange* lrPred = (*lr->blockmap)[id(edg->pred)];
+                  if(lrPred->rematerializable)
+                  {
+                    debug("remat SUCCESS");
+                    lr = lrPred;
+                  }
                 }
               }
+              Spill::InsertLoad(lr, Block_LastInst(blkLD), 
+                                mReg, Spill::REG_FP);
+              break;
             }
-            Spill::InsertLoad(lr, Block_LastInst(blkLD), 
-                              mReg, Spill::REG_FP);
+            default:
+              assert(false);
           }
         }
       }
