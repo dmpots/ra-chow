@@ -9,6 +9,8 @@
 #include <cassert>
 #include <algorithm>
 #include <cmath>
+#include <map>
+#include <utility>
 
 #include "live_range.h"
 #include "live_unit.h"
@@ -79,7 +81,6 @@ namespace {
 
   LiveUnit* LiveRange_AddLiveUnit(LiveRange*, LiveUnit*);
   LiveUnit* LiveRange_AddLiveUnitBlock(LiveRange*, Block*);
-  void LiveRange_RemoveLiveUnitBlock(LiveRange* lr, Block* b);
   LiveUnit* LiveRange_ChooseSplitPoint(LiveRange*);
   bool LiveRange_IncludeInSplit(LiveRange*, LiveRange*, Block*);
   void LiveRange_AddBlock(LiveRange* lr, Block* b);
@@ -130,6 +131,7 @@ LiveRange::LiveRange(RegisterClass::RC reg_class,
   bb_list = VectorSet_Create(LiveRange::arena, block_count+1);
   fear_list = new std::set<LiveRange*, LRcmp>;
   units = new std::list<LiveUnit*>;
+  unitmap = new std::map<Block*,LiveUnit*>;
   forbidden = 
     VectorSet_Create(LiveRange::arena, RegisterClass::NumMachineReg(rc));
   is_candidate  = TRUE;
@@ -415,17 +417,10 @@ void LiveRange::AssignColor()
  ***/
 LiveUnit* LiveRange::LiveUnitForBlock(Block* b) const
 {
-  LiveUnit* unit;
-  for(iterator i = begin(); i != end(); i++)
-  {
-    unit = *i;
-    if(id(unit->block) == id(b))
-    {
-      return unit;
-    }
-  }
-
-  return NULL;
+  LiveUnit* unit = NULL;
+  std::map<Block*,LiveUnit*>::iterator elem = unitmap->find(b);
+  if(elem != unitmap->end()){unit = (*elem).second;}
+  return unit;
 }
 
 /*
@@ -799,6 +794,7 @@ void LiveRange::RemoveLiveUnit(LiveUnit* unit)
   if(elem != end())
   {
     units->erase(elem);
+    unitmap->erase((*elem)->block);
   }
 }
 
@@ -834,27 +830,9 @@ LiveUnit* LiveRange_AddLiveUnit(LiveRange* lr, LiveUnit* unit)
   unit->live_range = lr;
 
   lr->units->push_back(unit);
+  lr->unitmap->insert(std::make_pair(unit->block, unit));
   return unit;
 }
-
-
-/*
- *=============================
- * LiveRange_RemoveLiveUnitBlock()
- *=============================
- *
- ***/
-void LiveRange_RemoveLiveUnitBlock(LiveRange* lr, Block* b)
-{
-  LiveUnit* remove_unit = NULL;
-  remove_unit = lr->LiveUnitForBlock(b);
-
-  if(remove_unit != NULL)
-  {
-    lr->RemoveLiveUnit(remove_unit);
-  }
-}
-
 
 
 /*

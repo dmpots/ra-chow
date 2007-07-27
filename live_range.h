@@ -62,6 +62,8 @@ struct LiveRange
   /* keeps track of all the live range split from this one */
   std::vector<LiveRange*> *splits; 
   bool zero_occurs;
+  /* maps from block --> live unit for that block */
+  std::map<Block*, LiveUnit*> *unitmap; 
 
   /* methods */
   void AddInterference(LiveRange* other);
