@@ -4,13 +4,13 @@ require 'tests/paths'
 #---------------------- REG=32 ---------------------------#
 expand HCT do |path|
   #single register set
-  test path, :args => '-r32 -p'
+  test path, :args => '-r32 -p -m'
 
   #agressive basic block splitting
-  test path, :args => '-r32 -b3 -m'
+  test path, :args => '-r32 -b3'
 
   #easier basic block length
-  test path, :args => '-r32 -b10 -m'
+  test path, :args => '-r32 -b10'
 
   #enhanced code motion
   test path, :args => '-r32 -b5 -e'
@@ -19,11 +19,11 @@ end
 #---------------------- REG=16 ---------------------------#
 expand HCT do |path|
   #agressive basic block splitting
-  test path, :args => '-r16 -b3 -m',
+  test path, :args => '-r16 -b3',
        :skip => [:doduc, :fpppp, :rkf45, :wave5X]
 
   #easier basic block length
-  test path, :args => '-r16 -b10 -m',
+  test path, :args => '-r16 -b10',
        :skip => [:doduc, :fpppp, :rkf45, :wave5X]
 
   #enhanced code motion
@@ -31,7 +31,7 @@ expand HCT do |path|
 end
 
 #------------------ MINIMUM REG (>16) ---------------------#
-['-b3 -m', '-b10 -m'].each do |a|
+['-b3', '-b10'].each do |a|
   test DODUC,  :args => '-r19 '+a, :comment => 'lowest reg < 32'
   test FPPPP,  :args => '-r27 '+a, :comment => 'lowest reg < 32'
   test RKF45,  :args => '-r24 '+a, :comment => 'lowest reg < 32'
@@ -51,7 +51,7 @@ expand HCT do |path|
 end
 
 #----------------- EXPECTED FAILURES  ---------------------#
-test DODUC, :args => '-r32 -b3 -pm', 
+test DODUC, :args => '-r32 -b3 -p', 
             :expected => :XFAIL,
             :comment => 'i2c failure for phi node with two types'
 
