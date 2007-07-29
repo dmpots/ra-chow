@@ -28,6 +28,7 @@ SRCFILES=union_find.cc\
          rematerialize.cc\
          reach.cc\
          heuristics.cc\
+         lazy_set.cc
 
 MAIN_SRC=chow.main.cc
 #
@@ -141,6 +142,8 @@ $(SSA_DUMP): ssa_dump.o
 	@ $(CXX) -o $@ $(LDFLAGS) $^ $(LIBS)
 	@ echo " -- make $@ (Done)"
 
+lazy_test: lazy_set_test.o $(OBJS)
+	@ $(CXX) -o $@ $(LDFLAGS) $^ $(LIBS)
 #
 # Cleanup targets
 #

@@ -9,6 +9,7 @@
 #define __GUARD_TYPES_H
 #include <vector>
 #include <set>
+#include <list>
 
 typedef unsigned int Register;
 typedef unsigned int Color;
@@ -31,6 +32,7 @@ struct LiveRange;
 struct LRcmp;
 typedef std::vector<LiveRange*> LRVec;
 typedef std::set<LiveRange*, LRcmp> LRSet;
+typedef std::list<LiveRange*> LRList;
 
 const LRID NO_LRID = (LRID) -1; //not a valid LRID
 
