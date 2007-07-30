@@ -40,24 +40,24 @@ void ComputeReachability(Arena arena)
     ForAllBlocks_Postorder(blk)
     {
       VectorSet_Clear(vs);
-      VectorSet_Insert(vs, id(blk));
+      VectorSet_Insert(vs, bid(blk));
       Edge* e;
       Block_ForAllSuccs(e, blk)
       {
         Block* succ = e->succ;
-        VectorSet_Union(vs, vs, mBlk_ReachSet[id(succ)]);
+        VectorSet_Union(vs, vs, mBlk_ReachSet[bid(succ)]);
       }
-      if(!VectorSet_Equal(vs, mBlk_ReachSet[id(blk)]))
+      if(!VectorSet_Equal(vs, mBlk_ReachSet[bid(blk)]))
       {
         changed = true;
-        VectorSet_Copy(mBlk_ReachSet[id(blk)], vs);
+        VectorSet_Copy(mBlk_ReachSet[bid(blk)], vs);
       }
     }
   }
   /*
   ForAllBlocks(blk){
-    fprintf(stderr, "blk: %s(%d):\t\t", bname(blk), id(blk));
-    VectorSet_Dump(mBlk_ReachSet[id(blk)]);
+    fprintf(stderr, "blk: %s(%d):\t\t", bname(blk), bid(blk));
+    VectorSet_Dump(mBlk_ReachSet[bid(blk)]);
   }
   */
 }
@@ -70,7 +70,7 @@ void ComputeReachability(Arena arena)
  ***/
 VectorSet ReachableBlocks(Block* blk)
 {
-  return mBlk_ReachSet[id(blk)];
+  return mBlk_ReachSet[bid(blk)];
 }
 
 }//end Reach namespace

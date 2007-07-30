@@ -183,7 +183,7 @@ BlockTuple Blk2_CleaveBlockAt(Inst* inLast, Block* blk)
   Inst* inIterFix;
   Block* blkNew = CreateEmptyBlock();
 
-  debug("cleaving block: %s(%d)", bname(blk), id(blk));
+  debug("cleaving block: %s(%d)", bname(blk), bid(blk));
   //walk up the insts backward until arriving at the clip point
   Block_ForAllInstsReverse(in, blk)
   {

@@ -10,6 +10,7 @@
 #include "debug.h"
 #include "stats.h"
 #include "rc.h"
+#include "lazy_set.h"
 
 /*--------------------------FORWARD DEFS--------------------------*/
 /* forward definition of a comparison object used by the std::set
@@ -19,6 +20,7 @@ struct LRcmp;
 
 /* forward definition of LiveUnit structure */
 struct LiveUnit;
+class LazySet;
 
 /*-------------------LIVE RANGE DATA STRUCTURE--------------------*/
 /* a live range is the unit of allocation for the register allocator.
@@ -27,6 +29,7 @@ typedef float Priority;
 struct LiveRange
 {
   /* class varaibles */
+  static const uint MAX_LRS;
   static void Init(Arena,unsigned int); /* class initialization function */
   static Arena arena; /* for memory allocation needs */
   static VectorSet tmpbbset; /* for memory allocation needs */
@@ -39,7 +42,8 @@ struct LiveRange
   /* fields */
   VectorSet bb_list;  /* basic blocks making up this LR */ 
                       /* set of live range interferences */
-  std::set<LiveRange*, LRcmp> *fear_list;
+  //std::set<LiveRange*, LRcmp> *fear_list;
+  LazySet *fear_list;
   VectorSet forbidden; /* forbidden colors for this LR */
   std::list<LiveUnit*> *units;  /* live units making up this LR */ 
   Color color;  /* color assigned to this LR */

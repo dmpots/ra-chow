@@ -65,7 +65,7 @@ void Coloring::Init(Arena arena, unsigned int num_live_ranges)
     Block* b;
     ForAllBlocks(b)
     {
-      Unsigned_Int bid = id(b);
+      Unsigned_Int bid = bid(b);
       Unsigned_Int cReg = RegisterClass::NumMachineReg(rc);
       mRcBlkId_VsUsedColor[rc][bid] = VectorSet_Create(arena, cReg);
       VectorSet_Clear(mRcBlkId_VsUsedColor[rc][bid]);
@@ -75,7 +75,7 @@ void Coloring::Init(Arena arena, unsigned int num_live_ranges)
 
 VectorSet Coloring::UsedColors(RegisterClass::RC rc, Block* blk)
 {
-  return mRcBlkId_VsUsedColor[rc][id(blk)];
+  return mRcBlkId_VsUsedColor[rc][bid(blk)];
 }
 
 void Coloring::SetColor(Block* blk, LRID lrid, Color color)
@@ -86,7 +86,7 @@ void Coloring::SetColor(Block* blk, LRID lrid, Color color)
 
 Color Coloring::GetColor(Block* blk, LRID lrid)
 {
-  LiveRange* lr = (*Chow::live_ranges[lrid]->blockmap)[(id(blk))];
+  LiveRange* lr = (*Chow::live_ranges[lrid]->blockmap)[(bid(blk))];
   assert(lr); /* could also return NO_COLOR if lr is NULL */
   return lr->color;
 }

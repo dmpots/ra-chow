@@ -178,7 +178,7 @@ void ConvertLiveNamespace(Liveness_Info* SSA_live)
   LRID lrid;
   ForAllBlocks(blk)
   {
-    info = SSA_live[id(blk)];
+    info = SSA_live[bid(blk)];
     for(j = 0; j < info.size; j++)
     {
       Variable vLive = info.names[j];

@@ -135,7 +135,7 @@ void LiveRange_Dump(LiveRange* lr)
   fprintf(stderr, "Interference List:\n");
     //LiveRange* intf_lr;
     //LiveRange_ForAllFears(lr,intf_lr)
-    for(LRSet::iterator i = lr->fear_list->begin();
+    for(LazySet::iterator i = lr->fear_list->begin();
         i != lr->fear_list->end();
         i++)
     {
@@ -169,7 +169,7 @@ void LiveUnit_DDump(LiveUnit* unit)
 void LiveUnit_Dump(LiveUnit* unit)
 {
   fprintf(stderr,"LR Unit: %s (%d)\n",bname(unit->block),
-                                      id(unit->block));
+                                      bid(unit->block));
   fprintf(stderr,"  Need Load: %c\n",unit->need_load ? 'Y' : 'N');
   fprintf(stderr,"  Need Store: %c\n",unit->need_store ? 'Y' : 'N');
   fprintf(stderr,"  Uses: %d\n",unit->uses);

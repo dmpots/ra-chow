@@ -2079,5 +2079,22 @@ writing
 * chow and briggs tried to compare thier allocators but it was not an
   apples to apples comparison. see briggs thesis for what he has done.
 
+=======================================================
+Malloc errors
+Sun Jul 29 19:49:48 CDT 2007
+=======================================================
+Getting some segfaults in malloc now that the fear_list has been
+changed to a LazySet. Not sure why this is happening. The files and
+args causing this are shown below (on godzilla).
 
+rt --chow-args="-r32 -b5 -eft" -a  
+twldrv.i
+ddeflu.i
+deseco.i
+fieldX.i
+initX.i
+parmovX.i
+radb2X.i
+radbgX.i
+radf5X.i
 

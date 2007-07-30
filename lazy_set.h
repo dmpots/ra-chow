@@ -22,6 +22,7 @@ class LazySet {
   void insert(LiveRange* lr);
   void erase(LiveRange* lr);
   void clear();
+  bool member(LiveRange* lr);
   int size();
 
 

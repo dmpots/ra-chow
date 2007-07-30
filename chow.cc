@@ -331,7 +331,7 @@ unsigned int FindLiveRanges(Arena uf_arena)
     //range
     Block_ForAllPhiNodes(phi, b)
     {
-      debug("process phi: %d at %s (%d)", phi->new_name, bname(b), id(b));
+      debug("process phi: %d at %s (%d)", phi->new_name, bname(b), bid(b));
       Variable* v_ptr;
       //find current sets for the phi node
       set = Find_Set(phi->new_name);
@@ -402,7 +402,7 @@ void BuildInterferences(Arena arena)
   SparseSet lrset = SparseSet_Create(arena, live_ranges.size());
   ForAllBlocks(blk)
   {
-    debug("processing blk:%s (%d)", bname(blk), id(blk));
+    debug("processing blk:%s (%d)", bname(blk), bid(blk));
 
     //we need to acccount for any variable that is referenced in this
     //block as it may not be in the live_out set, but should still be
@@ -445,7 +445,7 @@ void BuildInterferences(Arena arena)
     //Now add in the live_out set to the variables that include this
     //block in their live range
     Liveness_Info info;
-    info = SSA_live_out[id(blk)];
+    info = SSA_live_out[bid(blk)];
     for(unsigned int j = 0; j < info.size; j++)
     {
       //add block to each live range
@@ -525,7 +525,7 @@ Block* b)
   {
     LiveUnit* unit =  Chow::live_ranges[lrid]->LiveUnitForBlock(b);
     //debug("already present: %d, orig_name: %d new_orig: %d  block: %s (%d)", 
-   //                       lrid, unit->orig_name, v, bname(b), id(b));
+   //                       lrid, unit->orig_name, v, bname(b), bid(b));
     assert(unit->orig_name == v);
   }
 }
@@ -542,7 +542,7 @@ Block* b)
 LiveUnit* 
 AddLiveUnitOnce(LRID lrid, Block* b, SparseSet lrset, Variable orig_name)
 {
-  //debug("ADDING: %d BLOCK: %s (%d)", lrid, bname(b), id(b));
+  //debug("ADDING: %d BLOCK: %s (%d)", lrid, bname(b), bid(b));
   LiveUnit* new_unit = NULL;
   if(!SparseSet_Member(lrset, lrid))
   {
@@ -558,10 +558,10 @@ AddLiveUnitOnce(LRID lrid, Block* b, SparseSet lrset, Variable orig_name)
       SparseSet_Insert(lrset, lrid);
       Stats::BBStats bbstat = Stats::GetStatsForBlock(b, lr->id);
       new_unit = lr->AddLiveUnitForBlock(b, orig_name, bbstat);
-      Chow::live_units[id(b)].push_back(new_unit);
+      Chow::live_units[bid(b)].push_back(new_unit);
     }
     //block map must be initialized regardless of local or not
-    (*(lr->blockmap))[id(b)] = lr; 
+    (*(lr->blockmap))[bid(b)] = lr; 
   }
 
   return new_unit;
@@ -699,22 +699,29 @@ void UpdateConstrainedLists(LiveRange* newlr,
   //update constrained lists, only need to update for any live range
   //that interferes with both the new and original live range because
   //those are the only live ranges that could have changed status
-  LRSet updates;
+  /*LRSet updates;
   set_intersection(newlr->fear_list->begin(), newlr->fear_list->end(),
                    origlr->fear_list->begin(), origlr->fear_list->end(),
                    inserter(updates,updates.begin()));
-
   for(LRSet::iterator i = updates.begin(); i != updates.end(); i++)
+  */
+  for(LazySet::iterator i = newlr->fear_list->begin(); 
+      i != newlr->fear_list->end(); 
+      i++)
   {
-    LiveRange* lr = *i;
-    //skip anyone that has already been assigned a color
-    if(!lr->is_candidate) continue;
 
-    if(lr->IsConstrained())
+    LiveRange* lr = *i;
+    if(origlr->fear_list->member(lr))
     {
-      debug("ensuring LR: %d is in constr", lr->id);
-      unconstr_lrs->erase(lr);
-      constr_lrs->insert(lr);
+      //skip anyone that has already been assigned a color
+      if(!lr->is_candidate) continue;
+
+      if(lr->IsConstrained())
+      {
+        debug("ensuring LR: %d is in constr", lr->id);
+        unconstr_lrs->erase(lr);
+        constr_lrs->insert(lr);
+      }
     }
   }
 
@@ -740,7 +747,7 @@ void UpdateConstrainedListsAfterDelete(LiveRange* lr,
                                         LRSet* constr_lrs, 
                                         LRSet* unconstr_lrs)
 {
-  for(LRSet::iterator i = lr->fear_list->begin(); 
+  for(LazySet::iterator i = lr->fear_list->begin(); 
       i != lr->fear_list->end(); 
       i++)
   {
@@ -984,10 +991,10 @@ void MoveLoadsAndStores()
             LiveRange* lr = msd.lr;
             if(Params::Algorithm::rematerialize)
             {
-              if(lr->blockmap->find(id(edg->pred)) != lr->blockmap->end())
+              if(lr->blockmap->find(bid(edg->pred)) != lr->blockmap->end())
               {
                 debug("remat OPPORTUNITY");
-                LiveRange* lrPred = (*lr->blockmap)[id(edg->pred)];
+                LiveRange* lrPred = (*lr->blockmap)[bid(edg->pred)];
                 if(lrPred->rematerializable)
                 {
                   debug("remat SUCCESS");
@@ -1247,7 +1254,7 @@ void PullNodesFromGraph(
 
     //pull any neighbors that become unconstrained when this node is
     //removed
-    for(LRSI it = lr->fear_list->begin(); it != lr->fear_list->end(); it++)
+    for(LazySet::iterator it = lr->fear_list->begin(); it != lr->fear_list->end(); it++)
     {
       LiveRange* fear_lr = *it;
       fear_lr->simplified_neighbor_count++;

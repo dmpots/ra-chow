@@ -33,6 +33,10 @@ void LazySet::erase(LiveRange* lr)
     out_of_sync = true;
   }
 }
+bool LazySet::member(LiveRange* lr)
+{
+  return VectorSet_Member(elemset, lr->id);
+}
 
 void LazySet::clear()
 {

@@ -735,7 +735,7 @@ void FindLocalOnlyNames(Arena arena)
     {
       Variable v;
       Liveness_Info info;
-      info = SSA_live_out[id(blk)];
+      info = SSA_live_out[bid(blk)];
       SparseSet_ForAll(v, defs)
       {
         bool liveOut = false;

@@ -26,7 +26,7 @@
                 fprintf (stderr , __VA_ARGS__);\
                  fprintf(stderr, "\n");}
 
-#define id(b) ((b)->preorder_index)
+#define bid(b) ((b)->preorder_index)
 #define bname(b) (Label_Get_String((b)->labels->label))
 #define oname(op) ((opcode_specs[(op)->opcode]).opcode)
 

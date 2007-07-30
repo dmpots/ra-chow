@@ -105,6 +105,7 @@ Arena LiveRange::arena = NULL;
 VectorSet LiveRange::tmpbbset = NULL;
 const float LiveRange::UNDEFINED_PRIORITY = 666;
 unsigned int LiveRange::counter = 0;
+const uint LiveRange::MAX_LRS = 10000;
 void LiveRange::Init(Arena arena, unsigned int counter_start)
 {
   LiveRange::arena = arena;
@@ -129,7 +130,8 @@ LiveRange::LiveRange(RegisterClass::RC reg_class,
   priority = UNDEFINED_PRIORITY;
   color = Coloring::NO_COLOR;
   bb_list = VectorSet_Create(LiveRange::arena, block_count+1);
-  fear_list = new std::set<LiveRange*, LRcmp>;
+  //fear_list = new std::set<LiveRange*, LRcmp>;
+  fear_list = new LazySet(LiveRange::arena, MAX_LRS);
   units = new std::list<LiveUnit*>;
   unitmap = new std::map<Block*,LiveUnit*>;
   forbidden = 
@@ -226,7 +228,7 @@ bool LiveRange::IsConstrained() const
   //neighbors who have been removed from the graph because they are
   //garanteed to get a color
   int weighted_neighbor_cnt = 0;
-  for(LRSet::iterator it = fear_list->begin(); 
+  for(LazySet::iterator it = fear_list->begin(); 
       it != fear_list->end(); 
       it++)
   {
@@ -255,7 +257,7 @@ void LiveRange::MarkNonCandidateAndDelete()
 
   debug("deleting LR: %d from interference graph", this->id);
   //remove me from all neighbors fear list
-  for(LRSet::iterator it = fear_list->begin(); it != fear_list->end(); it++)
+  for(LazySet::iterator it = fear_list->begin(); it != fear_list->end(); it++)
   {
     (*it)->fear_list->erase(this);
   }
@@ -284,7 +286,7 @@ void LiveRange::AssignColor()
   debug("assigning color: %d to lr: %d", color, this->id);
 
   //update the interfering live ranges forbidden set
-  for(LRSet::iterator it = fear_list->begin(); it != fear_list->end(); it++)
+  for(LazySet::iterator it = fear_list->begin(); it != fear_list->end(); it++)
   {
     LiveRange* intf_lr = *it;
     for(int i = 0; i < RegisterClass::RegWidth(type); i++)
@@ -431,7 +433,7 @@ LiveUnit* LiveRange::LiveUnitForBlock(Block* b) const
  */
 bool LiveRange::ContainsBlock(Block* blk) const
 {
-  return VectorSet_Member(bb_list, id(blk));
+  return VectorSet_Member(bb_list, bid(blk));
 }
 
 /*
@@ -743,7 +745,7 @@ LiveRange* LiveRange::Mitosis()
 {
   LiveRange* newlr = new LiveRange(rc, NO_LRID, type);
   newlr->orig_lrid = orig_lrid;
-  newlr->id = LiveRange::counter++;
+  newlr->id = LiveRange::counter++; assert(counter < MAX_LRS);
   newlr->is_candidate = TRUE;
   newlr->type = type;
   newlr->blockmap = blockmap;
@@ -767,7 +769,7 @@ void LiveRange::TransferLiveUnitTo(LiveRange* to, LiveUnit* unit)
 {
   LiveRange_AddLiveUnit(to, unit);
   RemoveLiveUnit(unit);
-  (*blockmap)[id(unit->block)] = to;
+  (*blockmap)[bid(unit->block)] = to;
 }
 
 /*
@@ -787,7 +789,7 @@ void LiveRange::TransferLiveUnitTo(LiveRange* to, LiveUnit* unit)
 void LiveRange::RemoveLiveUnit(LiveUnit* unit)
 {
   //remove from the basic block set
-  VectorSet_Delete(bb_list, id(unit->block));
+  VectorSet_Delete(bb_list, bid(unit->block));
 
   std::list<LiveUnit*>::iterator elem;
   elem = find(begin(), end(), unit);
@@ -852,7 +854,7 @@ Priority LiveUnit_ComputePriority(LiveRange* lr, LiveUnit* lu)
       load_save_weight  * lu->uses 
     + store_save_weight * lu->defs 
     - move_cost_weight  * lu->need_store;
-  unitPrio *= pow(loop_depth_weight, Globals::depths[id(lu->block)]);
+  unitPrio *= pow(loop_depth_weight, Globals::depths[bid(lu->block)]);
 
   //treat load loop cost separte in case we can move it up from a loop
   int loadLoopDepth = LiveUnit_LoadLoopDepth(lr, lu);
@@ -898,7 +900,7 @@ bool LiveUnit_CanMoveLoad(LiveRange* lr, LiveUnit* lu)
  ***/
 int LiveUnit_LoadLoopDepth(LiveRange*  lr, LiveUnit* lu)
 {
-    int depth = depths[id(lu->block)];
+    int depth = depths[bid(lu->block)];
     if(Block_IsLoopHeader(lu->block) && LiveUnit_CanMoveLoad(lr, lu))
     {
       depth -= 1;
@@ -928,7 +930,7 @@ Priority LiveRange_OrigComputePriority(LiveRange* lr)
       - move_cost_weight  * lu->need_store
       - move_cost_weight  * lu->need_load;
     pr += unitPrio 
-          * pow(loop_depth_weight, Globals::depths[id(lu->block)]);
+          * pow(loop_depth_weight, Globals::depths[bid(lu->block)]);
     clu++;
   }
   return pr/clu;
@@ -1017,8 +1019,8 @@ void LiveRange_UpdateAfterSplit(LiveRange* newlr, LiveRange* origlr)
   //rebuild interferences of those live ranges that interfere with 
   //the original live range. they may now interfere with the new live
   //range and/or no longer interefer with the original live range
-  for(LRSet::iterator it = origlr->fear_list->begin(); 
-      it != origlr->fear_list->end();)
+  for(LazySet::iterator it = origlr->fear_list->begin(); 
+      it != origlr->fear_list->end(); it++)
   {
     LiveRange* fearlr = *it;
     bool neighbor_colored = (fearlr->color != Coloring::NO_COLOR);
@@ -1032,15 +1034,14 @@ void LiveRange_UpdateAfterSplit(LiveRange* newlr, LiveRange* origlr)
     //update origlr interference
     if(!origlr->InterferesWith(fearlr))
     {
-      //increment iterator before delete
-      LRSet::iterator del = it++; 
+      //can erase w/o invalidating the iterator in LazySet.
+      //you must change this if not using LazySet
       fearlr->fear_list->erase(origlr);
-      origlr->fear_list->erase(del);
+      origlr->fear_list->erase(fearlr); 
     }
     else //interferes so just increment iterator normally
     {
       if(neighbor_colored) origlr->num_colored_neighbors++;
-      it++; 
     }
   }
 
@@ -1070,7 +1071,7 @@ void LiveRange_UpdateAfterSplit(LiveRange* newlr, LiveRange* origlr)
  */
 void LiveRange_AddBlock(LiveRange* lr, Block* b)
 {
-  VectorSet_Insert(lr->bb_list, id(b));
+  VectorSet_Insert(lr->bb_list, bid(b));
   VectorSet vsUsed = Coloring::UsedColors(lr->rc, b);
   VectorSet_Union(lr->forbidden, lr->forbidden, vsUsed);
 }
@@ -1201,7 +1202,7 @@ void LiveRange_MarkStores(LiveRange* lr)
     for(LiveRange::iterator it = lr->begin(); it != lr->end(); it++)
     {
       LiveUnit* unit = *it;
-      if(!VectorSet_Member(LiveRange::tmpbbset, id(unit->block)))
+      if(!VectorSet_Member(LiveRange::tmpbbset, bid(unit->block)))
         continue;
 
       Boolean only_internal_store = TRUE; //keep track of why store needed
@@ -1213,7 +1214,7 @@ void LiveRange_MarkStores(LiveRange* lr)
         if(lr->ContainsBlock(blkSucc))
         { 
           //debug("checking lr: %d successor block %s(%d)",
-          //      lr->id, bname(blkSucc), id(blkSucc));
+          //      lr->id, bname(blkSucc), bid(blkSucc));
           LiveUnit* luSucc = lr->LiveUnitForBlock(blkSucc);
 
           //a direct successor in our live range needs a load
@@ -1222,13 +1223,13 @@ void LiveRange_MarkStores(LiveRange* lr)
             unit->need_store = TRUE;
             debug("store needed for lr: %d block(%s) "
                   "because load need in %s(%d)", lr->id, 
-                  bname(unit->block), bname(blkSucc), id(blkSucc));
+                  bname(unit->block), bname(blkSucc), bid(blkSucc));
           }
         }
         else //unit is an exit point of the live range
         {
           //test for liveness
-          Liveness_Info info = SSA_live_in[id(blkSucc)];
+          Liveness_Info info = SSA_live_in[bid(blkSucc)];
           for(LOOPVAR j = 0; j < info.size; j++)
           {
             //debug("LIVE_IN: %d in %s",info.names[j], bname(blkSucc));
@@ -1240,7 +1241,7 @@ void LiveRange_MarkStores(LiveRange* lr)
               debug("store needed for lr: %d block(%s) "
                     "because it is live in at successor %s(%d)\n",
                     lr->id, bname(unit->block), 
-                    bname(blkSucc), id(blkSucc));
+                    bname(blkSucc), bid(blkSucc));
               break;
             }
           }
@@ -1297,7 +1298,7 @@ debug("*** MARKING STORES for LR: %d ***\n", lr->id);
         if(lr->ContainsBlock(blkSucc))
         { 
           //debug("checking lr: %d successor block %s(%d)",
-          //      lr->id, bname(blkSucc), id(blkSucc));
+          //      lr->id, bname(blkSucc), bid(blkSucc));
           luSucc = lr->LiveUnitForBlock(blkSucc);
 
           //a direct successor in our live range needs a load
@@ -1306,7 +1307,7 @@ debug("*** MARKING STORES for LR: %d ***\n", lr->id);
             unit->need_store = TRUE;
             debug("store needed for lr: %d block(%s) "
                   "because load need in %s(%d)", lr->id, 
-                  bname(unit->block), bname(blkSucc), id(blkSucc));
+                  bname(unit->block), bname(blkSucc), bid(blkSucc));
           }
         }
         else //unit is an exit point of the live range
@@ -1317,7 +1318,7 @@ debug("*** MARKING STORES for LR: %d ***\n", lr->id);
               def_list.end())
           {
             //test for liveness
-            Liveness_Info info = SSA_live_in[id(blkSucc)];
+            Liveness_Info info = SSA_live_in[bid(blkSucc)];
             for(LOOPVAR j = 0; j < info.size; j++)
             {
               //debug("LIVE_IN: %d in %s",info.names[j], bname(blkSucc));
@@ -1329,7 +1330,7 @@ debug("*** MARKING STORES for LR: %d ***\n", lr->id);
                 debug("store needed for lr: %d block(%s) "
                       "because it is live in at successor %s(%d)\n",
                       lr->id, bname(unit->block), 
-                      bname(blkSucc), id(blkSucc));
+                      bname(blkSucc), bid(blkSucc));
                 break;
               }
             }
@@ -1396,7 +1397,7 @@ void Def_CollectUniqueUseNames(Variable v, std::list<Variable>& vgrp)
           //worklist
           if(find(vgrp.begin(), vgrp.end(), vPhi) == vgrp.end())
           {
-            debug("use (%d) is a phi node in %s(%d)", vPhi, bname(blk), id(blk)); 
+            debug("use (%d) is a phi node in %s(%d)", vPhi, bname(blk), bid(blk)); 
             vgrpWork.push_back(vPhi); //follow this phi def
             debug("adding %d to work queue", vPhi); 
           }
@@ -1424,8 +1425,8 @@ Boolean LiveRange_EntryPoint(LiveRange* lr, LiveUnit* unit)
     if(!lr->ContainsBlock(pred))
     {
       debug("LR: %d is entry at block %s(%d) from block %s(%d)",
-            lr->id, bname(unit->block), id(unit->block),
-                    bname(pred), id(pred));
+            lr->id, bname(unit->block), bid(unit->block),
+                    bname(pred), bid(pred));
       return TRUE;
     }
   }

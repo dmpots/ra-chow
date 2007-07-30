@@ -222,7 +222,7 @@ void SplitRematerializableLiveRanges()
       LiveUnit* lu = *i;
       unsigned int setid = (Find_Set(lu->orig_name, remat_sets))->id;
       debug("LiveUnit: %s(%d) is setid %d", bname(lu->block), 
-             id(lu->block), setid);
+             bid(lu->block), setid);
       lu_map[setid].push_back(lu);
     }
     assert(lu_map.size() > 1);
@@ -264,7 +264,7 @@ void SplitRematerializableLiveRanges()
     }
 
     //rebuild interferences
-    for(LRSet::iterator fearIT = lr->fear_list->begin(); 
+    for(LazySet::iterator fearIT = lr->fear_list->begin(); 
         fearIT != lr->fear_list->end();)
     {
       LiveRange* fearlr = *fearIT;
@@ -282,12 +282,13 @@ void SplitRematerializableLiveRanges()
       }
 
       //update origlr interference
-      LRSet::iterator del = fearIT++;
+      //can delete during iteration from a LazySet
+      //LRSet::iterator del = fearIT++; 
       if(!lr->InterferesWith(fearlr))
       {
         //increment iterator before delete
         fearlr->fear_list->erase(lr);
-        lr->fear_list->erase(del);
+        lr->fear_list->erase(fearlr);
       }
     }
 

@@ -323,7 +323,7 @@ void EnsureReg(Register* reg,
     {
       /* must grab the actual live range here to make sure that loads
        * and stores respect the rematerialization settings */
-      LiveRange* lr = (*live_ranges[orig_lrid]->blockmap)[id(blk)];
+      LiveRange* lr = (*live_ranges[orig_lrid]->blockmap)[bid(blk)];
       if(purpose == FOR_USE)
       {
         InsertLoad(lr, *updatedInst, tmpReg, Spill::REG_FP);
@@ -394,7 +394,7 @@ void HandleCopy(Block* blk,
   if(delete_copy)
   {
     //insert load from src to dest reg
-    LiveRange* lr = (*Chow::live_ranges[src_lrid]->blockmap)[id(blk)];
+    LiveRange* lr = (*Chow::live_ranges[src_lrid]->blockmap)[bid(blk)];
     Spill::InsertLoad(lr, *updatedInst, *destp, Spill::REG_FP);
     
     //delete copy
@@ -476,7 +476,7 @@ inline bool IsAllocated(LRID lrid, Block* blk)
 {
   if(lrid == NO_LRID) return false;
   //have to check to see if the block was ever part of the live range
-  if((*Chow::live_ranges[lrid]->blockmap)[id(blk)] == NULL) return false;
+  if((*Chow::live_ranges[lrid]->blockmap)[bid(blk)] == NULL) return false;
   return (GetMachineRegAssignment(blk, lrid) != REG_UNALLOCATED);
 }
 
@@ -1279,7 +1279,7 @@ void RecordDistance(
  * decisions. the mapping must have the invariant that if instA and
  * instB are in the same blocks, or are in blocks connected by a
  * SingleSuccesorPath and instA occurs textually before instB, then
- * id(instA) < id(instB)
+ * bid(instA) < bid(instB)
 */
 void BuildInstOrderingMap()
 {
@@ -1381,7 +1381,7 @@ bool NeedStore(AssignedReg* tmpReg, Inst* inst, Block* blk)
 bool LiveOut(LRID lrid, Block* blk)
 {
   using Mapping::SSAName2OrigLRID;
-  Liveness_Info info = SSA_live_out[id(blk)];
+  Liveness_Info info = SSA_live_out[bid(blk)];
   for(uint i = 0; i < info.size; i++)
   {
     if((info.names[i] < SSA_def_count))//avoid junk in live_out set

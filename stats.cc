@@ -47,14 +47,14 @@ void ComputeBBStats(Arena arena, Unsigned_Int variable_count)
     Arena_GetMemClear(arena, sizeof(BBStats*) * (block_count + 1));
   ForAllBlocks(b)
   {
-    bb_stats[id(b)] = (BBStats*) 
+    bb_stats[bid(b)] = (BBStats*) 
       Arena_GetMemClear(arena, sizeof(BBStats) * variable_count);
   }
 
   LRID lrid;
   ForAllBlocks(b)
   {
-    bstats = bb_stats[id(b)];
+    bstats = bb_stats[bid(b)];
     Block_ForAllInsts(inst, b)
     {
       Inst_ForAllOperations(op, inst)
@@ -85,7 +85,7 @@ void ComputeBBStats(Arena arena, Unsigned_Int variable_count)
  ***/
 BBStats GetStatsForBlock(Block* blk, LRID lrid)
 {
-  return bb_stats[id(blk)][lrid];
+  return bb_stats[bid(blk)][lrid];
 }
 
 /*

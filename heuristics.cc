@@ -187,7 +187,7 @@ void IncludeWhenNotTooManyNeighbors::AddNeighbors(LiveRange* lr,Block* blk)
 {
   //go through all the live units that include this block and add them
   //as neighbors if they are a candidate or have been assigned a color
-  debug("live unit size: %d", (int)Chow::live_units[id(blk)].size());
+  debug("live unit size: %d", (int)Chow::live_units[bid(blk)].size());
   std::for_each(
     lr->fear_list->begin(), lr->fear_list->end(), 
     AddIfBlockEq(blk, neighbors));
@@ -208,7 +208,7 @@ bool IncludeWhenNotTooManyNeighbors::operator()
   if((num_neighbors_after - num_neighbors_before) > num_colors_before)
   {
     debug("do not include %s(%d) it adds too many neighbors",
-      bname(blk), id(blk));
+      bname(blk), bid(blk));
     return false;
   }
 
@@ -225,7 +225,7 @@ bool IncludeWhenNotTooManyNeighbors::operator()
   if(((double)num_neighbors_after)/num_colors_after > max_ratio)
   {
     debug("do not include %s(%d) its neb/color ratio is too big",
-      bname(blk), id(blk));
+      bname(blk), bid(blk));
     return false;
   }
 
@@ -264,7 +264,7 @@ ChooseColorFromMostConstrainedNeighbor::operator()(
 )
 {
   using Coloring::NO_COLOR;
-  typedef LRSet::iterator SI;
+  typedef LazySet::iterator SI;
   typedef std::vector<LiveRange*>::iterator LI;
   typedef std::vector<Color>::const_iterator CI;
 
@@ -329,7 +329,7 @@ ChooseColorInMostNeighborsForbidden::operator()(
   const std::vector<Color>& choices
 )
 {
-  typedef LRSet::iterator SI;
+  typedef LazySet::iterator SI;
   typedef std::vector<Color>::const_iterator CI;
   typedef std::map<Color,int>::const_iterator CCI;
 
