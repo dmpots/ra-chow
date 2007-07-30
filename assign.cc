@@ -11,6 +11,7 @@
 #include <list>
 #include <vector>
 #include <map>
+#include <list>
 #include <algorithm>
 #include <functional>
 #include <utility>
@@ -25,6 +26,7 @@
 #include "color.h"
 #include "mapping.h"
 #include "cfg_tools.h"
+#include "params.h"
 
 /*------------------MODULE LOCAL DECLARATIONS------------------*/
 namespace {
@@ -129,6 +131,7 @@ void StoreIfNeeded(AssignedReg* tmpReg, Inst* origInst, Block* blk);
 AssignedReg* FindInRegPool(LRID lrid, AssignedRegList* regpool);
 void ResetRegSpan(AssignedReg* startingReg, uint width);
 void StoreAndResetRegSpan( AssignedReg* , Inst* , Block* , uint );
+bool LiveIn(LRID orig_lrid, Block* blk);
 
 //for local allocation
 bool recompute_dist_map = true;
@@ -405,6 +408,12 @@ void HandleCopy(Block* blk,
   }
 }
 
+//TODO: properly commend these function when you know they should be kept 
+inline LiveRange* RealLR(LRID orig_lrid, Block* blk);
+Edge_Extension* AddEdgeExtensionNode(Edge* e, MovedSpillDescription msd);
+void InsertCopy(AssignedReg* tmpReg, Edge* succ_edge);
+void ResetAllocatedTmpRegs(AssignedRegList* reserved, Block* blk);
+void ResetAllTmpRegs(AssignedRegList* reserved, Block* blk);
 /*
  *===================
  * ResetFreeTmpRegs()
@@ -418,26 +427,17 @@ void ResetFreeTmpRegs(Block* blk)
   //or multiple paths to the successor
   bool reset_all = !SingleSuccessorPath(blk);
 
-  //this if/else looks like a big copy and paste job, which it is but
-  //it was easier to get it to work this way and probably easier to
-  //understand later as the conditionals in the loop get a little
-  //messy if you try to merge the cases.
   if(reset_all)
   {
     //make sure that we update our distance map for the next block
     recompute_dist_map = true;
 
     //take care of business for each register class
-    debug("resetting all tmp regs to be free");
     for(unsigned int i = 0; i < reg_contents.size(); i++)
     {
-      RegisterContents* regContents = &reg_contents[i];
-      //3) set all reserved registers to be FREE so they can be used in
+      //set all reserved registers to be FREE so they can be used in
       //the next block
-      AssignedRegList* reserved = regContents->reserved;
-      StoreAndResetRegSpan(
-        reserved->front(), Block_LastInst(blk), blk, reserved->size()
-      );
+      ResetAllTmpRegs(reg_contents[i].reserved, blk);
     }
   }
   else
@@ -446,25 +446,176 @@ void ResetFreeTmpRegs(Block* blk)
     debug("resetting tmp regs allocated in succesor to be free");
     for(unsigned int i = 0; i < reg_contents.size(); i++)
     {
-      RegisterContents* regContents = &reg_contents[i];
-      AssignedRegList* reserved = regContents->reserved;
-      AssignedRegList::const_iterator resIT;
-      for(resIT = reserved->begin(); resIT != reserved->end(); resIT++)
+      //reset registers for those containing live ranges allocated in
+      //the successor block
+      ResetAllocatedTmpRegs(reg_contents[i].reserved, blk);
+    }
+  }
+}
+
+/* reset all temp regs. if a global lr is in a tmp reg and live out on
+ * an edge then insert a store on that edge */
+void ResetAllTmpRegs(AssignedRegList* reserved, Block* blk)
+{
+  debug("resetting all tmp regs to be free");
+  //if we are not moving loads and stores then just store in the block
+  if(!Params::Algorithm::move_loads_and_stores)
+  {
+    StoreAndResetRegSpan(
+      reserved->front(), Block_LastInst(blk), blk, reserved->size()
+    );
+  }
+  else
+  {
+    //first collect all globals as they are the only ones who might
+    //need a store
+    AssignedRegList globals;
+    AssignedRegList::const_iterator resIT;
+    for(resIT = reserved->begin(); resIT != reserved->end(); resIT++)
+    {
+      AssignedReg* tmpReg = *resIT;
+      if(!tmpReg->local) globals.push_back(tmpReg);
+    }
+    //now either store the global or generate a copy if it is
+    //allocated in a successor block.
+    for(resIT = globals.begin(); resIT != globals.end(); resIT++)
+    {
+      Edge* e;
+      AssignedReg* tmpReg = *resIT;
+      debug("resetting global tmp reg: r%d for lrid: %d",
+            tmpReg->machineReg, tmpReg->forLRID);
+      Block_ForAllSuccs(e,blk)
       {
-        //reset the reg if this tmp reg holds a live range that has a
-        //real register in the next block
-        if(IsAllocated((*resIT)->forLRID, blk->succ->succ))
+        //if it is allocated in the successor then  insert a copy
+        if(IsAllocated(tmpReg->forLRID, e->succ))
         {
-          debug("resetting tmp reg: r%d for lrid: %d", 
-            (*resIT)->machineReg, (*resIT)->forLRID);
-          StoreAndResetRegSpan(
-            *resIT, Block_LastInst(blk), blk, RegWidth(*resIT)
-          );
-          //could increment the iterator here to skip next width regs
+          debug("lrid allocated in successor: %s", bname(e->succ));
+          InsertCopy(tmpReg, e);
+        }
+        //if it is dirty and live in insert a store
+        else if(tmpReg->dirty && LiveIn(tmpReg->forLRID, e->succ))
+        {
+          debug("tmpreg dirty and live in at successor: %s", 
+                bname(e->succ));
+          MovedSpillDescription msd = {0};
+          msd.lr = RealLR(tmpReg->forLRID, blk);
+          msd.spill_type = STORE_SPILL;
+          msd.orig_blk = blk;
+          msd.mreg = tmpReg->machineReg;
+          (void)AddEdgeExtensionNode(e, msd);
         }
       }
     }
+    //reset all tmp regs since we are at end of local allocation
+    ResetRegSpan(reserved->front(), reserved->size());
   }
+}
+/* only reset regs which are allocated in a successor block */
+void ResetAllocatedTmpRegs(AssignedRegList* reserved, Block* blk)
+{
+  AssignedRegList::const_iterator resIT;
+  for(resIT = reserved->begin(); resIT != reserved->end(); resIT++)
+  {
+    //reset the reg if this tmp reg holds a live range that has a
+    //real register in the next block
+    if(IsAllocated((*resIT)->forLRID, blk->succ->succ))
+    {
+      debug("resetting tmp reg: r%d for lrid: %d", 
+        (*resIT)->machineReg, (*resIT)->forLRID);
+
+      //insert copy must be done on the edge
+      if(!Params::Algorithm::move_loads_and_stores)
+      {
+        StoreAndResetRegSpan(
+          *resIT, Block_LastInst(blk), blk, RegWidth(*resIT)
+        );
+      }
+      else
+      {
+        AssignedReg* tmpReg = *resIT;
+        InsertCopy(tmpReg, blk->succ);
+        ResetForRegWidth(tmpReg);
+      }
+        //could increment the iterator here to skip next width regs
+    }
+  }
+}
+/* insert a copy onto the edge. if the live range is dirty then insert
+ * a copy-def so that we treat the copy as a def in case it should
+ * reach anyone outside the live range */
+void InsertCopy(AssignedReg* tmpReg, Edge* succ_edge)
+{
+  Block* pred_blk = succ_edge->pred;
+  Block* succ_blk = succ_edge->succ;
+  Register dest_reg = GetMachineRegAssignment(succ_blk, tmpReg->forLRID);
+  assert(dest_reg != REG_UNALLOCATED);
+
+  //if the register has been written to then we need to insert a copy
+  //def so that the def will be stored if needed
+  MovedSpillDescription msd = {0};
+  msd.lr = RealLR(tmpReg->forLRID, pred_blk);
+  msd.lr_dest = RealLR(tmpReg->forLRID, succ_blk);
+  msd.cp_src = tmpReg->machineReg;
+  msd.cp_dest = dest_reg;
+  msd.orig_blk = pred_blk;
+  if(tmpReg->dirty) {
+    msd.spill_type = COPYDEF_SPILL;
+  }
+  else {
+    msd.spill_type = COPY_SPILL;
+  }
+
+  //add the copy to the edge
+  Edge_Extension* ee = AddEdgeExtensionNode(succ_edge, msd);
+
+  //remove load for this register from the edge list
+  typedef std::list<MovedSpillDescription> L;
+  L* spill_list = ee->spill_list;
+  bool found_load = false;
+  for(L::iterator it = spill_list->begin(); it != spill_list->end(); it++)
+  {
+    debug("match: %d_%d to load_for: %d_%d", (*it).lr->id,  
+          (*it).lr->orig_lrid, msd.lr->id, msd.lr->orig_lrid);
+    debug("st: %d, st: %d", (*it).spill_type, LOAD_SPILL);
+
+    if((*it).lr->orig_lrid == msd.lr->orig_lrid && 
+       (*it).spill_type == LOAD_SPILL)
+    {
+      found_load = true;
+      spill_list->erase(it); //delete the load
+      break;
+    }
+  }
+  assert(found_load); //may not find it on SSB with no enhanced motion
+}
+/* get a handle to the the real live range for a block given the
+ * orignal lrid. (it may have chaged due to splitting) */
+inline LiveRange* RealLR(LRID orig_lrid, Block* blk)
+{
+  typedef std::map<unsigned int, LiveRange*> M;
+  M* blockmap = Chow::live_ranges[orig_lrid]->blockmap;
+  M::iterator it = blockmap->find(id(blk));
+  assert(it != blockmap->end());
+  return (*it).second;
+}
+/* could factor this same function out of live_range.cc, but no good
+ * place to put it so we basically just copy it here.
+ */
+Edge_Extension* AddEdgeExtensionNode(Edge* e, MovedSpillDescription msd)
+{
+  //always add the edge extension to the predecessor version of the edge
+  Edge* edgPred = FindEdge(e->pred, e->succ, PRED_OWNS);
+  Edge_Extension* ee = edgPred->edge_extension;
+  if(ee == NULL)
+  {
+    //create and add the edge extension
+    ee = (Edge_Extension*) 
+      Arena_GetMemClear(Chow::arena, sizeof(Edge_Extension));
+    ee->spill_list = new std::list<MovedSpillDescription>;
+    edgPred->edge_extension = ee;
+  }
+  ee->spill_list->push_back(msd);
+  return ee;
 }
 
 /*
@@ -477,7 +628,7 @@ void ResetFreeTmpRegs(Block* blk)
  **/
 inline bool IsAllocated(LRID lrid, Block* blk)
 {
-  if(lrid == NO_LRID) return false;
+  if(lrid == NO_LRID || lrid == Spill::frame.lrid) return false;
   //have to check to see if the block was ever part of the live range
   if((*Chow::live_ranges[lrid]->blockmap)[bid(blk)] == NULL) return false;
   return (GetMachineRegAssignment(blk, lrid) != REG_UNALLOCATED);
@@ -1393,6 +1544,19 @@ bool LiveOut(LRID lrid, Block* blk)
       {
         return true;
       }
+    }
+  }
+  return false;
+}
+
+bool LiveIn(LRID orig_lrid, Block* blk)
+{
+  Liveness_Info info = SSA_live_in[id(blk)];
+  for(LOOPVAR j = 0; j < info.size; j++)
+  {
+    if(orig_lrid == info.names[j])
+    {
+      return true;
     }
   }
   return false;

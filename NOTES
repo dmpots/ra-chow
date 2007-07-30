@@ -2081,3 +2081,36 @@ writing
 
 
 
+
+(* check these values after changes to make sure they are working *)
+//HERE: this fails with an error. why are we putting two stores on the
+//same edge i wonder?
+chow -r16 -eft -l10,10 -g 1.i
+ERROR [chow_extensions.cc,97] lrid: 33, st1: 0, st2: 0
+ERROR [chow_extensions.cc,98] two mem-ops on edge, but not load store
+Assertion failed: false, file chow_extensions.cc, line 99
+(1.i = spline.i)
+
+(spline.i)
+end of block L00012
+0       iSSTor  @SPILL_46(156) 4 156 r555 r2    #STORE 46_46
+0       JMPl    L19
+
+L19:
+0       iSLDor  @SPILL_46(156) 4 156 r555 => r15        #LOAD 46_237
+0       JMPl    LL0002
+
+DEBUG [assign.cc,439] resetting tmp regs allocated in succesor to be
+free
+DEBUG [assign.cc,452] resetting tmp reg: r2 for lrid: 46
+Assertion failed: false, file assign.cc, line 453
+
+
+also - 
+decomp.i
+solve.i
+svd.i
+urand.i
+zeroin.i
+saxpy.i
+sgemm.i

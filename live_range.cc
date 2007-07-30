@@ -956,13 +956,11 @@ void AddEdgeExtensionNode(Edge* e, LiveRange* lr, LiveUnit* unit,
   }
 
   //record the relavant info
-  MovedSpillDescription msd;
+  MovedSpillDescription msd = {0};
   msd.lr = lr;
   msd.spill_type = spillType;
   msd.orig_blk = unit->block;
-  msd.lr_dest = NULL;//put junk values here 
-  msd.cp_src  = -1;  //put junk values here
-  msd.cp_dest = -1;  //put junk values here
+  msd.mreg = RegisterClass::MachineRegForColor(lr->rc, lr->color);
   ee->spill_list->push_back(msd);
 }
 

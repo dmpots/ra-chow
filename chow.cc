@@ -983,8 +983,10 @@ void MoveLoadsAndStores()
         {
           MovedSpillDescription msd = (*ee);
           //use machine registers for these loads/stores 
-          Register mReg =
-            Assign::GetMachineRegAssignment(msd.orig_blk, msd.lr->orig_lrid);
+          if(msd.mreg == -1) {
+            msd.mreg = Assign::GetMachineRegAssignment(msd.orig_blk, msd.lr->orig_lrid);
+          }
+            
           switch(msd.spill_type) {
             case STORE_SPILL:
             {
@@ -992,7 +994,7 @@ void MoveLoadsAndStores()
                     bname(msd.orig_blk), bname(blkST),
                     msd.lr->orig_lrid, msd.lr->id);
               Spill::InsertStore(msd.lr, Block_FirstInst(blkST),
-                                mReg, Spill::REG_FP,
+                                msd.mreg, Spill::REG_FP,
                                 BEFORE_INST);
               break;
             }
@@ -1014,7 +1016,7 @@ void MoveLoadsAndStores()
                 }
               }
               Spill::InsertLoad(lr, Block_LastInst(blkLD), 
-                                mReg, Spill::REG_FP);
+                                msd.mreg, Spill::REG_FP);
               break;
             }
             default:
@@ -1122,7 +1124,7 @@ void CountLocals()
 
 
 /****************************************************************
- *                     NEW STUFF
+ *                     OPTIMISTIC CHOW
  ****************************************************************/
 void SimplifyGraph(LRSet* constr_lrs);
 void ColorFromStack();

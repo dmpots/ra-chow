@@ -128,6 +128,7 @@ struct MovedSpillDescription
   LiveRange* lr;
   SpillType spill_type;
   Block* orig_blk;
+  int mreg; //machine reg, set to -1 if unknown
   //only for COPY_SPILL, COPYDEF_SPILL
   Register cp_src; 
   Register cp_dest;

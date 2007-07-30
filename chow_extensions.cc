@@ -93,6 +93,10 @@ void EnhancedCodeMotion(Edge* edg, Block* blkLD)
           default:
             //ignore if it is not a load or a store that we can change
             //into a copy
+            error("lrid: %d, st1: %d, st2: %d", ee->lr->orig_lrid,
+                  ee->spill_type, eeT->spill_type);
+            error("two mem-ops on edge, but not load store");
+            assert(false);
             ;
         }
         Stats::chowstats.cInsertedCopies++;
@@ -240,11 +244,15 @@ bool OrderCopies(const CopyList& rr_copies, CDL* ordered_copies)
 
     CopyDescription cd;
     cd.src_lr = msdSrc.lr;
-    cd.src_reg = Assign::GetMachineRegAssignment(msdSrc.orig_blk, 
-                                        msdSrc.lr->orig_lrid);
+    cd.src_reg = msdSrc.mreg == -1 ? 
+      Assign::GetMachineRegAssignment(msdSrc.orig_blk, 
+                                        msdSrc.lr->orig_lrid)
+      : msdSrc.mreg;
     cd.dest_lr = msdDest.lr;
-    cd.dest_reg = Assign::GetMachineRegAssignment(msdDest.orig_blk, 
-                                        msdDest.lr->orig_lrid);
+    cd.dest_reg = msdDest.mreg == -1 ?
+      Assign::GetMachineRegAssignment(msdDest.orig_blk, 
+                                        msdDest.lr->orig_lrid)
+      : msdDest.mreg;
     
 
     //insert this copy in the correct place in the ordered list
