@@ -8,11 +8,12 @@
 class LazySet {
   public:
   typedef std::list<LiveRange*> ElemList;
+  typedef std::vector<bool> ElemSet;
 
   /* fields */
   int real_size; /* number of elements in the set */
   bool out_of_sync; /* true if some element was deleted */
-  VectorSet elemset;  /* quick reference for elements in the set */
+  ElemSet* elemset;  /* quick reference for elements in the set */
   ElemList* elemlist; /* may contain removed elements */
 
   /* constructor */
@@ -31,7 +32,7 @@ class LazySet {
   {
     ElemList::iterator it;
     ElemList::iterator end; //end of the iteration range
-    VectorSet real_elems;
+    ElemSet* real_elems;
     ElemList* elems; 
     bool* out_of_sync; //reset this to false on complete iteration
 
@@ -39,16 +40,15 @@ class LazySet {
     LazySetIterator(
       ElemList::iterator start,
       ElemList::iterator _end,
-      VectorSet _guards, 
+      ElemSet*  _guards, 
       ElemList* _elems, 
-      bool* oos)
+      bool* oos
+    )
       : it(start),
         end(_end),
         real_elems(_guards), 
         elems(_elems),
-        out_of_sync(oos)
-      {
-      }
+        out_of_sync(oos) { }
 
     //copy constructor
     LazySetIterator(const LazySetIterator& other)

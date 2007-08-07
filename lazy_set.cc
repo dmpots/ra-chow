@@ -3,44 +3,62 @@
 #include "types.h"
 #include "debug.h"
 
+namespace {
+  inline bool mem(LazySet::ElemSet* elemset, uint i){
+    assert(i < elemset->size());
+    return ((*elemset)[i]);
+  }
+  inline void add(LazySet::ElemSet* elemset, uint i, bool b){
+    assert(i < elemset->size());
+    ((*elemset)[i]) = b;
+  }
+}
 
 LazySet::LazySet(Arena arena, int max_size)
   : real_size(0), out_of_sync(false)
 {
-  elemset = VectorSet_Create(arena, max_size);
-  elemlist = new ElemList;
+  //elemset = VectorSet_Create(arena, max_size);
+  elemset   = new std::vector<bool>(10, false);
+  elemlist  = new ElemList;
 }
 
 void LazySet::insert(LiveRange* lr)
 {
-  debug("checking for insert for lr: %d", lr->id);
-  if(!VectorSet_Member(elemset, lr->id))
+  //debug("checking for insert for lr: %d", lr->id);
+  //if(!VectorSet_Member(elemset, lr->id))
+  if(lr->id >= elemset->size()){elemset->resize(LiveRange::counter+100,false);};
+  if(!mem(elemset,lr->id))
   {
-    debug("inserting member");
-    VectorSet_Insert(elemset, lr->id);
+    //debug("inserting member");
+    //VectorSet_Insert(elemset, lr->id);
+    add(elemset,lr->id, true);
     elemlist->push_back(lr);
-    real_size++;
-    debug("new size: %d", real_size);
+    real_size++; assert(real_size <= (int)elemset->size());
+    //debug("new size: %d", real_size);
   }
 }
 
 void LazySet::erase(LiveRange* lr)
 {
-  if(VectorSet_Member(elemset, lr->id))
+  //if(VectorSet_Member(elemset, lr->id))
+  if(mem(elemset,lr->id))
   {
-    VectorSet_Delete(elemset, lr->id);
-    real_size--;
+    //VectorSet_Delete(elemset, lr->id);
+    add(elemset,lr->id, false);
+    real_size--; assert(real_size >= 0);
     out_of_sync = true;
   }
 }
 bool LazySet::member(LiveRange* lr)
 {
-  return VectorSet_Member(elemset, lr->id);
+  return lr->id < elemset->size() ? mem(elemset,lr->id) : false;
+  //return VectorSet_Member(elemset, lr->id);
 }
 
 void LazySet::clear()
 {
-  VectorSet_Clear(elemset);
+  //VectorSet_Clear(elemset);
+  for(uint i = 0; i < elemset->size(); i++){add(elemset,i,false);}
   elemlist->clear();
   real_size = 0;
   out_of_sync = false;
@@ -48,12 +66,15 @@ void LazySet::clear()
 
 int LazySet::size()
 {
-  debug("size: %d", real_size);
+  assert(real_size < (int)elemset->size());
+  assert(real_size >= 0);
   return real_size;
 }
 
 LazySet::iterator LazySet::begin()
 {
+  debug("looking for begin. size: %d, real_size: %d", 
+    elemset->size(), real_size);
   LRList::iterator start = elemlist->end();
   if(real_size == 0)
   {
@@ -66,7 +87,9 @@ LazySet::iterator LazySet::begin()
     //start the iteration from there, erasing expired as we go
     for(LRList::iterator it = elemlist->begin(); it != elemlist->end();)
     {
-      if(VectorSet_Member(elemset, (*it)->id)){start = it; break;}
+      //if(VectorSet_Member(elemset, (*it)->id)){start = it; break;}
+      debug("mem? %d", (*it)->id);
+      if(mem(elemset,(*it)->id)){start = it; break;}
       else{LRList::iterator del = it++; elemlist->erase(del);}
     }
   }
@@ -87,6 +110,7 @@ LazySet::iterator LazySet::end()
 
 LazySet::ElemList::value_type& LazySet::LazySetIterator::operator*()
 {
+  assert(it != end);
   return *it;
 }
 
@@ -117,7 +141,8 @@ LazySet::LazySetIterator& LazySet::LazySetIterator::operator++()
         *out_of_sync = false; //reached i
         break;
       }
-      if(!VectorSet_Member(real_elems, (*it)->id))
+      //if(!VectorSet_Member(real_elems, (*it)->id))
+      if(!mem(real_elems,(*it)->id))
       {
         ElemList::iterator del = it++;
         elems->erase(del);
