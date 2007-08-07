@@ -30,9 +30,9 @@ OptionParser.new do |opt|
   opt.banner = "usage: rt [options]\nRun tests for the chow allocator"
   opt.separator ""
   #arguments passed to the chow allocator
-  opt.on("-c ARGS", "--chow-args ARGS", Array, 
+  opt.on("-c ARGS", "--chow-args ARGS", 
           "Arguments passed to the chow allocator") do |list|
-    chow_args = list.join(" ")
+    chow_args = list
   end
 
   opt.on("-t TEST","--test TEST",
