@@ -26,7 +26,9 @@ void LazySet::insert(LiveRange* lr)
 {
   //debug("checking for insert for lr: %d", lr->id);
   //if(!VectorSet_Member(elemset, lr->id))
-  if(lr->id >= elemset->size()){elemset->resize(LiveRange::counter+100,false);};
+  if(lr->id >= elemset->size()){
+      elemset->resize(LiveRange::counter+100,false);
+  };
   if(!mem(elemset,lr->id))
   {
     //debug("inserting member");
@@ -34,6 +36,7 @@ void LazySet::insert(LiveRange* lr)
     add(elemset,lr->id, true);
     elemlist->push_back(lr);
     real_size++; assert(real_size <= (int)elemset->size());
+    assert(elemlist->size() == real_size || out_of_sync);
     //debug("new size: %d", real_size);
   }
 }
@@ -73,8 +76,8 @@ int LazySet::size()
 
 LazySet::iterator LazySet::begin()
 {
-  debug("looking for begin. size: %d, real_size: %d", 
-    elemset->size(), real_size);
+  //printf("looking for begin. size: %d, real_size: %d\n", 
+  //  elemset->size(), real_size);
   LRList::iterator start = elemlist->end();
   if(real_size == 0)
   {
@@ -95,14 +98,14 @@ LazySet::iterator LazySet::begin()
   }
 
   return LazySetIterator(
-    start, elemlist->end(), elemset, elemlist, &out_of_sync
+    start, elemlist->end(), elemset, elemlist, &out_of_sync, real_size
   );
 }
 
 LazySet::iterator LazySet::end()
 {
   return LazySetIterator(
-    elemlist->end(), elemlist->end(), NULL, NULL, NULL
+    elemlist->end(), elemlist->end(), NULL, NULL, NULL, -1
   );
 }
 
@@ -129,6 +132,7 @@ bool LazySet::LazySetIterator::operator!=(const LazySetIterator& other)
 //prefix ++
 LazySet::LazySetIterator& LazySet::LazySetIterator::operator++()
 {
+  assert(it != end);
   it++;
   if(*out_of_sync)
   {
@@ -136,9 +140,13 @@ LazySet::LazySetIterator& LazySet::LazySetIterator::operator++()
     do {
       if(it == end)
       {
-        //we reached the end of the sequence and pruned any
-        //non-members from the list
-        *out_of_sync = false; //reached i
+        //if we end up with our elem list having the same size as our
+        //expected size then say we are no longer out of sync. this
+        //was biting us due to incorrectly setting out_of_sync to be
+        //false when we were modifying the lazy set during iteration.
+        //it will still get us if we both add and remove from the set,
+        //but that does not happen i believe
+        if(real_size == elems->size()) *out_of_sync = false;
         break;
       }
       //if(!VectorSet_Member(real_elems, (*it)->id))

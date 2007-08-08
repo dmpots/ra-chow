@@ -28,7 +28,7 @@ SRCFILES=union_find.cc\
          rematerialize.cc\
          reach.cc\
          heuristics.cc\
-         lazy_set.cc
+         lazy_set.cc\
 
 MAIN_SRC=chow.main.cc
 #
@@ -44,6 +44,7 @@ MAIN_OBJ= ${MAIN_SRC:.cc=.o}
 ##CXXFLAGS =    -Wall -O3 -D__DEBUG 
 ##CXXFLAGS = -g -Wall     -D__DEBUG 
 OPT=-O
+#DEFS=-D_GLIBCXX_DEBUG
 CXXFLAGS = -g -Wall $(OPT) $(DEFS)
 
 #

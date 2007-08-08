@@ -35,6 +35,7 @@ class LazySet {
     ElemSet* real_elems;
     ElemList* elems; 
     bool* out_of_sync; //reset this to false on complete iteration
+    int real_size; //just for sanity checks
 
     public:
     LazySetIterator(
@@ -42,13 +43,15 @@ class LazySet {
       ElemList::iterator _end,
       ElemSet*  _guards, 
       ElemList* _elems, 
-      bool* oos
+      bool* oos,
+      int rs
     )
       : it(start),
         end(_end),
         real_elems(_guards), 
         elems(_elems),
-        out_of_sync(oos) { }
+        out_of_sync(oos),
+        real_size(rs) { }
 
     //copy constructor
     LazySetIterator(const LazySetIterator& other)

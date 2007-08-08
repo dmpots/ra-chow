@@ -62,8 +62,6 @@ struct RegisterContents
   AssignedRegList* assignable;//all non-reserved registers
   AssignedRegList* reserved;  //all reserved registers
   RegisterClass::RC rc;       //register class for these contents
-  //iterator for using reserved regs in a round robin fashion
-  AssignedRegList::iterator roundRobinIt;  
 }; 
 
 /* local variables */
@@ -196,7 +194,10 @@ void Init(Arena arena)
   using RegisterClass::all_classes;
 
   //make space for the number of register classes we are using
-  reg_contents.resize(all_classes.size());
+  //reg_contents.resize(all_classes.size());
+  //reg_contents.reserve(all_classes.size());
+  RegisterContents regc;
+  reg_contents.insert(reg_contents.end(), all_classes.size(), regc);
 
   //allocate register_contents structs per register class. these are
   //used during register assignment to find temporary registers when
@@ -229,7 +230,6 @@ void Init(Arena arena)
       rr->regpool->push_back(rr);
     }
     //set starting point for round robin usage
-    reg_contents[rc].roundRobinIt = reg_contents[rc].reserved->begin();
 
     //now build the list of all remaining machine registers for this
     //register class.

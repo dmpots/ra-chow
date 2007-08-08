@@ -620,6 +620,7 @@ void SplitNeighbors(LiveRange* lr, LRSet* constr_lr, LRSet* unconstr_lr)
         LiveRange* newlr = intf_lr->Split();
         //add new liverange to list of live ranges
         Chow::live_ranges.push_back(newlr);
+        assert(newlr->id == (Chow::live_ranges.size() - 1));
         debug("ADDED LR: %d", newlr->id);
 
         if(intf_lr->IsZeroOccurrence())
