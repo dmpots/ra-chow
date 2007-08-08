@@ -8,7 +8,7 @@ namespace {
     assert(i < elemset->size());
     return ((*elemset)[i]);
   }
-  inline void add(LazySet::ElemSet* elemset, uint i, bool b){
+  inline void update(LazySet::ElemSet* elemset, uint i, bool b){
     assert(i < elemset->size());
     ((*elemset)[i]) = b;
   }
@@ -33,7 +33,7 @@ void LazySet::insert(LiveRange* lr)
   {
     //debug("inserting member");
     //VectorSet_Insert(elemset, lr->id);
-    add(elemset,lr->id, true);
+    update(elemset,lr->id, true);
     elemlist->push_back(lr);
     real_size++; assert(real_size <= (int)elemset->size());
     assert(elemlist->size() == real_size || out_of_sync);
@@ -47,7 +47,7 @@ void LazySet::erase(LiveRange* lr)
   if(mem(elemset,lr->id))
   {
     //VectorSet_Delete(elemset, lr->id);
-    add(elemset,lr->id, false);
+    update(elemset,lr->id, false);
     real_size--; assert(real_size >= 0);
     out_of_sync = true;
   }
@@ -61,7 +61,7 @@ bool LazySet::member(LiveRange* lr)
 void LazySet::clear()
 {
   //VectorSet_Clear(elemset);
-  for(uint i = 0; i < elemset->size(); i++){add(elemset,i,false);}
+  for(uint i = 0; i < elemset->size(); i++){update(elemset,i,false);}
   elemlist->clear();
   real_size = 0;
   out_of_sync = false;
