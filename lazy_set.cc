@@ -146,7 +146,7 @@ LazySet::LazySetIterator& LazySet::LazySetIterator::operator++()
         //false when we were modifying the lazy set during iteration.
         //it will still get us if we both add and remove from the set,
         //but that does not happen i believe
-        if(real_size == elems->size()) *out_of_sync = false;
+        //if(real_size == elems->size()) *out_of_sync = false;
         break;
       }
       //if(!VectorSet_Member(real_elems, (*it)->id))
