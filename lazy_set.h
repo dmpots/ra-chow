@@ -15,6 +15,7 @@ class LazySet {
   bool out_of_sync; /* true if some element was deleted */
   ElemSet* elemset;  /* quick reference for elements in the set */
   ElemList* elemlist; /* may contain removed elements */
+  int seq_id; /* keep track of when the set changes for out-of-sync reset*/
 
   /* constructor */
   LazySet(Arena, int max_size);
@@ -35,7 +36,9 @@ class LazySet {
     ElemSet* real_elems;
     ElemList* elems; 
     bool* out_of_sync; //reset this to false on complete iteration
-    int real_size; //just for sanity checks
+    const int& real_size; //just for sanity checks
+    int seq_start; //check for modifications during iteration
+    int* seq_current;
 
     public:
     LazySetIterator(
@@ -44,14 +47,19 @@ class LazySet {
       ElemSet*  _guards, 
       ElemList* _elems, 
       bool* oos,
-      int rs
+      const int& rs,
+      int ss,
+      int* sc
     )
       : it(start),
         end(_end),
         real_elems(_guards), 
         elems(_elems),
         out_of_sync(oos),
-        real_size(rs) { }
+        real_size(rs),
+        seq_start(ss),
+        seq_current(sc)
+        { }
 
     //copy constructor
     LazySetIterator(const LazySetIterator& other)
@@ -59,7 +67,10 @@ class LazySet {
         end(other.end),
         real_elems(other.real_elems),
         elems(other.elems),
-        out_of_sync(other.out_of_sync)
+        out_of_sync(other.out_of_sync),
+        real_size(other.real_size),
+        seq_start(other.seq_start),
+        seq_current(other.seq_current)
     {
     }
 
