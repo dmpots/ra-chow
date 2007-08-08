@@ -265,7 +265,7 @@ void SplitRematerializableLiveRanges()
 
     //rebuild interferences
     for(LazySet::iterator fearIT = lr->fear_list->begin(); 
-        fearIT != lr->fear_list->end();)
+        fearIT != lr->fear_list->end(); fearIT++)
     {
       LiveRange* fearlr = *fearIT;
       //check each of the new lrs we split from us for interference
