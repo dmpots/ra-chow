@@ -591,7 +591,10 @@ void SplitNeighbors(LiveRange* lr, LRSet* constr_lr, LRSet* unconstr_lr)
   //make a copy of the interference list as a worklist since splitting
   //may add and remove items to the original interference list
   LRVec worklist(lr->fear_list->size());
-  copy(lr->fear_list->begin(), lr->fear_list->end(), worklist.begin());
+  if(lr->fear_list->size() > 0)
+  {
+    copy(lr->fear_list->begin(), lr->fear_list->end(), worklist.begin());
+  }
 
   //our neighbors are the live ranges we interfere with
   while(!worklist.empty())

@@ -103,7 +103,10 @@ include $(MAIN_SRC:.cc=.d)
 # Chow Allocator
 #
 $(CHOW):$(OBJS) $(MAIN_OBJ) 
-	@ $(CXX) -o $@ $(LDFLAGS) $^ $(LIBS)
+	@ $(CXX) -o $@ $(LDFLAGS) $^ $(LIBS) 
+	@#$(CXX) -o $@ $(LDFLAGS) $^ $(LIBS) /opt/local/lib/libdmallocxx.a 
+	@#$(CXX) -o $@ $(LDFLAGS) $^ $(LIBS) libefence.a
+	@#$(CXX) -o $@ $(LDFLAGS) $^ $(LIBS) /usr/lib/libMallocDebug.a
 	@ echo " -- make $@ (Done)"
 
 debug: DEFS += -D__DEBUG
