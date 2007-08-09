@@ -73,6 +73,7 @@ namespace {
   Priority LiveUnit_ComputePriority(LiveRange*, LiveUnit*);
   Boolean VectorSet_Full(VectorSet vs);
   Boolean VectorSet_Empty(VectorSet vs);
+  bool VectorSet_Intersects(VectorSet y, VectorSet z);
   void AddEdgeExtensionNode(Edge*, LiveRange*, LiveUnit*,SpillType);
 
   bool LiveUnit_CanMoveLoad(LiveRange* lr, LiveUnit* lu);
@@ -528,8 +529,9 @@ Boolean LiveRange::InterferesWith(LiveRange* lr2) const
   {
     return FALSE;
   }
-  VectorSet_Intersect(LiveRange::tmpbbset, bb_list, lr2->bb_list);
-  return (!VectorSet_Empty(LiveRange::tmpbbset));
+  return VectorSet_Intersects(bb_list, lr2->bb_list);
+  //VectorSet_Intersect(LiveRange::tmpbbset, bb_list, lr2->bb_list);
+  //return (!VectorSet_Empty(LiveRange::tmpbbset));
 }
 
 /*
@@ -1445,6 +1447,26 @@ Boolean VectorSet_Empty(VectorSet vs)
 {
   return (VectorSet_Size(vs) == 0);
 }
+
+bool VectorSet_Intersects(VectorSet y, VectorSet z)
+{
+  Unsigned_Int4 *yLast;
+  Unsigned_Int4 *yp;        /* Current location in y */
+  Unsigned_Int4 *zp;        /* Current location in z */
+
+  /* Initialize the pointers. */
+  yp = y->word;
+  zp = z->word;
+  yLast = y->word + y->word_count;
+
+  /* Union the bit vectors. */
+  while (yp < yLast) if(*yp++ & *zp++) return true;
+
+  return false;
+
+} /* VectorSet_Intersect. */
+
+
 
 }//end anonymous namespace
 
