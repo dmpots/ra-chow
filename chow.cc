@@ -1000,14 +1000,16 @@ void MoveLoadsAndStores()
             }
             case LOAD_SPILL:
             {
-              if(lr->blockmap->find(id(edg->pred)) != lr->blockmap->end())
+              debug("moving load from %s to %s for lrid: %d_%d",
+                    bname(msd.orig_blk), bname(blkLD),
+                    msd.lr->orig_lrid, msd.lr->id);
+              LiveRange* lr = msd.lr;
+              if(Params::Algorithm::rematerialize)
               {
-                debug("remat OPPORTUNITY");
-                LiveRange* lrPred = (*lr->blockmap)[id(edg->pred)];
-                if(lrPred->rematerializable)
+                if(lr->blockmap->find(bid(edg->pred)) != lr->blockmap->end())
                 {
                   debug("remat OPPORTUNITY");
-                  LiveRange* lrPred = (*lr->blockmap)[id(edg->pred)];
+                  LiveRange* lrPred = (*lr->blockmap)[bid(edg->pred)];
                   if(lrPred->rematerializable)
                   {
                     debug("remat SUCCESS");

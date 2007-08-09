@@ -2079,8 +2079,65 @@ writing
 * chow and briggs tried to compare thier allocators but it was not an
   apples to apples comparison. see briggs thesis for what he has done.
 
+=======================================================
+Malloc errors
+Sun Jul 29 19:49:48 CDT 2007
+=======================================================
+Getting some segfaults in malloc now that the fear_list has been
+changed to a LazySet. Not sure why this is happening. The files and
+args causing this are shown below (on godzilla).
 
+rt --chow-args="-r32 -b5 -eft" -a  
+twldrv.i
+ddeflu.i
+deseco.i
+fieldX.i
+initX.i
+parmovX.i
+radb2X.i
+radbgX.i
+radf5X.i
 
+=======================================================
+Fixing register promotion
+Wed Jul 25 13:51:23 CDT 2007
+=======================================================
+When you are in ResetTmpRegs there are two cases to consider
+1) resetting for single successor block
+Here we just need to look at all temporary registers which contain an
+allocated register in the next block. if the tempreg is dirty then
+insert a copy_def MovedSpillDescription. if the tmpreg is clean then
+insert a copy MovedSpillDescription. in either case we should delete
+the load.
+call ResetRegSpan for any allocated reg in the succesor
+
+2) resetting for non-local successor
+Here we need to look at only global values.
+For each global
+  For each successor block
+    if the live range is allocated in the successor
+      insert copy as described above
+    else
+      insert store if live out on the edge
+call ResetRegSpan for all tmpregs
+
+(*HERE: still need to implement this part below *)
+Additionaly MovedSpillDescription
+*) for deciding when to split blocks in load/store movement copy behaves
+as store because we are moving the copy down the edge.
+*) copies should come after stores so that the real reg can be stored
+before the copy overwrites the value. thus insert them before the
+first instuction of the load block.
+*) should not need to worry about ordering copies because the source
+is always a temporary reg and the dest is always a real reg. so there
+should never be an cycles in the copies.
+*) copy_def implementation - this should be similar to MarkStores. For
+the copy_def pretend that there is a definition of the live range that
+is the sink of the copy in destination block. look at all of the
+blocks that definition would reach in the live range. if the block is
+a live range exit and the variable is live out, then put a store on
+that edge (i think this has to be done as a pre-pass). then you can
+treat the copy_def just like a copy on the second pass.
 
 (* check these values after changes to make sure they are working *)
 //HERE: this fails with an error. why are we putting two stores on the

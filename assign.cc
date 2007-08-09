@@ -64,8 +64,6 @@ struct RegisterContents
   AssignedRegList* assignable;//all non-reserved registers
   AssignedRegList* reserved;  //all reserved registers
   RegisterClass::RC rc;       //register class for these contents
-  //iterator for using reserved regs in a round robin fashion
-  AssignedRegList::iterator roundRobinIt;  
 }; 
 
 /* local variables */
@@ -234,8 +232,6 @@ void Init(Arena arena)
       rr->regpool = reg_contents[rc].reserved;
       rr->regpool->push_back(rr);
     }
-    //set starting point for round robin usage
-    reg_contents[rc].roundRobinIt = reg_contents[rc].reserved->begin();
 
     //now build the list of all remaining machine registers for this
     //register class.
@@ -594,7 +590,7 @@ inline LiveRange* RealLR(LRID orig_lrid, Block* blk)
 {
   typedef std::map<unsigned int, LiveRange*> M;
   M* blockmap = Chow::live_ranges[orig_lrid]->blockmap;
-  M::iterator it = blockmap->find(id(blk));
+  M::iterator it = blockmap->find(bid(blk));
   assert(it != blockmap->end());
   return (*it).second;
 }
@@ -1551,7 +1547,7 @@ bool LiveOut(LRID lrid, Block* blk)
 
 bool LiveIn(LRID orig_lrid, Block* blk)
 {
-  Liveness_Info info = SSA_live_in[id(blk)];
+  Liveness_Info info = SSA_live_in[bid(blk)];
   for(LOOPVAR j = 0; j < info.size; j++)
   {
     if(orig_lrid == info.names[j])
