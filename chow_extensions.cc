@@ -84,11 +84,13 @@ void EnhancedCodeMotion(Edge* edg, Block* blkLD)
           {
             rr_copies.push_back(make_pair(*ee, *eeT));
             removals.push_back(eeT);
+            break;
           }
           case LOAD_SPILL:
           {
             rr_copies.push_back(make_pair(*eeT, *ee));
             removals.push_back(ee);
+            break;
           }
           default:
             //ignore if it is not a load or a store that we can change
@@ -97,7 +99,6 @@ void EnhancedCodeMotion(Edge* edg, Block* blkLD)
                   ee->spill_type, eeT->spill_type);
             error("two mem-ops on edge, but not load store");
             assert(false);
-            ;
         }
         Stats::chowstats.cInsertedCopies++;
       }

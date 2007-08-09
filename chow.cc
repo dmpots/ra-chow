@@ -954,6 +954,7 @@ void MoveLoadsAndStores()
               }
               break;
             default:
+              //HERE: need to implement other edge ops
               assert(false);
           }
           if(need_split) break; //out of loop

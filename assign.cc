@@ -467,10 +467,13 @@ void ResetAllTmpRegs(AssignedRegList* reserved, Block* blk)
     //need a store
     AssignedRegList globals;
     AssignedRegList::const_iterator resIT;
-    for(resIT = reserved->begin(); resIT != reserved->end(); resIT++)
+    for(resIT = reserved->begin(); resIT != reserved->end();)
     {
       AssignedReg* tmpReg = *resIT;
       if(!tmpReg->local) globals.push_back(tmpReg);
+
+      //skip over other regs used by this live range
+      resIT = resIT+RegWidth(*resIT);
     }
     //now either store the global or generate a copy if it is
     //allocated in a successor block.
@@ -510,7 +513,7 @@ void ResetAllTmpRegs(AssignedRegList* reserved, Block* blk)
 void ResetAllocatedTmpRegs(AssignedRegList* reserved, Block* blk)
 {
   AssignedRegList::const_iterator resIT;
-  for(resIT = reserved->begin(); resIT != reserved->end(); resIT++)
+  for(resIT = reserved->begin(); resIT != reserved->end();)
   {
     //reset the reg if this tmp reg holds a live range that has a
     //real register in the next block
@@ -532,8 +535,9 @@ void ResetAllocatedTmpRegs(AssignedRegList* reserved, Block* blk)
         InsertCopy(tmpReg, blk->succ);
         ResetForRegWidth(tmpReg);
       }
-        //could increment the iterator here to skip next width regs
     }
+    //skip over other regs used by this live range
+    resIT = resIT+RegWidth(*resIT);
   }
 }
 /* insert a copy onto the edge. if the live range is dirty then insert
