@@ -37,7 +37,7 @@ struct LiveRange
   static unsigned int counter;
 
   /* constructor */
-  LiveRange(RegisterClass::RC rc, LRID lrid, Def_Type);
+  LiveRange(RegisterClass::RC rc, LRID lrid, Def_Type, uint num_lrs);
 
   /* fields */
   VectorSet bb_list;  /* basic blocks making up this LR */ 

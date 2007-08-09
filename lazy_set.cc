@@ -14,10 +14,10 @@ namespace {
   }
 }
 
-LazySet::LazySet(Arena arena, int max_size)
+LazySet::LazySet(Arena arena, int initial_size)
   : real_size(0), out_of_sync(false), seq_id(0)
 {
-  elemset   = new std::vector<bool>(10, false);
+  elemset   = new std::vector<bool>(initial_size, false);
   elemlist  = new ElemList;
 }
 

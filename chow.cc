@@ -502,7 +502,8 @@ void CreateLiveRanges(Arena arena, Unsigned_Int num_lrs)
     LiveRange* lr = 
       new LiveRange(RegisterClass::InitialRegisterClassForLRID(lrid), 
                     lrid,
-                    Mapping::LiveRangeDefType(lrid));
+                    Mapping::LiveRangeDefType(lrid),
+                    num_lrs);
 
     //initialize blockmap here since there should only be one tied to
     //the original live range that is shared by all live ranges split

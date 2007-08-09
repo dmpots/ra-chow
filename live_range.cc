@@ -122,7 +122,8 @@ void LiveRange::Init(Arena arena, unsigned int counter_start)
  ***/
 LiveRange::LiveRange(RegisterClass::RC reg_class, 
                      LRID lrid, 
-                     Def_Type def_type)
+                     Def_Type def_type,
+                     uint current_lr_count)
 {
   orig_lrid = lrid;
   id = lrid;
@@ -131,7 +132,7 @@ LiveRange::LiveRange(RegisterClass::RC reg_class,
   color = Coloring::NO_COLOR;
   bb_list = VectorSet_Create(LiveRange::arena, block_count+1);
   //fear_list = new std::set<LiveRange*, LRcmp>;
-  fear_list = new LazySet(LiveRange::arena, MAX_LRS);
+  fear_list = new LazySet(LiveRange::arena, current_lr_count + 100);
   units = new std::list<LiveUnit*>;
   unitmap = new std::map<Block*,LiveUnit*>;
   forbidden = 
@@ -743,7 +744,7 @@ Priority LiveRange::GetPriority()
  */
 LiveRange* LiveRange::Mitosis()
 {
-  LiveRange* newlr = new LiveRange(rc, NO_LRID, type);
+  LiveRange* newlr = new LiveRange(rc, NO_LRID, type, counter);
   newlr->orig_lrid = orig_lrid;
   newlr->id = LiveRange::counter++; assert(counter < MAX_LRS);
   newlr->is_candidate = TRUE;
