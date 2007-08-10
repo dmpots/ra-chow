@@ -799,6 +799,7 @@ void LiveRange::RemoveLiveUnit(LiveUnit* unit)
   if(elem != end())
   {
     unitmap->erase((*elem)->block);
+    blockmap->erase(bid((*elem)->block));
     units->erase(elem);
   }
 }
