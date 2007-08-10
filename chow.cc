@@ -933,6 +933,8 @@ void MoveLoadsAndStores()
         //one pred
         //2) we are inserting a load and the predecessor has more than
         //one successor
+        //3) we are inserting a copy and the successor has more than
+        //one pred
         Boolean need_split = FALSE;
         for(LI ee = edg->edge_extension->spill_list->begin(); 
                ee != edg->edge_extension->spill_list->end(); 
@@ -952,9 +954,18 @@ void MoveLoadsAndStores()
                 need_split = TRUE;
                 break;
               }
+            case COPY_SPILL:
+            {
+              //in the case of a copy, we always split the edge
+              //because we want the copy to come after all of the
+              //stores and the easiest way to do that is split the
+              //edge and insert the copy in the same manner as a ld
+              need_split = true;
               break;
+            }
             default:
               //HERE: need to implement other edge ops
+              error("got invalid spill type: %d", msd.spill_type);
               assert(false);
           }
           if(need_split) break; //out of loop
@@ -1022,7 +1033,19 @@ void MoveLoadsAndStores()
                                 msd.mreg, Spill::REG_FP);
               break;
             }
+            case COPY_SPILL:
+            {
+              debug("inserting copy from %s to %s for lrid: %d",
+                    bname(msd.orig_blk), bname(blkLD), msd.lr->id);
+              //error("LOOKING FOR THIS"); assert(false);
+              Spill::InsertCopy(
+                msd.lr, msd.lr_dest,     Block_LastInst(blkLD),
+                msd.cp_src, msd.cp_dest, BEFORE_INST
+              );
+              break;
+            }
             default:
+              error("unknown spill type: %d", msd.spill_type);
               assert(false);
           }
         }

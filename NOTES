@@ -2141,6 +2141,7 @@ treat the copy_def just like a copy on the second pass.
 
 (* check these values after changes to make sure they are working *)
 (spline.i)
+chow -r16 -eft -l10,10 -g 1.i
 end of block L00012
 0       iSSTor  @SPILL_46(156) 4 156 r555 r2    #STORE 46_46
 0       JMPl    L19
@@ -2149,28 +2150,18 @@ L19:
 0       iSLDor  @SPILL_46(156) 4 156 r555 => r15        #LOAD 46_237
 0       JMPl    LL0002
 
-DEBUG [assign.cc,439] resetting tmp regs allocated in succesor to be
-free
-DEBUG [assign.cc,452] resetting tmp reg: r2 for lrid: 46
-Assertion failed: false, file assign.cc, line 453
-
-
-also - 
-decomp.i
-solve.i
-svd.i
-urand.i
-zeroin.i
-saxpy.i
-sgemm.i
-
-
-//HERE: this fails with an error. why are we putting two stores on the
-//same edge i wonder?
-chow -r16 -eft -l10,10 -g 1.i
-ERROR [chow_extensions.cc,97] lrid: 33, st1: 0, st2: 0
-ERROR [chow_extensions.cc,98] two mem-ops on edge, but not load store
-Assertion failed: false, file chow_extensions.cc, line 99
-(1.i = spline.i)
+so it seems that things are somewhat working as far as the copies go.
+need to check some more to verify, but we have some files to check:
+  fehl.i
+  sgemm.i
+  saxpy.i
+  chow -r16 -b5 -eft -l 10 -g 1.i
+these will die now with assertion failure so that we know what we are
+looking at. fehl.i has a copy at block 89 (between 43 and 42) for LR:
+87 that seems to be doing the job well. a curious thing there is why
+there is a store on both edges out of the loop. It is only live in on
+one edge. It seems that when we are moving stores that we really only
+need to store on an edge if it is live in at the succssor block of
+that edge. still need to implement the copy-def moved store.
 
 

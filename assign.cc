@@ -486,9 +486,11 @@ void ResetAllTmpRegs(AssignedRegList* reserved, Block* blk)
       Block_ForAllSuccs(e,blk)
       {
         //if it is allocated in the successor then  insert a copy
-        if(IsAllocated(tmpReg->forLRID, e->succ))
+        if(IsAllocated(tmpReg->forLRID, e->succ) &&
+           LiveIn(tmpReg->forLRID, e->succ))
         {
-          debug("lrid allocated in successor: %s", bname(e->succ));
+          debug("lrid allocated in and live in at successor: %s, from: %s", 
+            bname(e->succ), bname(e->pred));
           InsertCopy(tmpReg, e);
         }
         //if it is dirty and live in insert a store
@@ -497,7 +499,8 @@ void ResetAllTmpRegs(AssignedRegList* reserved, Block* blk)
           debug("tmpreg dirty and live in at successor: %s", 
                 bname(e->succ));
           MovedSpillDescription msd = {0};
-          msd.lr = RealLR(tmpReg->forLRID, blk);
+          //msd.lr = RealLR(tmpReg->forLRID, blk);
+          msd.lr = Chow::live_ranges[tmpReg->forLRID];
           msd.spill_type = STORE_SPILL;
           msd.orig_blk = blk;
           msd.mreg = tmpReg->machineReg;
@@ -545,6 +548,12 @@ void ResetAllocatedTmpRegs(AssignedRegList* reserved, Block* blk)
  * reach anyone outside the live range */
 void InsertCopy(AssignedReg* tmpReg, Edge* succ_edge)
 {
+  
+  debug("lr: %d is allocated reg: %d in blk: %s",
+    tmpReg->forLRID, 
+    GetMachineRegAssignment(succ_edge->succ, tmpReg->forLRID), 
+    bname(succ_edge->succ)
+  );
   Block* pred_blk = succ_edge->pred;
   Block* succ_blk = succ_edge->succ;
   Register dest_reg = GetMachineRegAssignment(succ_blk, tmpReg->forLRID);
@@ -553,8 +562,10 @@ void InsertCopy(AssignedReg* tmpReg, Edge* succ_edge)
   //if the register has been written to then we need to insert a copy
   //def so that the def will be stored if needed
   MovedSpillDescription msd = {0};
-  msd.lr = RealLR(tmpReg->forLRID, pred_blk);
-  msd.lr_dest = RealLR(tmpReg->forLRID, succ_blk);
+  //msd.lr = RealLR(tmpReg->forLRID, pred_blk);
+  //msd.lr_dest = RealLR(tmpReg->forLRID, succ_blk);
+  msd.lr = Chow::live_ranges[tmpReg->forLRID];
+  msd.lr_dest = Chow::live_ranges[tmpReg->forLRID];
   msd.cp_src = tmpReg->machineReg;
   msd.cp_dest = dest_reg;
   msd.orig_blk = pred_blk;
@@ -586,7 +597,8 @@ void InsertCopy(AssignedReg* tmpReg, Edge* succ_edge)
       break;
     }
   }
-  assert(found_load); //may not find it on SSB with no enhanced motion
+  //may not find the load on SSB with no enhanced motion
+  assert(found_load || !Params::Algorithm::enhanced_code_motion); 
 }
 /* get a handle to the the real live range for a block given the
  * orignal lrid. (it may have chaged due to splitting) */
@@ -596,6 +608,7 @@ inline LiveRange* RealLR(LRID orig_lrid, Block* blk)
   M* blockmap = Chow::live_ranges[orig_lrid]->blockmap;
   M::iterator it = blockmap->find(bid(blk));
   assert(it != blockmap->end());
+  assert((*it).second != NULL);
   return (*it).second;
 }
 /* could factor this same function out of live_range.cc, but no good
