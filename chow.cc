@@ -1058,7 +1058,6 @@ void MoveLoadsAndStores()
   }
 }
 
-//bool ShouldSplitLiveRange(LiveRange* lr, WhenToSplitStrategy& strategy)
 bool ShouldSplitLiveRange(LiveRange* lr)
 {
   debug("should split LR: %d ?", lr->id);
@@ -1082,6 +1081,9 @@ inline void AddToCorrectConstrainedList(LRSet* constr_lrs,
   }
 }
 
+/****************************************************************
+ *                     LOCAL NAMES DEBUG STUFF
+ ****************************************************************/
 void DumpLocals()
 { 
   using Chow::live_ranges;

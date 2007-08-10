@@ -455,7 +455,8 @@ void ResetAllTmpRegs(AssignedRegList* reserved, Block* blk)
 {
   debug("resetting all tmp regs to be free");
   //if we are not moving loads and stores then just store in the block
-  if(!Params::Algorithm::move_loads_and_stores)
+  if(!Params::Algorithm::move_loads_and_stores ||
+     !Params::Algorithm::enhanced_register_promotion)
   {
     StoreAndResetRegSpan(
       reserved->front(), Block_LastInst(blk), blk, reserved->size()
@@ -526,7 +527,8 @@ void ResetAllocatedTmpRegs(AssignedRegList* reserved, Block* blk)
         (*resIT)->machineReg, (*resIT)->forLRID);
 
       //insert copy must be done on the edge
-      if(!Params::Algorithm::move_loads_and_stores)
+      if(!Params::Algorithm::move_loads_and_stores ||
+         !Params::Algorithm::enhanced_register_promotion)
       {
         StoreAndResetRegSpan(
           *resIT, Block_LastInst(blk), blk, RegWidth(*resIT)

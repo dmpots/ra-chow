@@ -30,6 +30,7 @@ namespace Params {
     extern bool  spill_instead_of_split;
     extern bool  optimistic;
     extern bool  allocate_all_unconstrained;
+    extern bool  enhanced_register_promotion;
 
     using namespace Chow::Heuristics;
     extern WhenToSplit when_to_split;
