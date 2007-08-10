@@ -538,7 +538,11 @@ void ResetAllocatedTmpRegs(AssignedRegList* reserved, Block* blk)
       else
       {
         AssignedReg* tmpReg = *resIT;
-        InsertCopy(tmpReg, blk->succ);
+        //only need to insert a copy if the live range is live in.
+        //this is ok here because we are only dealing with single
+        //successor blocks
+        if(LiveIn(tmpReg->forLRID, blk->succ->succ))
+          InsertCopy(tmpReg, blk->succ);
         ResetForRegWidth(tmpReg);
       }
     }
