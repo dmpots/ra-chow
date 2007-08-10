@@ -27,6 +27,7 @@
 #include "mapping.h"
 #include "cfg_tools.h"
 #include "params.h"
+#include "chow_extensions.h"
 
 /*------------------MODULE LOCAL DECLARATIONS------------------*/
 namespace {
@@ -406,7 +407,6 @@ void HandleCopy(Block* blk,
 
 //TODO: properly commend these function when you know they should be kept 
 inline LiveRange* RealLR(LRID orig_lrid, Block* blk);
-Edge_Extension* AddEdgeExtensionNode(Edge* e, MovedSpillDescription msd);
 void InsertCopy(AssignedReg* tmpReg, Edge* succ_edge);
 void ResetAllocatedTmpRegs(AssignedRegList* reserved, Block* blk);
 void ResetAllTmpRegs(AssignedRegList* reserved, Block* blk);
@@ -505,7 +505,7 @@ void ResetAllTmpRegs(AssignedRegList* reserved, Block* blk)
           msd.spill_type = STORE_SPILL;
           msd.orig_blk = blk;
           msd.mreg = tmpReg->machineReg;
-          (void)AddEdgeExtensionNode(e, msd);
+          (void)Chow::Extensions::AddEdgeExtensionNode(e, msd);
         }
       }
     }
@@ -516,6 +516,7 @@ void ResetAllTmpRegs(AssignedRegList* reserved, Block* blk)
 /* only reset regs which are allocated in a successor block */
 void ResetAllocatedTmpRegs(AssignedRegList* reserved, Block* blk)
 {
+  using Chow::Extensions::AddEdgeExtensionNode;
   AssignedRegList::const_iterator resIT;
   for(resIT = reserved->begin(); resIT != reserved->end();)
   {
@@ -550,6 +551,7 @@ void ResetAllocatedTmpRegs(AssignedRegList* reserved, Block* blk)
  * reach anyone outside the live range */
 void InsertCopy(AssignedReg* tmpReg, Edge* succ_edge)
 {
+  using Chow::Extensions::AddEdgeExtensionNode;
   
   debug("lr: %d is allocated reg: %d in blk: %s",
     tmpReg->forLRID, 
@@ -567,7 +569,7 @@ void InsertCopy(AssignedReg* tmpReg, Edge* succ_edge)
   //msd.lr = RealLR(tmpReg->forLRID, pred_blk);
   //msd.lr_dest = RealLR(tmpReg->forLRID, succ_blk);
   msd.lr = Chow::live_ranges[tmpReg->forLRID];
-  msd.lr_dest = Chow::live_ranges[tmpReg->forLRID];
+  msd.lr_dest = RealLR(tmpReg->forLRID, succ_blk); //dest needs real lr 
   msd.cp_src = tmpReg->machineReg;
   msd.cp_dest = dest_reg;
   msd.orig_blk = pred_blk;
@@ -612,25 +614,6 @@ inline LiveRange* RealLR(LRID orig_lrid, Block* blk)
   assert(it != blockmap->end());
   assert((*it).second != NULL);
   return (*it).second;
-}
-/* could factor this same function out of live_range.cc, but no good
- * place to put it so we basically just copy it here.
- */
-Edge_Extension* AddEdgeExtensionNode(Edge* e, MovedSpillDescription msd)
-{
-  //always add the edge extension to the predecessor version of the edge
-  Edge* edgPred = FindEdge(e->pred, e->succ, PRED_OWNS);
-  Edge_Extension* ee = edgPred->edge_extension;
-  if(ee == NULL)
-  {
-    //create and add the edge extension
-    ee = (Edge_Extension*) 
-      Arena_GetMemClear(Chow::arena, sizeof(Edge_Extension));
-    ee->spill_list = new std::list<MovedSpillDescription>;
-    edgPred->edge_extension = ee;
-  }
-  ee->spill_list->push_back(msd);
-  return ee;
 }
 
 /*

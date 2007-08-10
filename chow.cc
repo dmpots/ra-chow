@@ -33,6 +33,7 @@
 #include "shared_globals.h" //Global namespace for iloc Shared vars
 #include "rematerialize.h" //Global namespace for iloc Shared vars
 #include "heuristics.h" //heuristics for splitting, etc.
+#include "reach.h"
 
 
 /*------------------MODULE LOCAL DEFINITIONS-------------------*/
@@ -58,6 +59,7 @@ namespace {
   void SeparateConstrainedLiveRanges(LRSet*, LRSet*);
   void ColorUnconstrained(LRSet* unconstr_lrs);
   void PullNodeFromGraph(LiveRange* lr, LRSet* constr_lrs);
+  bool LiveIn(LRID orig_lrid, Block* blk);
 }
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
@@ -906,12 +908,17 @@ void RenameRegisters()
  * moving the stores and loads after renaming and using the machine
  * register assignments
  ***/
+void HandleCopyDefs();
 void MoveLoadsAndStores()
 {
   using namespace std; //for list, pair
+  typedef list<MovedSpillDescription>::iterator LI;
   InitCFGTools(Chow::arena); //for adding edges
 
-  typedef list<MovedSpillDescription>::iterator LI;
+  //first handle any copy-def spills so that they are turned into
+  //normal copies and stores placed on the edges as needed
+  HandleCopyDefs();
+
   //we should already have the loads and stores moved onto the
   //appropriate edge. all that remains is to walk the graph and
   //actually insert the instructions, splitting edges as needed.
@@ -964,7 +971,6 @@ void MoveLoadsAndStores()
               break;
             }
             default:
-              //HERE: need to implement other edge ops
               error("got invalid spill type: %d", msd.spill_type);
               assert(false);
           }
@@ -1056,6 +1062,116 @@ void MoveLoadsAndStores()
   {
     Block_Order();
   }
+}
+
+void HandleCopyDefs()
+{
+  typedef std::list<MovedSpillDescription>::iterator LI;
+  Block* blk;
+
+  ForAllBlocks(blk)
+  {
+    Edge* edg;
+    Block_ForAllSuccs(edg, blk)
+    {
+      //if edg->edge_extension is not NULL then there is a load or
+      //store moved onto this edge and we must process it
+      if(edg->edge_extension)
+      {
+        //first we look at whether we need to split this edge in order
+        //to move the loads and stores to their destinations
+        //we need to split the block if:
+        //1) we are inserting a store and the successor has more than
+        //one pred
+        //2) we are inserting a load and the predecessor has more than
+        //one successor
+        //3) we are inserting a copy and the successor has more than
+        //one pred
+        for(LI ee = edg->edge_extension->spill_list->begin(); 
+               ee != edg->edge_extension->spill_list->end(); 
+               ee++)
+        {
+          MovedSpillDescription msd = *ee;
+          if(msd.spill_type == COPYDEF_SPILL)
+          {
+            //imagine we have a def in the succesor block and look at
+            //all the blocks that def would reach that belong to the
+            //succssor live range.
+            LiveRange* lr = msd.lr_dest;
+
+            //interset the blocks that the def would reach with this
+            //live ranges blocks to limit our scope
+            VectorSet_Intersect(
+              LiveRange::tmpbbset, 
+              Reach::ReachableBlocks(edg->succ),
+              lr->bb_list
+            );
+
+            //check all the blocks the def would reach to see if a
+            //store is necessary
+            for(LiveRange::iterator it = lr->begin(); it != lr->end(); it++)
+            {
+              LiveUnit* unit = *it;
+              if(!VectorSet_Member(LiveRange::tmpbbset, bid(unit->block)))
+                continue;
+
+              //check all the succesor blocks to find any exits of the
+              //live range and insert a store if they are live in at
+              //the successor block
+              Edge* eSucc;
+              Block_ForAllSuccs(eSucc, unit->block)
+              {
+                Block* blkSucc = eSucc->succ;
+                if(!lr->ContainsBlock(blkSucc))
+                { 
+                  //make sure that there is not already a store for
+                  //this live range on this edge
+                  bool existing_store = false;
+                  if(eSucc->edge_extension)
+                  {
+                    for(LI eeSucc = eSucc->edge_extension->spill_list->begin(); 
+                        eeSucc != eSucc->edge_extension->spill_list->end(); 
+                        eeSucc++)
+                    {
+                      if(eeSucc->lr->orig_lrid == lr->orig_lrid &&
+                         eeSucc->spill_type == STORE_SPILL)
+                      {
+                        existing_store = true; break;
+                      }
+                    }
+                  }
+                  if(!existing_store && LiveIn(lr->orig_lrid, blkSucc))
+                  {
+                    MovedSpillDescription msd_store = {0};
+                    msd_store.lr = lr;
+                    msd_store.spill_type = STORE_SPILL;
+                    msd_store.orig_blk = unit->block;
+                    msd_store.mreg = msd.cp_dest;
+                    Chow::Extensions::AddEdgeExtensionNode(eSucc,msd_store);
+                  }
+                }
+              }
+            }
+            //finally we change the copydef to be a simple copy now
+            //that the def part has been handled
+            ee->spill_type = COPY_SPILL;
+          }//handle copydef
+        }//ForAll MovedSpills
+      }//has a spill
+    }//ForAllSuccs
+  }//ForAllBlocks
+}
+bool LiveIn(LRID orig_lrid, Block* blk)
+{
+  Liveness_Info info = SSA_live_in[bid(blk)];
+  for(LOOPVAR j = 0; j < info.size; j++)
+  {
+    if(orig_lrid == info.names[j])
+    {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool ShouldSplitLiveRange(LiveRange* lr)

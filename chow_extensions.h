@@ -7,6 +7,7 @@
 
 #include <Shared.h>
 #include "types.h"
+#include "live_range.h"
 
 /* forward def */
 struct LiveRange;
@@ -16,6 +17,7 @@ namespace Chow
   {
     void EnhancedCodeMotion(Edge*, Block*);
     void Trim(LiveRange*);
+    Edge_Extension* AddEdgeExtensionNode(Edge*, MovedSpillDescription);
   }
 }
 

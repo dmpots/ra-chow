@@ -13,6 +13,7 @@
 #include "assign.h"
 #include "spill.h"
 #include "cfg_tools.h"
+#include "chow.h"
 
 /*------------------MODULE LOCAL DECLARATIONS------------------*/
 namespace {
@@ -214,6 +215,31 @@ void Trim(LiveRange* lr)
   }
 
 }
+
+/*
+ *========================================
+ * Chow::Extensions::AddEdgeExtensionNode()
+ *========================================
+ * Adds another moved spill description onto the edge
+*/ 
+Edge_Extension* AddEdgeExtensionNode(Edge* e, MovedSpillDescription msd)
+{
+  //always add the edge extension to the predecessor version of the edge
+  Edge* edgPred = FindEdge(e->pred, e->succ, PRED_OWNS);
+  Edge_Extension* ee = edgPred->edge_extension;
+  if(ee == NULL)
+  {
+    //create and add the edge extension
+    ee = (Edge_Extension*) 
+      Arena_GetMemClear(Chow::arena, sizeof(Edge_Extension));
+    ee->spill_list = new std::list<MovedSpillDescription>;
+    edgPred->edge_extension = ee;
+  }
+  ee->spill_list->push_back(msd);
+  return ee;
+}
+
+
 
 }}//end Chow::Enhancments namespace
 

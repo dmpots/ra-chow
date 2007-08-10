@@ -2123,15 +2123,16 @@ call ResetRegSpan for all tmpregs
 
 (*HERE: still need to implement this part below *)
 Additionaly MovedSpillDescription
-*) for deciding when to split blocks in load/store movement copy behaves
-as store because we are moving the copy down the edge.
-*) copies should come after stores so that the real reg can be stored
+X) for deciding when to split blocks in load/store movement copy
+should always split because we need to put copies after stores so that
+we don't overwrite a value in that allocated register.
+X) copies should come after stores so that the real reg can be stored
 before the copy overwrites the value. thus insert them before the
-first instuction of the load block.
-*) should not need to worry about ordering copies because the source
+last instuction of the load block.
+X) should not need to worry about ordering copies because the source
 is always a temporary reg and the dest is always a real reg. so there
 should never be an cycles in the copies.
-*) copy_def implementation - this should be similar to MarkStores. For
+X) copy_def implementation - this should be similar to MarkStores. For
 the copy_def pretend that there is a definition of the live range that
 is the sink of the copy in destination block. look at all of the
 blocks that definition would reach in the live range. if the block is
@@ -2150,18 +2151,19 @@ L19:
 0       iSLDor  @SPILL_46(156) 4 156 r555 => r15        #LOAD 46_237
 0       JMPl    LL0002
 
-so it seems that things are somewhat working as far as the copies go.
-need to check some more to verify, but we have some files to check:
-  fehl.i
-  sgemm.i
-  saxpy.i
-  chow -r16 -b5 -eft -l 10 -g 1.i
-these will die now with assertion failure so that we know what we are
-looking at. fehl.i has a copy at block 89 (between 43 and 42) for LR:
+fehl.i has a copy at block 89 (between 43 and 42) for LR:
 87 that seems to be doing the job well. a curious thing there is why
 there is a store on both edges out of the loop. It is only live in on
 one edge. It seems that when we are moving stores that we really only
 need to store on an edge if it is live in at the succssor block of
 that edge. still need to implement the copy-def moved store.
 
+
+HERE:
+chow -r16 -b5 -eft -l 10 -g 1.i
+Now we are getting a failure to find a load in some doduc files:
+  inideb.i (shortest)
+  debflu.i
+  prophy.i
+with args as above. why?
 
