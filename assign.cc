@@ -455,8 +455,7 @@ void ResetAllTmpRegs(AssignedRegList* reserved, Block* blk)
 {
   debug("resetting all tmp regs to be free");
   //if we are not moving loads and stores then just store in the block
-  if(!Params::Algorithm::move_loads_and_stores ||
-     !Params::Algorithm::enhanced_register_promotion)
+  if(!Params::Algorithm::enhanced_register_promotion)
   {
     StoreAndResetRegSpan(
       reserved->front(), Block_LastInst(blk), blk, reserved->size()
@@ -528,8 +527,7 @@ void ResetAllocatedTmpRegs(AssignedRegList* reserved, Block* blk)
         (*resIT)->machineReg, (*resIT)->forLRID);
 
       //insert copy must be done on the edge
-      if(!Params::Algorithm::move_loads_and_stores ||
-         !Params::Algorithm::enhanced_register_promotion)
+      if(!Params::Algorithm::enhanced_register_promotion)
       {
         StoreAndResetRegSpan(
           *resIT, Block_LastInst(blk), blk, RegWidth(*resIT)
@@ -606,7 +604,7 @@ void InsertCopy(AssignedReg* tmpReg, Edge* succ_edge)
     }
   }
   //may not find the load on SSB with no enhanced motion
-  assert(found_load || !Params::Algorithm::enhanced_code_motion); 
+  assert(found_load);
 }
 /* get a handle to the the real live range for a block given the
  * orignal lrid. (it may have chaged due to splitting) */

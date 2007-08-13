@@ -554,6 +554,15 @@ void EnforceParameterConsistency()
   if(Params::Algorithm::enhanced_code_motion) 
       Params::Algorithm::move_loads_and_stores = true;
 
+  //register promotion code needs enhanced code motion in order to
+  //ensure that loads are moved onto edges so they can be deleted when
+  //inserting copies in assign.cc
+  if(Params::Algorithm::enhanced_register_promotion)
+  {
+    Params::Algorithm::move_loads_and_stores = true;
+    Params::Algorithm::enhanced_code_motion = true;
+  }
+
   if(!Params::Machine::enable_register_classes)
   {
     Params::Machine::num_register_classes = 1;

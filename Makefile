@@ -40,10 +40,8 @@ MAIN_OBJ= ${MAIN_SRC:.cc=.o}
 #
 # CXXFLAGS will be passed to the c++ compiler
 #
-##CXXFLAGS  =    -Wall -O3 
-##CXXFLAGS =    -Wall -O3 -D__DEBUG 
-##CXXFLAGS = -g -Wall     -D__DEBUG 
 OPT=-O
+DEFS=
 #DEFS=-D_GLIBCXX_DEBUG
 CXXFLAGS = -g -Wall $(OPT) $(DEFS)
 
@@ -109,6 +107,12 @@ $(CHOW):$(OBJS) $(MAIN_OBJ)
 	@#$(CXX) -o $@ $(LDFLAGS) $^ $(LIBS) /usr/lib/libMallocDebug.a
 	@ echo " -- make $@ (Done)"
 
+opt: DEFS += -DNDEBUG
+opt: OPT=-O3
+opt: $(OBJS) $(MAIN_OBJ)
+	@ $(CXX) -o $@ $(LDFLAGS) $^ $(LIBS)
+	cp opt chow
+
 debug: DEFS += -D__DEBUG
 debug: OPT =
 debug: $(OBJS) $(MAIN_OBJ)
@@ -152,10 +156,7 @@ lazy_test: lazy_set_test.o $(OBJS)
 # Cleanup targets
 #
 clean:
-	@ rm -f *.o
-	@ rm -f $(CHOW)
-	@ rm -f chow-benchmark
-	@ rm -f debug
+	rm -f *.o $(CHOW) chow-benchmark debug opt
 	@ echo " -- make clean (Done)"
 
 clobber: clean
