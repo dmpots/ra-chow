@@ -50,8 +50,13 @@ expand HCT do |path|
   test path, :args => '-r16 -b5 -e -f -z'
 end
 
-#----------------- EXPECTED FAILURES  ---------------------#
+#----------------- EXPECTED PASSES ------------------------#
 test DODUC, :args => '-r32 -b3 -p', 
-            :expected => :XFAIL,
-            :comment => 'i2c failure for phi node with two types'
+            :comment => 'used to fail, i2c failure for phi node with two types'
 
+#----------------- EXPECTED FAILURES  ---------------------#
+test FMM+"/fmin", 
+     :args => '-r16 -b7 -f -z -c3 -s1 -l8,6 -g',
+     :expected => :XFAIL,
+     :comment => 'failure after implementing -n'
+                
