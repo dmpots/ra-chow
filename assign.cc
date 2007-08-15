@@ -626,11 +626,15 @@ inline LiveRange* RealLR(LRID orig_lrid, Block* blk)
  * block. the live range does not have to have originally contained
  * the block.
  **/
+inline bool InMap(const std::map<uint, LiveRange*>* m, uint key)
+{return m->find(key) != m->end();}
 inline bool IsAllocated(LRID lrid, Block* blk)
 {
   if(lrid == NO_LRID || lrid == Spill::frame.lrid) return false;
   //have to check to see if the block was ever part of the live range
-  if((*Chow::live_ranges[lrid]->blockmap)[bid(blk)] == NULL) return false;
+  //since checking machine reg assignement requires that the block
+  //given was once part of the live range. so bail out here if not
+  if(!InMap(Chow::live_ranges[lrid]->blockmap, bid(blk))) return false;
   return (GetMachineRegAssignment(blk, lrid) != REG_UNALLOCATED);
 }
 
