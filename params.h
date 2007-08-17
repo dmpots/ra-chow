@@ -31,6 +31,7 @@ namespace Params {
     extern bool  optimistic;
     extern bool  allocate_all_unconstrained;
     extern bool  enhanced_register_promotion;
+    extern bool  prefer_clean_locals;
 
     using namespace Chow::Heuristics;
     extern WhenToSplit when_to_split;

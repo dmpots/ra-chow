@@ -1322,12 +1322,29 @@ Belady(
   //choose tmp reg with furthest next use if GC did not give any
   if(tmpReg == NULL)
   {
-    debug("searching for furthest next use");
-    int max_next_use = -2;
-    for(LI i = choices.begin(); i != choices.end(); i++)
+    if(Params::Algorithm::prefer_clean_locals)
     {
-      int next_use = (*i)->next_use;
-      if(next_use > max_next_use) {tmpReg = *i; max_next_use = next_use;}
+      debug("searching for clean register to evict");
+      int max_next_use = -2;
+      for(LI i = choices.begin(); i != choices.end(); i++)
+      {
+        if(!(*i)->dirty)
+        {
+          int next_use = (*i)->next_use;
+          if(next_use > max_next_use) 
+            {tmpReg = *i; max_next_use = next_use;}
+        }
+      }
+    }
+    if(tmpReg == NULL) //did not find a clean register
+    {
+      debug("searching for furthest next use");
+      int max_next_use = -2;
+      for(LI i = choices.begin(); i != choices.end(); i++)
+      {
+        int next_use = (*i)->next_use;
+        if(next_use > max_next_use) {tmpReg = *i; max_next_use = next_use;}
+      }
     }
 
     assert(tmpReg != NULL);
