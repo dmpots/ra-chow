@@ -847,6 +847,12 @@ LiveUnit* LiveRange_AddLiveUnit(LiveRange* lr, LiveUnit* unit)
  *=======================================
  *
  ***/
+inline bool need_store(LiveUnit* lu){
+  if(Params::Algorithm::move_loads_and_stores){
+    return lu->need_store && !lu->internal_store;
+  }
+  return lu->need_store;
+}
 Priority LiveUnit_ComputePriority(LiveRange* lr, LiveUnit* lu)
 {
   using Params::Machine::load_save_weight;
@@ -857,7 +863,7 @@ Priority LiveUnit_ComputePriority(LiveRange* lr, LiveUnit* lu)
   Priority unitPrio = 
       load_save_weight  * lu->uses 
     + store_save_weight * lu->defs 
-    - move_cost_weight  * lu->need_store;
+    - move_cost_weight  * need_store(lu);
   unitPrio *= pow(loop_depth_weight, Globals::depths[bid(lu->block)]);
 
   //treat load loop cost separte in case we can move it up from a loop
