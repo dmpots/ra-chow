@@ -127,6 +127,7 @@ using Params::Algorithm::optimistic;
 using Params::Algorithm::allocate_all_unconstrained;
 using Params::Algorithm::enhanced_register_promotion;
 using Params::Algorithm::prefer_clean_locals;
+using Params::Algorithm::split_limit;
 using Params::Program::force_minimum_register_count;
 using Params::Program::dump_params_only;
 static Param_Details param_table[] = 
@@ -171,10 +172,11 @@ static Param_Details param_table[] =
   {'n', process_, I,F,enhanced_register_promotion,
          &enhanced_register_promotion, BOOL_PARAM, NO_HELP},
   {'k', process_, I,F,prefer_clean_locals,
-         &prefer_clean_locals, BOOL_PARAM, NO_HELP}
+         &prefer_clean_locals, BOOL_PARAM, NO_HELP},
+  {'u', process_, split_limit,F,B, &split_limit, INT_PARAM, NO_HELP}
 };
 const unsigned int NPARAMS = (sizeof(param_table) / sizeof(param_table[0]));
-const char* PARAMETER_STRING  = ":b:r:d:c:i:w:s:l:mpefyztgoank";
+const char* PARAMETER_STRING  = ":b:r:d:c:i:w:s:l:u:mpefyztgoank";
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
 /*

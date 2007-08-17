@@ -37,6 +37,7 @@ bool  optimistic = false;
 bool  allocate_all_unconstrained = false;
 bool  enhanced_register_promotion = true;
 bool  prefer_clean_locals = false;
+int   split_limit = 0;
 
 /* default heuristics */
 ColorChoice color_choice = CHOOSE_FIRST_COLOR;

@@ -590,6 +590,7 @@ void SplitNeighbors(LiveRange* lr, LRSet* constr_lr, LRSet* unconstr_lr)
   debug("BEGIN SPLITTING");
   using Stats::chowstats;
   using Params::Algorithm::spill_instead_of_split;
+  using Params::Algorithm::split_limit;
 
   //make a copy of the interference list as a worklist since splitting
   //may add and remove items to the original interference list
@@ -611,7 +612,9 @@ void SplitNeighbors(LiveRange* lr, LRSet* constr_lr, LRSet* unconstr_lr)
     if(ShouldSplitLiveRange(intf_lr))
     {
       debug("Need to split LR: %d", intf_lr->id);
-      if(intf_lr->IsEntirelyUnColorable() || spill_instead_of_split)
+      if((split_limit && (int)chowstats.cSplits >= split_limit) ||
+          spill_instead_of_split ||
+          intf_lr->IsEntirelyUnColorable())
       {
         debug("LR: %d is uncolorable - will not split", intf_lr->id);
         //delete this live range from the interference graph. update
