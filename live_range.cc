@@ -93,6 +93,18 @@ namespace {
   void LiveRange_InsertLoad(LiveRange* lr, LiveUnit* unit);
   void LiveRange_InsertStore(LiveRange*lr, LiveUnit* unit);
   Priority LiveRange_OrigComputePriority(LiveRange* lr);
+  bool inline LiveIn(LRID orig_lrid, Block* blk)
+  {
+    Liveness_Info info = SSA_live_in[bid(blk)];
+    for(LOOPVAR j = 0; j < info.size; j++)
+    {
+      if(orig_lrid == info.names[j])
+      {
+        return true;
+      }
+    }
+    return false;
+  }
 }
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
@@ -382,7 +394,7 @@ void LiveRange::AssignColor()
         {
           Block_ForAllSuccs(e, unit->block)
           {
-            if(!this->ContainsBlock(e->succ))
+            if(!ContainsBlock(e->succ) && LiveIn(orig_lrid, e->succ))
             {
               //add this spill to list of spills on this edge
               debug("moving store for lr: %d_%d to edge %s --> %s",
