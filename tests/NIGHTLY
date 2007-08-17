@@ -50,6 +50,18 @@ expand HCT do |path|
   test path, :args => '-r16 -b5 -e -f -z'
 end
 
+#---------------------- TRIMMING -------------------------#
+expand HCT do |path|
+  test path, :args => '-r32 -b5 -e -f -z -t'
+  test path, :args => '-r16 -b5 -e -f -z -t'
+end
+
+#-------------------- KITCHEN SINK -----------------------#
+expand HCT do |path|
+  test path, :args => '-r32 -b5 -e -f -z -t -c1 -s0 -l 8 -g -o -a'
+  test path, :args => '-r16 -b5 -e -f -z -t -c0 -s1 -l 8 -g -o -a'
+end
+
 #----------------- EXPECTED PASSES ------------------------#
 test DODUC, :args => '-r32 -b3 -p', 
             :comment => 'used to fail, i2c failure for phi node with two types'
