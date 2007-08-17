@@ -177,7 +177,7 @@ void Trim(LiveRange* lr, TrimDirection td);
 void Trim(LiveRange* lr)
 {
   Trim(lr, UP);
-  //Trim(lr, DOWN);
+  Trim(lr, DOWN);
 }
 void Trim(LiveRange* lr, TrimDirection td)
 {
