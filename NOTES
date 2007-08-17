@@ -2167,3 +2167,17 @@ Now we are getting a failure to find a load in some doduc files:
   prophy.i
 with args as above. why?
 
+
+
+=======================================================
+Things I still want to do to chow
+Wed Aug 15 10:04:58 CDT 2007
+=======================================================
++ fix rematerialization to use copy_def splits on the edges
++ add a limit to the number of times splitting is allowed
++ make sure you are computing priorities correctly when moving loads
+and stores
++ add a flag to prefer dumping non-dirty regs in local allocation
++ don't add store on edge when the variable is not live out on that
+edge
+

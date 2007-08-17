@@ -172,7 +172,14 @@ void EnhancedCodeMotion(Edge* edg, Block* blkLD)
  * be dangling blocks that are not part of a path that reaches a use
  * or a def and thus serve no purpose.
 */ 
+enum TrimDirection{UP, DOWN};
+void Trim(LiveRange* lr, TrimDirection td);
 void Trim(LiveRange* lr)
+{
+  Trim(lr, UP);
+  //Trim(lr, DOWN);
+}
+void Trim(LiveRange* lr, TrimDirection td)
 {
   std::queue<LiveUnit*> worklist;
   for(LiveRange::iterator i = lr->begin(); i != lr->end(); i++)
@@ -187,16 +194,35 @@ void Trim(LiveRange* lr)
   {
     LiveUnit* lu = worklist.front(); worklist.pop();
     Edge* e;
-    Block_ForAllPreds(e, lu->block)
+    if(td == UP) //look up the graph 
     {
-      Block* pred = e->pred;
-      if(lr->ContainsBlock(pred)) 
+      Block_ForAllPreds(e, lu->block)
       {
-        LiveUnit* luPred = lr->LiveUnitForBlock(pred);
-        if(!luPred->mark)
+        Block* pred = e->pred;
+        if(lr->ContainsBlock(pred)) 
         {
-          luPred->mark = true;
-          worklist.push(luPred);
+          LiveUnit* luPred = lr->LiveUnitForBlock(pred);
+          if(!luPred->mark)
+          {
+            luPred->mark = true;
+            worklist.push(luPred);
+          }
+        }
+      }
+    }
+    else //look down the graph 
+    {
+      Block_ForAllSuccs(e, lu->block)
+      {
+        Block* succ = e->succ;
+        if(lr->ContainsBlock(succ)) 
+        {
+          LiveUnit* luSucc = lr->LiveUnitForBlock(succ);
+          if(!luSucc->mark)
+          {
+            luSucc->mark = true;
+            worklist.push(luSucc);
+          }
         }
       }
     }
@@ -213,8 +239,8 @@ void Trim(LiveRange* lr)
           //better be a list or i++ could be invalid
     }
   }
-
 }
+
 
 /*
  *========================================
