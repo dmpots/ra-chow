@@ -258,7 +258,9 @@ int main(Int argc, Char **argv)
     CleaveBlocks();
     Stats::Stop();
   }
+    Stats::Start("DataFlow Analysis");
   DataFlowAnalysis(Chow::arena);
+    Stats::Stop();
 
   //setup machine configuration
   CheckRegisterLimitFeasibility(Chow::arena);

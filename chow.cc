@@ -251,6 +251,7 @@ void BuildInitialLiveRanges(Arena chow_arena)
   using Chow::live_ranges;
 
   //run union find over phi nodes to get initial live ranges
+    Stats::Start("Create LiveRanges");
   unsigned int clrInitial = FindLiveRanges(chow_arena);
   --clrInitial; //no lr for SSA name 0
 
@@ -269,6 +270,7 @@ void BuildInitialLiveRanges(Arena chow_arena)
   //now that we know how many live ranges we start with allocate them
   Stats::ComputeBBStats(chow_arena, SSA_def_count);
   CreateLiveRanges(chow_arena, clrInitial);
+    Stats::Stop();
 
   //find all interferenes for each live range
     Stats::Start("Build Interferences");
