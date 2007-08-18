@@ -760,7 +760,7 @@ LiveRange* LiveRange::Mitosis()
 {
   LiveRange* newlr = new LiveRange(rc, NO_LRID, type, counter);
   newlr->orig_lrid = orig_lrid;
-  newlr->id = LiveRange::counter++; assert(counter < MAX_LRS);
+  newlr->id = LiveRange::counter++;
   newlr->is_candidate = TRUE;
   newlr->type = type;
   newlr->blockmap = blockmap;
