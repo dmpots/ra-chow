@@ -2181,3 +2181,31 @@ and stores
 + don't add store on edge when the variable is not live out on that
 edge
 
+=======================================================
+How to fix rematerialization
+Fri Aug 17 18:05:29 CDT 2007
+=======================================================
+In chow.cc
+  + when calling Remat::AddSplit - include the edge along which the
+  split occurs and save that away in the split struct
+
+  + in HandleCopyDef look for REMAT_COPY on the edge. when you see it
+  then you need to check whether the cpSrc is allocated in the pred
+  block and if so then use that reg for srcReg. if destlr is not
+  allocated then you need to insert a STi on that edge.
+  
+  If it is not allocated then check if destlr is allocated. if it 
+
+  if dest is allocated
+    if src is allocated --> change to a copy, treat as def
+    if src is not allocated -> change to load, treat as def
+  if dest is not allocated
+    if src is allocated --> change to a store
+    if src is not allocated  --> what now???
+
+  + make sure that the MoveLoadsAndStores() gets called when you are
+  doing rematerialization.
+
+  on second thought i might just keep the remat code the same, but it
+  seems like it would make sense to trim the live ranges after remat
+  because they may not be a use at the split point.
