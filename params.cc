@@ -35,7 +35,7 @@ bool  allocate_locals = false;
 bool  spill_instead_of_split = false;
 bool  optimistic = false;
 bool  allocate_all_unconstrained = false;
-bool  enhanced_register_promotion = true;
+bool  enhanced_register_promotion = false;
 bool  prefer_clean_locals = false;
 int   split_limit = 0;
 
