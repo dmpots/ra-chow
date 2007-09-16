@@ -38,6 +38,13 @@ namespace Chow
       CHOW_SPLIT,
       UP_AND_DOWN_SPLIT
     };
+    enum PriorityFunction {
+      CLASSIC,
+      NO_NORMAL,
+      SQUARE_NORMAL,
+      GNU,
+      GNU_SQUARE_NORMAL,
+    };
 
     /*
      * WHEN TO SPLIT STRATEGIES
@@ -174,6 +181,44 @@ namespace Chow
       void   ExpandFringeNode(Block*,FringeList&);
     };
 
+    /*
+     * PRIORITY FUNCTIONS
+     */
+    struct PriorityFunctionStrategy
+    {
+      virtual Priority operator() (LiveRange*) = 0;
+      virtual ~PriorityFunctionStrategy(){};
+    };
+
+    /* 0 */
+    struct PriorityClassic : PriorityFunctionStrategy
+    {
+      Priority operator()(LiveRange*);
+    };
+
+    /* 1 */
+    struct PriorityNoNormal : PriorityFunctionStrategy
+    {
+      Priority operator()(LiveRange*);
+    };
+
+    /* 2 */
+    struct PriorityGnu : PriorityFunctionStrategy
+    {
+      Priority operator()(LiveRange*);
+    };
+
+    /* 3 */
+    struct PrioritySquareNormal : PriorityFunctionStrategy
+    {
+      Priority operator()(LiveRange*);
+    };
+
+    /* 4 */
+    struct PriorityGnuSquareNormal : PriorityFunctionStrategy
+    {
+      Priority operator()(LiveRange*);
+    };
 
     /*
      * STRATEGY VARIABLES
@@ -182,10 +227,13 @@ namespace Chow
     extern IncludeInSplitStrategy* include_in_split_strategy;
     extern WhenToSplitStrategy* when_to_split_strategy;
     extern SplitStrategy* how_to_split_strategy;
+    extern PriorityFunctionStrategy* priority_strategy;
+
     void SetColorChoiceStrategy(ColorChoice cs);
     void SetIncludeInSplitStrategy(IncludeInSplit is);
     void SetWhenToSplitStrategy(WhenToSplit ws);
     void SetHowToSplitStrategy(HowToSplit ws);
+    void SetPriorityFunctionStrategy(PriorityFunction pf);
   }//Heuristics
 }//Chow
 

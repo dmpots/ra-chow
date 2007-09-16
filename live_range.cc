@@ -23,6 +23,7 @@
 #include "chow_extensions.h"
 #include "reach.h"
 #include "heuristics.h"
+#include "priority.h"
 
 /*------------------MODULE LOCAL DEFINITIONS-------------------*/
 namespace {
@@ -70,16 +71,10 @@ namespace {
 
 /* local functions */
   void Def_CollectUniqueUseNames(Variable, std::list<Variable>&);
-  Priority LiveUnit_ComputePriority(LiveRange*, LiveUnit*);
   Boolean VectorSet_Full(VectorSet vs);
   Boolean VectorSet_Empty(VectorSet vs);
   bool VectorSet_Intersects(VectorSet y, VectorSet z);
   void AddEdgeExtensionNode(Edge*, LiveRange*, LiveUnit*,SpillType);
-
-  bool LiveUnit_CanMoveLoad(LiveRange* lr, LiveUnit* lu);
-  int LiveUnit_LoadLoopDepth(LiveRange*  lr, LiveUnit* lu);
-  Priority LiveUnit_ComputePriority(LiveRange* lr, LiveUnit* lu);
-
   LiveUnit* LiveRange_AddLiveUnit(LiveRange*, LiveUnit*);
   LiveUnit* LiveRange_AddLiveUnitBlock(LiveRange*, Block*);
   LiveUnit* LiveRange_ChooseSplitPoint(LiveRange*);
@@ -92,7 +87,6 @@ namespace {
   void LiveRange_MarkStores__ORIG(LiveRange* lr);
   void LiveRange_InsertLoad(LiveRange* lr, LiveUnit* unit);
   void LiveRange_InsertStore(LiveRange*lr, LiveUnit* unit);
-  Priority LiveRange_OrigComputePriority(LiveRange* lr);
   bool inline LiveIn(LRID orig_lrid, Block* blk)
   {
     Liveness_Info info = SSA_live_in[bid(blk)];
@@ -725,14 +719,8 @@ LiveRange::AddLiveUnitForBlock(Block* b,
  ***/
 Priority LiveRange::ComputePriority()
 {
-  Priority pr = 0.0;
-  Unsigned_Int clu = 0; //count of live units
-  for(LiveRange::iterator luIT = begin(); luIT != end(); luIT++)
-  {
-    pr += LiveUnit_ComputePriority(this, *luIT);
-    clu++;
-  }
-  priority = pr/clu;
+  //priority = Chow::PriorityFuns::Classic(this);
+  priority = (*Chow::Heuristics::priority_strategy)(this);
   return priority;
 }
 
@@ -851,113 +839,6 @@ LiveUnit* LiveRange_AddLiveUnit(LiveRange* lr, LiveUnit* unit)
   lr->unitmap->insert(std::make_pair(unit->block, unit));
   return unit;
 }
-
-
-/*
- *=======================================
- * LiveUnit_ComputePriority()
- *=======================================
- *
- ***/
-inline bool need_store(LiveUnit* lu){
-  if(Params::Algorithm::move_loads_and_stores){
-    return lu->need_store && !lu->internal_store;
-  }
-  return lu->need_store;
-}
-Priority LiveUnit_ComputePriority(LiveRange* lr, LiveUnit* lu)
-{
-  using Params::Machine::load_save_weight;
-  using Params::Machine::store_save_weight;
-  using Params::Machine::move_cost_weight;
-  using Params::Algorithm::loop_depth_weight;
-
-  Priority unitPrio = 
-      load_save_weight  * lu->uses 
-    + store_save_weight * lu->defs 
-    - move_cost_weight  * need_store(lu);
-  unitPrio *= pow(loop_depth_weight, Globals::depths[bid(lu->block)]);
-
-  //treat load loop cost separte in case we can move it up from a loop
-  int loadLoopDepth = LiveUnit_LoadLoopDepth(lr, lu);
-  unitPrio -=   (move_cost_weight * lu->need_load)
-                * pow(loop_depth_weight, loadLoopDepth);
-  return unitPrio;
-}
-
-
-
-/*
- *=======================================
- * LiveUnit_CanMoveLoad()
- *=======================================
- * used by LiveUnit to compute priority taking into account the final
- * resting place of the load
- *
- ***/
-bool LiveUnit_CanMoveLoad(LiveRange* lr, LiveUnit* lu)
-{
-  if(lu->need_load) return false;
-
-  //the load can be moved if there is at least on predecessor *in* the
-  //live range. we know there must be at least one *NOT* in the live
-  //range because the unit needs a load and this only happens when it
-  //is an entry point
-  int lrPreds = 0;
-  Edge* e;
-  Block_ForAllPreds(e, lu->block)
-  {
-    if(lr->ContainsBlock(e->pred)) lrPreds++;
-  }
-  return (lrPreds > 0 && Params::Algorithm::move_loads_and_stores);
-}
-
-/*
- *=======================================
- * LiveUnit_LoadLoopDepth()
- * computes loop depth level for inserting loads. the level could be
- * decreased by one to account for moving a load up from a loop header
- *=======================================
- *
- ***/
-int LiveUnit_LoadLoopDepth(LiveRange*  lr, LiveUnit* lu)
-{
-    int depth = depths[bid(lu->block)];
-    if(Block_IsLoopHeader(lu->block) && LiveUnit_CanMoveLoad(lr, lu))
-    {
-      depth -= 1;
-    }
-    return depth;
-}
-
-
-
-//kept for prosperity in case we want to compare orig priority to the
-//priority used when moving loads and stores
-Priority LiveRange_OrigComputePriority(LiveRange* lr)
-{
-  using Params::Machine::load_save_weight;
-  using Params::Machine::store_save_weight;
-  using Params::Machine::move_cost_weight;
-  using Params::Algorithm::loop_depth_weight;
-
-  int clu = 0; //count of live units
-  Priority pr = 0.0;
-  for(LiveRange::iterator it = lr->begin(); it != lr->end(); it++)
-  {
-    LiveUnit* lu = *it;
-    Priority unitPrio = 
-        load_save_weight  * lu->uses 
-      + store_save_weight * lu->defs 
-      - move_cost_weight  * lu->need_store
-      - move_cost_weight  * lu->need_load;
-    pr += unitPrio 
-          * pow(loop_depth_weight, Globals::depths[bid(lu->block)]);
-    clu++;
-  }
-  return pr/clu;
-}
-
 
 void AddEdgeExtensionNode(Edge* e, LiveRange* lr, LiveUnit* unit, 
                           SpillType spillType)

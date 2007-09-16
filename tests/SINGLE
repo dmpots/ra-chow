@@ -3,17 +3,24 @@ require 'tests/paths'
 
 #---------------------- REG=32 ---------------------------#
 expand HCT do |path|
-  test path, :args => '-r32 -b5 -pm'
+  #test path, :args => '-r32 -f -n'
+  #test path, :args => '-r16 -f -n'
+  test path, :args => '-r32 -f -n -k'
+  test path, :args => '-r16 -f -n -k'
+  #test path, :args => '-r32 -f -n -z'
+  #test path, :args => '-r16 -f -n -z'
+  #test path, :args => '-r32 -f -n -t'
+  #test path, :args => '-r16 -f -n -t'
 end
 
 #---------------------- REG=16 ---------------------------#
-expand HCT do |path|
-  test path, :args => '-r16 -b5 -pm',
-       :skip => [:doduc, :fpppp, :rkf45, :wave5X]
-end
-test DODUC,  :args => '-r19 -b5 -pm', :comment => 'lowest reg < 32'
-test FPPPP,  :args => '-r27 -b5 -pm', :comment => 'lowest reg < 32'
-test RKF45,  :args => '-r24 -b5 -pm', :comment => 'lowest reg < 32'
-test WAVE5X, :args => '-r25 -b5 -pm', :comment => 'lowest reg < 32'
+#expand HCT do |path|
+#  test path, :args => '-r16 -b5 -pm',
+#       :skip => [:doduc, :fpppp, :rkf45, :wave5X]
+#end
+#test DODUC,  :args => '-r19 -b5 -pm', :comment => 'lowest reg < 32'
+#test FPPPP,  :args => '-r27 -b5 -pm', :comment => 'lowest reg < 32'
+#test RKF45,  :args => '-r24 -b5 -pm', :comment => 'lowest reg < 32'
+#test WAVE5X, :args => '-r25 -b5 -pm', :comment => 'lowest reg < 32'
 
 

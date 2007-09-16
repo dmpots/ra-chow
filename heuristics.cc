@@ -10,6 +10,7 @@
 #include "live_unit.h"
 #include "color.h"
 #include "chow.h"
+#include "priority.h"
 
 /*------------------MODULE LOCAL DECLARATIONS------------------*/
 namespace {
@@ -34,6 +35,13 @@ ChooseColorFromMostConstrainedNeighbor choose_from_most_constrained;
 ChooseColorInMostNeighborsForbidden choose_most_forbidden;
 ChooseColorFromSplit choose_from_split;
 
+//priorities
+PriorityClassic priority_classic;
+PriorityNoNormal priority_no_normal;
+PriorityGnu priority_gnu;
+PrioritySquareNormal priority_square_normal;
+PriorityGnuSquareNormal priority_gnu_square_normal;
+
 template<class T>
 inline T max(T a, T b){return a > b ? a : b;}
 
@@ -52,6 +60,7 @@ ColorChoiceStrategy* color_choice_strategy = NULL;
 IncludeInSplitStrategy* include_in_split_strategy = NULL;
 WhenToSplitStrategy* when_to_split_strategy = NULL;
 SplitStrategy* how_to_split_strategy = NULL;
+PriorityFunctionStrategy* priority_strategy = NULL;
 
 //heuristic setters
 void SetColorChoiceStrategy(ColorChoice cs)
@@ -126,6 +135,32 @@ void SetHowToSplitStrategy(HowToSplit hs)
       abort();
   }
 }
+
+void SetPriorityFunctionStrategy(PriorityFunction pf)
+{
+  switch(pf)
+  {
+    case CLASSIC:
+      priority_strategy = &priority_classic;
+      break;
+    case NO_NORMAL:
+      priority_strategy = &priority_no_normal;
+      break;
+    case SQUARE_NORMAL:
+      priority_strategy = &priority_square_normal;
+      break;
+    case GNU:
+      priority_strategy = &priority_gnu;
+      break;
+    case GNU_SQUARE_NORMAL:
+      priority_strategy = &priority_gnu_square_normal;
+      break;
+    default:
+      error("unknown priority strategy: %d", pf);
+      abort();
+  }
+}
+
 
 /*
  * WHEN TO SPLIT STRATEGIES
@@ -471,6 +506,29 @@ UpAndDownSplit::ExpandFringeNode(Block* blk, FringeList& fringe)
   ExpandPreds(blk, fringe);
 }
 
+/*
+ * PRIORITY STRATEGIES
+ */
+Priority PriorityClassic::operator()(LiveRange* lr)
+{
+  return Chow::PriorityFuns::Classic(lr);
+}
+Priority PriorityNoNormal::operator()(LiveRange* lr)
+{
+  return Chow::PriorityFuns::NoNormal(lr);
+}
+Priority PrioritySquareNormal::operator()(LiveRange* lr)
+{
+  return Chow::PriorityFuns::SquareNormal(lr);
+}
+Priority PriorityGnu::operator()(LiveRange* lr)
+{
+  return Chow::PriorityFuns::Gnu(lr);
+}
+Priority PriorityGnuSquareNormal::operator()(LiveRange* lr)
+{
+  return Chow::PriorityFuns::GnuSquareNormal(lr);
+}
 
 }
 }//end Chow::Heuristics namespace

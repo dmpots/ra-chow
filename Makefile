@@ -29,6 +29,7 @@ SRCFILES=union_find.cc\
          reach.cc\
          heuristics.cc\
          lazy_set.cc\
+         priority.cc\
 
 MAIN_SRC=chow.main.cc
 #

@@ -128,6 +128,7 @@ using Params::Algorithm::allocate_all_unconstrained;
 using Params::Algorithm::enhanced_register_promotion;
 using Params::Algorithm::prefer_clean_locals;
 using Params::Algorithm::split_limit;
+using Params::Algorithm::priority_function;
 using Params::Program::force_minimum_register_count;
 using Params::Program::dump_params_only;
 static Param_Details param_table[] = 
@@ -173,10 +174,12 @@ static Param_Details param_table[] =
          &enhanced_register_promotion, BOOL_PARAM, NO_HELP},
   {'k', process_, I,F,prefer_clean_locals,
          &prefer_clean_locals, BOOL_PARAM, NO_HELP},
-  {'u', process_, split_limit,F,B, &split_limit, INT_PARAM, NO_HELP}
+  {'u', process_, split_limit,F,B, &split_limit, INT_PARAM, NO_HELP},
+  {'x', process_heuristic, priority_function,F,B,&priority_function,
+         INT_PARAM, NO_HELP}
 };
 const unsigned int NPARAMS = (sizeof(param_table) / sizeof(param_table[0]));
-const char* PARAMETER_STRING  = ":b:r:d:c:i:w:s:l:u:mpefyztgoank";
+const char* PARAMETER_STRING  = ":b:r:d:c:i:w:s:l:u:x:mpefyztgoank";
 
 /*--------------------BEGIN IMPLEMENTATION---------------------*/
 /*
@@ -375,10 +378,12 @@ int process_heuristic(Param_Details* param, char* arg)
   using Chow::Heuristics::IncludeInSplit;
   using Chow::Heuristics::WhenToSplit;
   using Chow::Heuristics::HowToSplit;
+  using Chow::Heuristics::PriorityFunction;
   using Chow::Heuristics::SetColorChoiceStrategy;
   using Chow::Heuristics::SetIncludeInSplitStrategy;
   using Chow::Heuristics::SetWhenToSplitStrategy;
   using Chow::Heuristics::SetHowToSplitStrategy;
+  using Chow::Heuristics::SetPriorityFunctionStrategy;
 
   int hval = (arg == NULL ) ?  param->idefault : atoi(arg);
   switch(param->name)
@@ -391,6 +396,8 @@ int process_heuristic(Param_Details* param, char* arg)
       SetWhenToSplitStrategy(WhenToSplit(hval)); break;
     case 's': 
       SetHowToSplitStrategy(HowToSplit(hval)); break;
+    case 'x':
+      SetPriorityFunctionStrategy(PriorityFunction(hval)); break;
     default:
       error("unknown heuristic: %c", param->name);
       abort();

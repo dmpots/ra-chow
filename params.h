@@ -39,6 +39,7 @@ namespace Params {
     extern ColorChoice color_choice;
     extern IncludeInSplit include_in_split;
     extern HowToSplit how_to_split;
+    extern PriorityFunction priority_function;
   }
   namespace Program {
     extern bool force_minimum_register_count;
