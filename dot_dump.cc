@@ -6,6 +6,7 @@
 #include <Shared.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include "dot_dump.h"
 #include "live_range.h"
 #include "live_unit.h"

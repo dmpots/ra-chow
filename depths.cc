@@ -13,16 +13,16 @@ static Unsigned_Int walk_tree(Block *block, Unsigned_Int *index,
 static Boolean dominates(Block *parent, Block *child);
 static Unsigned_Int DFS_DJ_graph(Block *block, Unsigned_Int *index);
 static Boolean sp_back_edge(Block *parent, Block *child);
-static Void reach_under(Block *block, Block *head, SparseSet loop);
-static Void dfs(Unsigned_Int i);
-static Void visit_successors(Unsigned_Int pred, Unsigned_Int i);
+static void reach_under(Block *block, Block *head, SparseSet loop);
+static void dfs(Unsigned_Int i);
+static void visit_successors(Unsigned_Int pred, Unsigned_Int i);
 
 //added by dave
-static Void Block_Clear_Visited_Flags();
+static void Block_Clear_Visited_Flags();
 Unsigned_Int max_depth = 0;
 Unsigned_Int debug = FALSE;
 
-Void find_nesting_depths(Arena external_arena)
+void find_nesting_depths(Arena external_arena)
 {
     depths = (Unsigned_Int*)
         Arena_GetMemClear(external_arena,
@@ -202,7 +202,7 @@ static Boolean sp_back_edge(Block *parent, Block *child)
 
     return p_index <= c_index && c_index < p_index + p_size;
 }
-static Void reach_under(Block *block, Block *head, SparseSet loop)
+static void reach_under(Block *block, Block *head, SparseSet loop)
 {
     SparseSet worklist;
 
@@ -241,7 +241,7 @@ static Void reach_under(Block *block, Block *head, SparseSet loop)
     }
     Arena_Release(depth_arena);
 }
-static Void dfs(Unsigned_Int i)
+static void dfs(Unsigned_Int i)
 {
     scc_info[i].visited = TRUE;
     scc_info[i].dfs_num = scc_info[i].low = next_dfs_num++;
@@ -301,7 +301,7 @@ static Void dfs(Unsigned_Int i)
     }
     
 }
-static Void visit_successors(Unsigned_Int pred, Unsigned_Int i)
+static void visit_successors(Unsigned_Int pred, Unsigned_Int i)
 {
     Block *block = preorder_block_list[i];
     Edge *edge;
@@ -329,7 +329,7 @@ static Void visit_successors(Unsigned_Int pred, Unsigned_Int i)
 }
 
 //added by dave... where was this originally?
-static Void Block_Clear_Visited_Flags()
+static void Block_Clear_Visited_Flags()
 {
   Block* blk;
   ForAllBlocks(blk)

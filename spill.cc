@@ -4,6 +4,7 @@
  * inserting loads, stores and copies.
  */
 #include <map>
+#include <string.h>
 
 #include "spill.h"
 #include "live_range.h"

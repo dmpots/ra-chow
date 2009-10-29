@@ -9,6 +9,7 @@
 
 /*----------------------------INCLUDES----------------------------*/
 #include <Shared.h>
+#include <time.h>
 #include "types.h"
 #include "debug.h"
 

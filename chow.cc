@@ -47,7 +47,7 @@ namespace {
   void UpdateConstrainedLists(LiveRange* , LiveRange* , LRSet*, LRSet*);
   void UpdateConstrainedListsAfterDelete(LiveRange*, LRSet*, LRSet*);
   LiveUnit* AddLiveUnitOnce(LRID, Block*, SparseSet, Variable);
-  LiveRange* ComputePriorityAndChooseTop(LRSet* lrs, LRSet* lrs);
+  LiveRange* ComputePriorityAndChooseTop(LRSet*, LRSet*);
   void BuildInitialLiveRanges(Arena);
   void BuildInterferences(Arena arena);
   void AllocateRegisters();

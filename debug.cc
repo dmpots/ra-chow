@@ -6,6 +6,7 @@
 #include <Shared.h>
 #include <SSA.h>
 #include <string>
+#include <stdlib.h>
 
 #include "debug.h"
 #include "live_range.h"

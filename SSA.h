@@ -90,13 +90,13 @@ extern Parm_Map_Node **parm_map;
  /* Chain_ForAllUses(Chains_List *runner, Unsigned_Int resource_name) */
 #define Chain_ForAllUses(runner, resource_name) \
     for (runner = SSA_def_use_chains[(resource_name)]; runner; runner = runner->next)
-extern Void SSA_Build(Unsigned_Int flags);
-extern Void SSA_Replace_Phi_Nodes(Void);
-extern Void SSA_Restore(Void);
-Void SSA_Phi_Node_Dump(Void);
-Void print_phi_nodes(Block *block);
-Void print_def_use_chains(Void);
-Void print_use_def_chains(Void);
+extern void SSA_Build(Unsigned_Int flags);
+extern void SSA_Replace_Phi_Nodes(void);
+extern void SSA_Restore(void);
+void SSA_Phi_Node_Dump(void);
+void print_phi_nodes(Block *block);
+void print_def_use_chains(void);
+void print_use_def_chains(void);
 
 #ifdef __cplusplus
 };

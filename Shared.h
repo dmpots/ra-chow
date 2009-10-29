@@ -15,7 +15,6 @@ extern "C" {
 typedef FILE *File;
 typedef char Char;
 typedef double Double;
-typedef void Void;
 typedef int Int;
 typedef signed char Int1;
 typedef int Int2;
@@ -37,8 +36,8 @@ typedef struct tms *Timer;
 
 extern Boolean time_print;
 
-Timer Time_Start(Void);
-Void Time_Dump(Timer timer_var, Char *format_string);
+Timer Time_Start(void);
+void Time_Dump(Timer timer_var, Char *format_string);
 
 
 typedef union arena *Arena;
@@ -47,13 +46,13 @@ typedef union arena *Arena;
 Boolean mem_stats_print;
 #endif
 
-Arena Arena_Create(Void);
-Void Arena_Destroy(Arena);
-Void *Arena_GetMem(Arena, Unsigned_Int num_bytes);
-Void *Arena_GetMemClear(Arena, Unsigned_Int num_bytes);
-Void Arena_Mark(Arena);
-Void Arena_Release(Arena);
-Void Arena_DumpStats(Void);
+Arena Arena_Create(void);
+void Arena_Destroy(Arena);
+void *Arena_GetMem(Arena, Unsigned_Int num_bytes);
+void *Arena_GetMemClear(Arena, Unsigned_Int num_bytes);
+void Arena_Mark(Arena);
+void Arena_Release(Arena);
+void Arena_DumpStats(void);
 
 
 struct sparse_set_node {
@@ -75,21 +74,21 @@ typedef struct sparse_set *SparseSet;
        x = (set)->node[x].stack_index)
 
 SparseSet SparseSet_Create(Arena, Unsigned_Int universe_size);
-Void SparseSet_Clear(SparseSet);
-Void SparseSet_Insert(SparseSet, Unsigned_Int x);
-Void SparseSet_Delete(SparseSet, Unsigned_Int x);
+void SparseSet_Clear(SparseSet);
+void SparseSet_Insert(SparseSet, Unsigned_Int x);
+void SparseSet_Delete(SparseSet, Unsigned_Int x);
 Boolean SparseSet_Member(SparseSet, Unsigned_Int x);
 Unsigned_Int SparseSet_Size(SparseSet);
 Unsigned_Int SparseSet_ChooseMember(SparseSet);
 Boolean SparseSet_Equal(SparseSet, SparseSet);
-Void SparseSet_Copy(SparseSet dst, SparseSet src);
-Void SparseSet_Union(SparseSet x, SparseSet y, SparseSet z);
-Void SparseSet_Intersect(SparseSet x, SparseSet y, SparseSet z);
-Void SparseSet_Difference(SparseSet x, SparseSet y, SparseSet z);
-Void SparseSet_Complement(SparseSet x, SparseSet y);
-Void SparseSet_Sort(SparseSet);
-Void SparseSet_Dump(SparseSet);
-Void SparseSet_Dump_Pretty(SparseSet);
+void SparseSet_Copy(SparseSet dst, SparseSet src);
+void SparseSet_Union(SparseSet x, SparseSet y, SparseSet z);
+void SparseSet_Intersect(SparseSet x, SparseSet y, SparseSet z);
+void SparseSet_Difference(SparseSet x, SparseSet y, SparseSet z);
+void SparseSet_Complement(SparseSet x, SparseSet y);
+void SparseSet_Sort(SparseSet);
+void SparseSet_Dump(SparseSet);
+void SparseSet_Dump_Pretty(SparseSet);
 
 
 struct vector_set {
@@ -105,27 +104,27 @@ typedef struct vector_set *VectorSet;
     if (VectorSet_Member((set), x))
 
 VectorSet VectorSet_Create(Arena, Unsigned_Int universe_size);
-Void VectorSet_Clear(VectorSet);
-Void VectorSet_Insert(VectorSet, Unsigned_Int);
-Void VectorSet_Delete(VectorSet, Unsigned_Int);
+void VectorSet_Clear(VectorSet);
+void VectorSet_Insert(VectorSet, Unsigned_Int);
+void VectorSet_Delete(VectorSet, Unsigned_Int);
 Boolean VectorSet_Member(VectorSet, Unsigned_Int);
 Unsigned_Int VectorSet_Size(VectorSet);
 Unsigned_Int VectorSet_ChooseMember(VectorSet);
-Void VectorSet_Copy(VectorSet dst, VectorSet src);
+void VectorSet_Copy(VectorSet dst, VectorSet src);
 Boolean VectorSet_Equal(VectorSet, VectorSet);
-Void VectorSet_Union(VectorSet x, VectorSet y, VectorSet z);
-Void VectorSet_Intersect(VectorSet x, VectorSet y, VectorSet z);
-Void VectorSet_Difference(VectorSet x, VectorSet y, VectorSet z);
-Void VectorSet_Imply(VectorSet x, VectorSet y, VectorSet z);
-Void VectorSet_DifferenceUnion(VectorSet w, VectorSet x, 
+void VectorSet_Union(VectorSet x, VectorSet y, VectorSet z);
+void VectorSet_Intersect(VectorSet x, VectorSet y, VectorSet z);
+void VectorSet_Difference(VectorSet x, VectorSet y, VectorSet z);
+void VectorSet_Imply(VectorSet x, VectorSet y, VectorSet z);
+void VectorSet_DifferenceUnion(VectorSet w, VectorSet x, 
                                VectorSet y, VectorSet z);
-Void VectorSet_Complement(VectorSet x, VectorSet y);
-Void VectorSet_Dump(VectorSet);
+void VectorSet_Complement(VectorSet x, VectorSet y);
+void VectorSet_Dump(VectorSet);
 
 
 typedef Unsigned_Int2 Expr;
 Boolean Expr_Is_Integer(Expr);
-Unsigned_Int Expr_Count(Void);
+Unsigned_Int Expr_Count(void);
 Int Expr_Get_Integer(Expr);
 Expr Expr_Install_Int(Int);
 Char *Expr_Get_String(Expr);
@@ -385,9 +384,9 @@ struct block_node {
    for (edge = (block)->succ;                   \
         edge;                                   \
         edge = edge->next_succ)
-Void Block_Dump(Block *block, Void (*extension_printer)(Block *), Boolean);
+void Block_Dump(Block *block, void (*extension_printer)(Block *), Boolean);
 
-Void Block_Init(Char *file_name);
+void Block_Init(Char *file_name);
 extern Boolean insert_landing_pads;
 extern Boolean insert_edge_splits;
 extern Boolean keep_comments;
@@ -451,16 +450,16 @@ extern Subgraph_Points **subgraph_points;
         b=postorder_subgraph_list[subgraph_points[start->preorder_index]->back]; \
         b;                                                          \
         b = postorder_subgraph_list[--i])
-Void Block_Order(Void);
-Void Block_Add_Edge(Block * source_block, Block * dest_block);
-Void Block_Put_All(File);
+void Block_Order(void);
+void Block_Add_Edge(Block * source_block, Block * dest_block);
+void Block_Put_All(File);
 extern Boolean print_all_operations;
-Void Block_Dump_All(Void (*extension_printer)(Block *), Boolean);
-Void Block_Edge_Dump(Void (*extension_printer)(Edge *));
+void Block_Dump_All(void (*extension_printer)(Block *), Boolean);
+void Block_Edge_Dump(void (*extension_printer)(Edge *));
 Char *Block_Print_Name(Block *block);
-Void Dominator_CalcDom(Arena,Boolean);
-Void Dominator_CalcPostDom(Arena,Boolean);
-Void Block_Find_Infinite_Loops(Void);
+void Dominator_CalcDom(Arena,Boolean);
+void Dominator_CalcPostDom(Arena,Boolean);
+void Block_Find_Infinite_Loops(void);
 struct dom_node {
   Block *parent; /* a pointer to the parent in the dominator tree,
                                 NULL if the root of the tree */
@@ -478,9 +477,9 @@ struct dom_node {
    for (b = (node)->frontier;          \
         b;                             \
         b = b->next)
-Void Dominator_Dump(Block *root, Boolean forward_flag);
-Int Dominator_Walk_Preparation(Void);
-Int Post_Dominator_Walk_Preparation(Void);
+void Dominator_Dump(Block *root, Boolean forward_flag);
+Int Dominator_Walk_Preparation(void);
+Int Post_Dominator_Walk_Preparation(void);
 extern Block **dominator_preorder_block_list;
 extern Block **dominator_postorder_block_list;
 extern Block **postdominator_preorder_block_list;
@@ -578,9 +577,9 @@ extern Static_Code_List *NAME_list;
 extern Opcode_Names *op_list;
 extern Unsigned_Int line_number;
 Char *Comment_Get_String(Comment_Val);
-Label *Label_Invent(Void);
+Label *Label_Invent(void);
 
-Void Block_Insert_Instruction(Inst *new_inst, Inst *current_inst);
+void Block_Insert_Instruction(Inst *new_inst, Inst *current_inst);
 Block *Block_Build_Drone_Block();
 
 /* Creation date: 9/28/94 TJHARVEY */
@@ -607,11 +606,11 @@ extern Stack_Def_Node *list_of_GLOBALs;
 /* This routine adds a new node onto a list of nodes */
 /* for STACK statements, the value sent in for the parameter global_label
    should be zero */
-extern Void Stack_Def_Insert(Stack_Def_Node **list, Opcode_Names opcode,
+extern void Stack_Def_Insert(Stack_Def_Node **list, Opcode_Names opcode,
                              Expr offset, Expr name, Expr global_label);
 
 /* This routine prints out all of the nodes in the list of nodes */
-extern Void Stack_Def_Put_All(File output_file, Stack_Def_Node *list);
+extern void Stack_Def_Put_All(File output_file, Stack_Def_Node *list);
 
 /* This macro simulates a C for-loop and is analogous to the other
    loops such as ForAllBlocks */
@@ -628,7 +627,7 @@ struct xfunc_node {
 extern Xfunc_Node *list_of_function_names;
 
 /* returns a new tag name which is guaranteed to be unique */
-Expr Tag_Create(Void);
+Expr Tag_Create(void);
 
 /* this data structure holds the alias names for a tag in a linked list */
 typedef struct alias_node Alias_Node;
@@ -682,7 +681,7 @@ Tag_Node *Alias_Install(Tag tag_name);
 
 
 /* adds an "alias_node" onto the tag's list */
-Void Alias_Add(Tag_Node *tag, Tag alias);
+void Alias_Add(Tag_Node *tag, Tag alias);
 /* this for loop runs through the list of aliases for a tag */
 /*
  * Alias_ForAllAliases(Alias_Node *next_alias_node, Tag_Node *tag_node)
@@ -697,7 +696,7 @@ Tag_Node *Alias_Retrieve_Tag(Tag tag_name);
 
 /* this is used by the all-in-one compiler to reset the
      tag counter when the number of registers changes */
-Unsigned_Int Tag_Get_Tag_Offset(Void);
+Unsigned_Int Tag_Get_Tag_Offset(void);
 
 
 Comment_Val Comment_Install(Char *comment_string); //for c++ to see

@@ -33,6 +33,6 @@ struct linked_list {
 };
 
 extern Unsigned_Int max_depth;
-extern Void find_nesting_depths(Arena external_arena);
+extern void find_nesting_depths(Arena external_arena);
 
 #define MIN(x, y)             (((x) < (y)) ? (x) : (y))
